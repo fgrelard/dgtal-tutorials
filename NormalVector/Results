@@ -1,0 +1,4 @@
+Spiral (l=50, r=5, a=2)
+Expected: 256.286
+RosenProffitt: 284.418
+

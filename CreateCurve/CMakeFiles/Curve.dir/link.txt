@@ -1,0 +1,1 @@
+/usr/bin/c++    -fopenmp -g    CMakeFiles/Curve.dir/Curve.cpp.o  -o Curve  -L/usr/local/lib -rdynamic /usr/local/lib/libDGtal.so /usr/local/lib/libDGtalIO.so /usr/local/lib/libDGtal.so -lrt -lcairo -lQtOpenGL -lQtGui -lQtXml -lQtCore -lQGLViewer -lGLU -lGL -lSM -lICE -lX11 -lXext -Wl,-rpath,/usr/local/lib 

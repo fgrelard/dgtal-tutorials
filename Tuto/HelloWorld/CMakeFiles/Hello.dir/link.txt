@@ -1,0 +1,1 @@
+/usr/bin/c++       CMakeFiles/Hello.dir/Hello.cpp.o  -o Hello  -L/usr/local/lib -rdynamic /usr/local/lib/libDGtal.so /usr/local/lib/libDGtalIO.so /usr/local/lib/libDGtal.so -lrt -Wl,-rpath,/usr/local/lib 
