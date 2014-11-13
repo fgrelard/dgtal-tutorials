@@ -1,0 +1,1 @@
+/usr/bin/c++    -fopenmp    CMakeFiles/MedialAxis.dir/MedialAxis.cpp.o  -o MedialAxis  -L/usr/local/lib -rdynamic /usr/local/lib/libDGtal.so /usr/local/lib/libDGtalIO.so -Wl,-Bstatic -lboost_program_options -Wl,-Bdynamic /usr/local/lib/libDGtal.so -lrt -lcairo -lQtOpenGL -lQtGui -lQtXml -lQtCore -lQGLViewer -lGLU -lGL -lSM -lICE -lX11 -lXext -Wl,-rpath,/usr/local/lib 
