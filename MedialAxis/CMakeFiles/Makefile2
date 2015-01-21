@@ -56,38 +56,38 @@ CMAKE_SOURCE_DIR = /home/florent/Documents/DGtal/tutorials-copy/MedialAxis
 CMAKE_BINARY_DIR = /home/florent/Documents/DGtal/tutorials-copy/MedialAxis
 
 #=============================================================================
-# Target rules for target CMakeFiles/MedialAxis.dir
+# Target rules for target CMakeFiles/surface2points.dir
 
 # All Build rule for target.
-CMakeFiles/MedialAxis.dir/all:
-	$(MAKE) -f CMakeFiles/MedialAxis.dir/build.make CMakeFiles/MedialAxis.dir/depend
-	$(MAKE) -f CMakeFiles/MedialAxis.dir/build.make CMakeFiles/MedialAxis.dir/build
+CMakeFiles/surface2points.dir/all:
+	$(MAKE) -f CMakeFiles/surface2points.dir/build.make CMakeFiles/surface2points.dir/depend
+	$(MAKE) -f CMakeFiles/surface2points.dir/build.make CMakeFiles/surface2points.dir/build
 	$(CMAKE_COMMAND) -E cmake_progress_report /home/florent/Documents/DGtal/tutorials-copy/MedialAxis/CMakeFiles  1
-	@echo "Built target MedialAxis"
-.PHONY : CMakeFiles/MedialAxis.dir/all
+	@echo "Built target surface2points"
+.PHONY : CMakeFiles/surface2points.dir/all
 
 # Include target in all.
-all: CMakeFiles/MedialAxis.dir/all
+all: CMakeFiles/surface2points.dir/all
 .PHONY : all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/MedialAxis.dir/rule: cmake_check_build_system
+CMakeFiles/surface2points.dir/rule: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/florent/Documents/DGtal/tutorials-copy/MedialAxis/CMakeFiles 1
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/MedialAxis.dir/all
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/surface2points.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/florent/Documents/DGtal/tutorials-copy/MedialAxis/CMakeFiles 0
-.PHONY : CMakeFiles/MedialAxis.dir/rule
+.PHONY : CMakeFiles/surface2points.dir/rule
 
 # Convenience name for target.
-MedialAxis: CMakeFiles/MedialAxis.dir/rule
-.PHONY : MedialAxis
+surface2points: CMakeFiles/surface2points.dir/rule
+.PHONY : surface2points
 
 # clean rule for target.
-CMakeFiles/MedialAxis.dir/clean:
-	$(MAKE) -f CMakeFiles/MedialAxis.dir/build.make CMakeFiles/MedialAxis.dir/clean
-.PHONY : CMakeFiles/MedialAxis.dir/clean
+CMakeFiles/surface2points.dir/clean:
+	$(MAKE) -f CMakeFiles/surface2points.dir/build.make CMakeFiles/surface2points.dir/clean
+.PHONY : CMakeFiles/surface2points.dir/clean
 
 # clean rule for target.
-clean: CMakeFiles/MedialAxis.dir/clean
+clean: CMakeFiles/surface2points.dir/clean
 .PHONY : clean
 
 #=============================================================================

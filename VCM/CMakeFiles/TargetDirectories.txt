@@ -1,1 +1,1 @@
-/home/florent/Documents/DGtal/VCM/CMakeFiles/VCM.dir
+/home/florent/Documents/DGtal/tutorials-copy/VCM/CMakeFiles/VCM.dir

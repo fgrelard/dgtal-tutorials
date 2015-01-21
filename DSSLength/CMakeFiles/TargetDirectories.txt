@@ -1,1 +1,1 @@
-/home/florent/Documents/DGtal/DSSLength/CMakeFiles/DSSLength.dir
+/home/florent/Documents/DGtal/tutorials-copy/DSSLength/CMakeFiles/DSSLength.dir

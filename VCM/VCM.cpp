@@ -29,7 +29,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include <iostream>
 #include <QtGui/qapplication.h>
-#include "DGtal/kernel/sets/DigitalSetBySTLSet.h"
+
 #include "DGtal/base/Common.h"
 #include "DGtal/helpers/StdDefs.h"
 #include "DGtal/kernel/BasicPointPredicates.h"
@@ -44,66 +44,40 @@
 #include "DGtal/io/colormaps/GradientColorMap.h"
 #include "DGtal/io/viewers/Viewer3D.h"
 #include "DGtal/io/readers/GenericReader.h"
-#include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
-
-
 
 ///////////////////////////////////////////////////////////////////////////////
 
 using namespace std;
 using namespace DGtal;
-
 namespace po = boost::program_options;
-
-
-typedef Z3i::Space Space;
-typedef Z3i::KSpace KSpace;
-typedef Z3i::Point Point;
-typedef Z3i::RealPoint RealPoint;
-typedef Z3i::RealVector RealVector;
-typedef HyperRectDomain<Space> Domain;
-typedef KSpace::Surfel Surfel;
-typedef KSpace::Cell Cell;
-
-typedef ImageSelector<Domain, unsigned char>::Type Image;
-typedef functors::IntervalForegroundPredicate<Image> ThresholdedImage;
-typedef ImplicitDigitalSurface< KSpace, ThresholdedImage > DigitalSurfaceContainer;
-
-//! [DVCM3D-typedefs]
-typedef ExactPredicateLpSeparableMetric<Space, 2> Metric;          // L2-metric type
-typedef functors::HatPointFunction<Point,double>  KernelFunction;  // chi function type 
-typedef EigenDecomposition<3,double> LinearAlgebraTool;
-typedef LinearAlgebraTool::Matrix Matrix;
-
-typedef VoronoiCovarianceMeasure<Space,Metric> VCM;
-typedef functors::HatPointFunction<Point,double> KernelFunction;
-
-//typedef  DigitalSetBySTLSet<DGtal::HyperRectDomain<DGtal::SpaceND<3u, int> >, std::less<DGtal::PointVector<3u, int, boost::array<int, 3ul> > > >::Iterator Iterator;
-typedef vector<Point>::iterator Iterator;
 ///////////////////////////////////////////////////////////////////////////////
-
-RealVector computeOrthogonalVectors(Point pt1, Point pt2) {
-	RealVector v((pt2[0] - pt1[0]), (pt2[1] - pt1[1]), (pt2[2] - pt1[2]));
-	int x = 0, y = 0, z = 0;
-	if (v[0] != 0)
-		y = -v[0];
-	if (v[1] != 0)
-		x = -v[1];
-	return RealVector(x,y,z);
-}
-
-
 int main( int argc, char** argv )
 {
-	const string examplesPath = "/home/florent/bin/DGtal/examples/samples/";
 	QApplication application(argc,argv);
-	
 
+	typedef Z3i::Space Space;
+	typedef Z3i::KSpace KSpace;
+	typedef Z3i::Point Point;
+	typedef Z3i::RealPoint RealPoint;
+	typedef Z3i::RealVector RealVector;
+	typedef HyperRectDomain<Space> Domain;
+	typedef KSpace::Surfel Surfel;
+	typedef KSpace::Cell Cell;
 
-// parse command line ----------------------------------------------
+	typedef ImageSelector<Domain, unsigned char>::Type Image;
+	typedef functors::IntervalForegroundPredicate<Image> ThresholdedImage;
+	typedef ImplicitDigitalSurface< KSpace, ThresholdedImage > DigitalSurfaceContainer;
+
+	//! [DVCM3D-typedefs]
+	typedef ExactPredicateLpSeparableMetric<Space, 2> Metric;          // L2-metric type
+	typedef functors::HatPointFunction<Point,double>  KernelFunction;  // chi function type 
+	typedef VoronoiCovarianceMeasureOnDigitalSurface< DigitalSurfaceContainer, Metric,
+													  KernelFunction > VCMOnSurface;
+	typedef VCMOnSurface::Surfel2Normals::const_iterator S2NConstIterator;
+	//! [DVCM3D-typedefs]
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
 		("help,h", "display this message")
@@ -134,13 +108,12 @@ int main( int argc, char** argv )
 		trace.error() << " The file name was defined" << endl;      
 		return 0;
 	}
-	string inputFilename2 = vm["input"].as<std::string>();
+	string inputFilename = vm["input"].as<std::string>();
 	int thresholdMin = vm["thresholdMin"].as<int>();
 	int thresholdMax = vm["thresholdMax"].as<int>();
 	unsigned char transp = vm["transparency"].as<uint>();
 	double T = vm["featureThreshold"].as<double>();
-  
-	string inputFilename = examplesPath + inputFilename2;
+ 
 	trace.info() << "File             = " << inputFilename << std::endl;
 	trace.info() << "Min image thres. = " << thresholdMin << std::endl;
 	trace.info() << "Max image thres. = " << thresholdMax << std::endl;
@@ -151,99 +124,34 @@ int main( int argc, char** argv )
 	const double trivial_r = 3;
 	trace.info() << "Trivial radius t = " << trivial_r << std::endl; // for orienting the directions given by the tensor.
 	trace.info() << "Feature thres. T = " << T << std::endl; // threshold for displaying features as red.
+	
 
 	const double size = 1.0; // size of displayed normals.
+
 	KSpace ks;
-// Reads the volume
+	// Reads the volume
 	trace.beginBlock( "Loading image into memory and build digital surface." );
-	//Image image = GenericReader<Image>::import(inputFilename);
-	//ThresholdedImage thresholdedImage( image, thresholdMin, thresholdMax );
-	std::vector<Point> points = PointListReader<Point>::getPointsFromFile(inputFilename);
-	//Z3i::DigitalSet set3d (image.domain());
-	//SetFromImage<Z3i::DigitalSet>::append<Image>(set3d, image, thresholdMin, thresholdMax);
-    Iterator it = points.begin();
-    Iterator itE = points.end();
-	
-	Metric l2;
-	VCM vcm(R,r, l2, true);
-	vcm.init( points.begin(), points.end() );
-	Domain domain = vcm.domain();
-	KernelFunction chi( 1.0, r );
-	//ks.init( image.domain().lowerBound(),
-	//		 image.domain().upperBound(), true );
-	// Flat zones are metallic blue, slightly curved zones are white,
-	// more curved zones are yellow till red.
-	GradientColorMap<double> colormap( 0.0, T );
-	colormap.addColor( Color( 128, 128, 255,(transp/255.0f) ) );
-	colormap.addColor( Color( 255, 255, 255,(transp/255.0f) ) );
-	colormap.addColor( Color( 255, 255, 0,(transp/255.0f) ) );
-	colormap.addColor( Color( 255, 0, 0, (transp/255.0f) ) );
-
-	Matrix vcm_r, evec;
-	RealVector eval;
-	Viewer3D<> viewer;
-	Cell dummy;
-	viewer.setWindowTitle("3D VCM viewer");
-	viewer << SetMode3D( dummy.className(), "Basic" );
-	viewer.show();
-	double totalDistance = 0.0;
-	for (; it != itE; ++it )
-	{
-		// Compute VCM and diagonalize it.
-
-		Iterator itNext = it;
-		itNext++;
-		if (itNext != itE) {
-			vcm_r = vcm.measure( chi, *it );
-			LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
-			double feature = eval[ 1 ] / ( eval[ 0 ] +  eval[ 1 ] + eval[2] );
-			// Display normal
-			RealVector n = evec.column( 1 );
-			RealPoint rp( (*it)[ 0 ], (*it)[ 1 ], (*it)[2] ); 
-			RealVector orth2(round(n[0]), round(n[1]), round(n[2]));
-			viewer.setFillColor( colormap( feature > T ? T : feature ) );
-			viewer << (*it);
-			double norm = n.dot(orth2);
-			trace.info() << orth2 << endl;
-  			totalDistance += norm;
-			n *= size;
-			viewer.setLineColor( Color::Black );
-			viewer.addLine( rp + n, rp - n, 0.3 );
-		}
-	}
-	trace.info() << "Total distance= " << totalDistance << "size= " << points.size() << endl;
-	viewer << Viewer3D<>::updateDisplay;
-	application.exec();
-	return 0;
-}
-
-
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
-
-/*void function3D() {
+	Image image = GenericReader<Image>::import(inputFilename );
+	ThresholdedImage thresholdedImage( image, thresholdMin, thresholdMax );
 	trace.endBlock();
 	trace.beginBlock( "Extracting boundary by scanning the space. " );
-	trace.info() << image.domain().lowerBound() << " upperBound= " << image.domain().upperBound() << endl;
 	ks.init( image.domain().lowerBound(),
 			 image.domain().upperBound(), true );
-	SurfelAdjacency<KSpace::dimension> surfAdj(true); // interior in all directions.
-	Surfel bel = Surfaces<KSpace>::findABel( ks, thresholdedImage, 100 );
-
+	SurfelAdjacency<KSpace::dimension> surfAdj( true ); // interior in all directions.
+	Surfel bel = Surfaces<KSpace>::findABel( ks, thresholdedImage, 10000 );
 	DigitalSurfaceContainer* container = 
-		new DigitalSurfaceContainer( ks, thresholdedImage, surfAdj, bel, true  );
-
+		new DigitalSurfaceContainer( ks, thresholdedImage, surfAdj, bel, false  );
 	DigitalSurface< DigitalSurfaceContainer > surface( container ); //acquired
 	trace.info() << "Digital surface has " << surface.size() << " surfels." << std::endl;
 	trace.endBlock();
 
-//! [DVCM3D-instantiation]
+	//! [DVCM3D-instantiation]
 	Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel; 
 	Metric l2;                                // Euclidean L2 metric 
 	KernelFunction chi( 1.0, r );             // hat function with support of radius r
 	VCMOnSurface vcm_surface( surface, embType, R, r, 
-							  chi, trivial_r, l2, true );
-//! [DVCM3D-instantiation]
+							  chi, trivial_r, l2, true /* verbose */ );
+	//! [DVCM3D-instantiation]
 
 	trace.beginBlock( "Displaying VCM" );
 	Viewer3D<> viewer( ks );
@@ -260,7 +168,7 @@ int main( int argc, char** argv )
 	RealVector lambda; // eigenvalues of chi-vcm
 	for ( S2NConstIterator it = vcm_surface.mapSurfel2Normals().begin(), 
 			  itE = vcm_surface.mapSurfel2Normals().end(); it != itE; ++it )
-	{
+    {
 		Surfel s = it->first;
 		Point kp = ks.sKCoords( s );
 		RealPoint rp( 0.5 * (double) kp[ 0 ], 0.5 * (double) kp[ 1 ], 0.5 * (double) kp[ 2 ] );
@@ -277,8 +185,6 @@ int main( int argc, char** argv )
 	application.exec();
 	trace.endBlock();
 	return 0;
-	}*/
+}
 //                                                                           //
 ///////////////////////////////////////////////////////////////////////////////
-
-

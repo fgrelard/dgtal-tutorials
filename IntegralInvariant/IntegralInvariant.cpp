@@ -57,6 +57,7 @@
 #include "DGtal/helpers/StdDefs.h"
 #include "DGtal/base/ConstAlias.h"
 #include "DGtal/base/CountedConstPtrOrConstPtr.h"
+#include "IntegralInvariantVolumeEstimatorAdapted.h"
 
 using namespace DGtal;
 template <typename Distance>
@@ -140,17 +141,25 @@ void checkPointForMedialAxis(ImageFct& imageFct, vector<WeightedPoint>& vPoints 
 		vPoints.push_back(WeightedPoint(p, d));
 	}
 }
-template <typename Vertex, typename WeightedSurfel>
-vector<Vertex> findLocation(const vector<WeightedSurfel>& surfels, float value, float leeway) {
-	vector<Vertex> locations;
-	for (int i = 0; i < surfels.size(); i++) {
-		float upperBound = value + value * leeway;
-		float lowerBound = value - value * leeway;
-		if (surfels[i].d <= upperBound && surfels[i].d >= lowerBound) {
-			locations.push_back(surfels[i].p);
+
+template <typename WeightedSurfel, typename SurfelConstIterator, typename Range, typename WeightedPoint,
+		  typename KSpace>
+void closestMedialAxisPoint(vector<WeightedSurfel> & vIterators, const Range & range,
+							const vector<WeightedPoint> & vPoints, KSpace KSpaceShape) {
+	for (SurfelConstIterator it = range.begin(); it != range.end(); ++it) {
+		double maximum = INT_MAX;
+		Z3i::Point surfPoint = KSpaceShape.sCoords(*it);
+		for (typename vector<WeightedPoint>::const_iterator it2 = vPoints.begin(); it2 != vPoints.end(); ++it2) {
+			double euclideanDistance = sqrt(pow((surfPoint[0] - (*it2).p[0]), 2) +
+											pow((surfPoint[1] - (*it2).p[1]), 2) +
+											pow((surfPoint[2] - (*it2).p[2]), 2));
+			if (euclideanDistance < maximum) {
+				maximum = euclideanDistance;
+			}
 		}
+		WeightedSurfel w(*it, maximum);
+		vIterators.push_back(w);
 	}
-	return locations;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -161,7 +170,7 @@ using namespace DGtal;
 
 int main( int argc, char** argv )
 {
-    if ( argc != 4 )
+    if ( argc != 5 )
     {
         trace.error() << "Usage: " << argv[0]
                                << " <fileName.vol> <threshold> <radius>" << std::endl;
@@ -178,6 +187,7 @@ int main( int argc, char** argv )
     double h = 1.0;
     unsigned int threshold = std::atoi( argv[ 2 ] );
 	double leeway = std::atof(argv[3]);
+	double scaling_factor = std::atof(argv[4]);
     /// Construction of the shape from vol file
     typedef ImageSelector< Z3i::Domain, bool >::Type Image;
     typedef functors::SimpleThresholdForegroundPredicate< Image > ImagePredicate;
@@ -243,27 +253,16 @@ int main( int argc, char** argv )
 	VisitorRange range( new Visitor( digSurf, *digSurf.begin() ) );
    	vector<WeightedSurfel> vIterators;
 		
-	for (SurfelConstIterator it = range.begin(); it != range.end(); ++it) {
-		double maximum = INT_MAX;
-		Z3i::Point surfPoint = KSpaceShape.sCoords(*it);
-		for (vector<WeightedPoint>::iterator it2 = vPoints.begin(); it2 != vPoints.end(); ++it2) {
-			double euclideanDistance = sqrt(pow((surfPoint[0] - (*it2).p[0]), 2) + pow((surfPoint[1] - (*it2).p[1]), 2) + pow((surfPoint[2] - (*it2).p[2]),2));
-			if (euclideanDistance < maximum) {
-				maximum = euclideanDistance;
-			}
-		}
-		WeightedSurfel w(*it, maximum);
-		vIterators.push_back(w);
-	}
-	
+
+	closestMedialAxisPoint<WeightedSurfel, SurfelConstIterator>(vIterators, range, vPoints, KSpaceShape);
 
 	
-    /// Integral Invariant stuff
+    //! Integral Invariant stuff
     //! [IntegralInvariantUsage]
 
 
     typedef functors::IIMeanCurvature3DFunctor<Z3i::Space> MyIICurvatureFunctor;
-    typedef IntegralInvariantVolumeEstimator< Z3i::KSpace, ImagePredicate, MyIICurvatureFunctor > MyIICurvatureEstimator;
+    typedef IntegralInvariantVolumeEstimatorAdapted< Z3i::KSpace, ImagePredicate, MyIICurvatureFunctor > MyIICurvatureEstimator;
     
     // For computing Gaussian curvature instead, for example, change the two typedef above by : 
     // typedef functors::IIGaussianCurvature3DFunctor<Z3i::Space> MyIICurvatureFunctor;
@@ -277,39 +276,16 @@ int main( int argc, char** argv )
 	SurfelConstIterator abegin = range2.begin();
     SurfelConstIterator aend = range2.end();
 
-	i=0;
-	vector<float> values;
-	values.push_back(vIterators[0].d);
-	for (unsigned int i = 0; i < vIterators.size(); i++) {
-		float value = vIterators.at(i).d;
-		bool add = true;
-	    for (vector<float>::iterator it = values.begin(); it != values.end(); ++it) {
-			float upperBound = value + value * leeway;
-			float lowerBound = value - value * leeway;
-			//trace.info() << lowerBound << " " << upperBound << " " << *it << endl;
-			if (upperBound >= *it && lowerBound <= *it) {
-			    add = false;
-			}
-		}
-		if (add)
-			values.push_back(value);
-	}
+
 	trace.beginBlock("Estimating curvature");
-	for (unsigned int i = 0; i < values.size(); i++) {
-		vector<Surfel> locations = findLocation<Surfel, WeightedSurfel> (vIterators, values[i], leeway);
-		vector<Surfel>::iterator itB = locations.begin();
-		vector<Surfel>::iterator itE = locations.end();
-		
-		MyIICurvatureFunctor curvatureFunctor; // Functor used to convert volume -> curvature
-	    float radius = values[i];
-		curvatureFunctor.init( h, radius ); // Initialisation for a grid step and a given Euclidean radius of convolution kernel
-		MyIICurvatureEstimator curvatureEstimator( curvatureFunctor ); 
-		curvatureEstimator.attach( KSpaceShape, predicate ); // Setting a KSpace and a predicate on the object to evaluate
-		curvatureEstimator.setParams( radius / h ); // Setting the digital radius of the convolution kernel
-		curvatureEstimator.init( h, itB, itE ); // Initialisation for a given h, and a range of surfels
-		curvatureEstimator.eval( itB, itE, resultsIt ); // Computation
-		trace.progressBar(i, values.size());
-   	}
+	MyIICurvatureFunctor curvatureFunctor; // Functor used to convert volume -> curvature
+	float radius = 10;
+	curvatureFunctor.init( h, radius ); // Initialisation for a grid step and a given Euclidean radius of convolution kernel
+	MyIICurvatureEstimator curvatureEstimator( curvatureFunctor ); 
+	curvatureEstimator.attach( KSpaceShape, predicate ); // Setting a KSpace and a predicate on the object to evaluate
+	curvatureEstimator.setParams( radius / h ); // Setting the digital radius of the convolution kernel
+	curvatureEstimator.init( h, abegin, aend ); // Initialisation for a given h, and a range of surfels
+	curvatureEstimator.eval<Surfel, WeightedSurfel,  vector<Value>, SurfelConstIterator >( results, vIterators, leeway, scaling_factor ); // Computation
 	trace.endBlock();
     
     //! [IntegralInvariantUsage]
@@ -328,7 +304,7 @@ int main( int argc, char** argv )
             max = results[ i ];
         }
 	}
-	trace.info() << min << " " << max;
+	 
     QApplication application( argc, argv );
     typedef Viewer3D<Z3i::Space, Z3i::KSpace> Viewer;
     Viewer viewer( KSpaceShape );
@@ -336,7 +312,8 @@ int main( int argc, char** argv )
     viewer.show();
 
     typedef GradientColorMap< Value > Gradient;
-    Gradient cmap_grad( min, max );
+	trace.info() << min << " " << max;
+	Gradient cmap_grad( min, max);
     cmap_grad.addColor( Color( 50, 50, 255 ) );
     cmap_grad.addColor( Color( 255, 0, 0 ) );
     cmap_grad.addColor( Color( 255, 255, 10 ) );
@@ -346,9 +323,10 @@ int main( int argc, char** argv )
 
     Z3i::KSpace::Cell dummy_cell;
     viewer << SetMode3D( dummy_cell.className(), "Basic" );
+	trace.info() << results.size() << " " << vIterators.size() << endl;
     for ( unsigned int i = 0; i < vIterators.size(); ++i )
     {
-        viewer << CustomColors3D( Color::Black, cmap_grad( results[ i ] ))
+        viewer << CustomColors3D( Color::Black, cmap_grad( results[i] ))
                << KSpaceShape.unsigns( *abegin );
         ++abegin;
 	}

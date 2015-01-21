@@ -24,7 +24,7 @@
 #include "DGtal/images/imagesSetsUtils/ImageFromSet.h"
 ///////////////////////////////////////////////////////////////////////////////
 
-#define INCREMENT 0.001
+#define INCREMENT 0.01
 using namespace std;
 using namespace DGtal;
 
@@ -54,7 +54,7 @@ void saveToPL(vector<Point> & vPoints, std::string filename) {
 
 void add(const Point & p, vector<Point> & v) {
 	if (find(v.begin(), v.end(), p) != v.end()) {
-	
+		return;
 	} else {
 		v.push_back(p);
 	}
@@ -167,7 +167,7 @@ int main( int argc, char** argv )
 	typedef ImageFromSet<Image3D> SetConverter;
 
 	int range = 200;
-	int pitch = 20;
+	int pitch =  20;
 	int radius = 10;
 	
 	vector<Point> vectorPoints;

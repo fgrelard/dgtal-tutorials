@@ -68,23 +68,7 @@ using namespace DGtal;
  * @param nb the number of random points to insert
  * @param value the value to add at each random point
  */
-template<typename Image>
-void randomSeeds(Image &image, const unsigned int nb, const int value)
-{
-	typename Image::Point p, low = image.domain().lowerBound();
-	typename Image::Vector ext;
-	srand ( time(NULL) );
 
-	ext = image.extent();
-
-	for (unsigned int k = 0 ; k < nb; k++)
-    {
-		for (unsigned int dim = 0; dim < Image::dimension; dim++)
-			p[dim] = rand() % (ext[dim]) +  low[dim];
-    
-		image.setValue(p, value);
-    }
-}
 
 using namespace DGtal;
 

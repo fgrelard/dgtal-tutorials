@@ -30,7 +30,10 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include <iostream>
 #include <fstream>
+
 #include <sstream>
+#include <QtGui/qapplication.h>
+
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
@@ -45,10 +48,20 @@
 #include "DGtal/io/colormaps/GradientColorMap.h"
 #include "DGtal/io/readers/GenericReader.h"
 #include "DGtal/io/boards/Board3D.h"
+#include "DGtal/geometry/surfaces/ChordGenericStandardPlaneComputer.h"
 #include "DGtal/io/colormaps/GradientColorMap.h"
 #include "DGtal/io/readers/VolReader.h"
 #include "DGtal/images/IntervalForegroundPredicate.h"
 #include "DGtal/geometry/volumes/distance/DistanceTransformation.h"
+#include "DGtal/kernel/BasicPointPredicates.h"
+#include "DGtal/shapes/parametric/Ball3D.h"
+#include "DGtal/io/viewers/Viewer3D.h"
+#include <miniball/Seb.h>
+#include <miniball/Seb_debug.h>
+#include "DGtal/kernel/sets/DigitalSetInserter.h"
+#include "DGtal/geometry/volumes/distance/ExactPredicateLpSeparableMetric.h"
+#include "DGtal/geometry/surfaces/estimation/VoronoiCovarianceMeasureOnDigitalSurface.h"
+
 using namespace std;
 using namespace DGtal;
 namespace po = boost::program_options;
@@ -56,176 +69,305 @@ namespace po = boost::program_options;
 
 template <typename Distance>
 struct DistanceToPointFunctor {
+	typedef typename Distance::Space Space;
+	typedef typename Distance::Value Value;
+	typedef typename Space::Point    Point;
 
-  typedef typename Distance::Space Space;
-  typedef typename Distance::Value Value;
-  typedef typename Space::Point    Point;
+	Point p;
+	DistanceToPointFunctor( Clone<Distance> distance,
+							const Point& aP )
+		: myDistance( distance ), p( aP ) {}
 
-  Point p;
-  DistanceToPointFunctor( Clone<Distance> distance,
-                          const Point& aP )
-    : myDistance( distance ), p( aP ) {}
-
-  Value operator()( const Point& q ) const
-  {
-    return myDistance( p, q );
-  }
-  Distance myDistance;
+	Value operator()( const Point& q ) const
+		{
+			return myDistance( p, q );
+		}
+	Distance myDistance;
 };
 
-// A measure is a function
-template <typename ImageFct>
-class DistanceToMeasure {
+template <typename Point>
+class WeightedPoint {
 public:
-  typedef typename ImageFct::Value  Value;
-  typedef typename ImageFct::Point  Point;
-  typedef typename ImageFct::Domain Domain;
-  typedef typename Domain::Space    Space;
-
+	WeightedPoint( const Point& _p, float _d ) : p(_p), d(_d) {}
+	friend bool operator<(const WeightedPoint& it, const WeightedPoint& other) {
+		if (it.d >= other.d) {
+			return true;
+		}
+		return false;
+	}
 public:
-  DistanceToMeasure( const ImageFct& measure, Value rmax = 10.0 )
-    : myMeasure( measure ), myDistance2( myMeasure.domain() ),
-      myR2Max( rmax*rmax )
-  {
-    init( myMeasure );
-  }
-
-  void init( const ImageFct& measure )
-  {
-    double       nb = myDistance2.domain().size();
-    unsigned int i  = 0;
-    trace.progressBar( i, nb );
-
-    for ( typename Domain::ConstIterator it = myDistance2.domain().begin(),
-            itE = myDistance2.domain().end(); it != itE; ++it, ++i )
-      {
-        if ( ( i % 100 ) == 0 ) trace.progressBar( i, nb );
-        myDistance2.setValue( *it, computeDistance2( *it ) );
-      }
-  }
-
-  Value distance2( const Point& p ) const
-  {
-    return myDistance2( p );
-  }
-
-  Value computeDistance2( const Point& p )
-  {
-    typedef ExactPredicateLpSeparableMetric<Space,2> Distance;
-    typedef DistanceToPointFunctor<Distance>         DistanceToPoint;
-    typedef MetricAdjacency<Space, 1>                Graph;
-    typedef DistanceBreadthFirstVisitor< Graph, DistanceToPoint, std::set<Point> >
-      DistanceVisitor;
-    typedef typename DistanceVisitor::Node MyNode;
-    typedef typename DistanceVisitor::Scalar MySize;
-
-    Value             m  = NumberTraits<Value>::ZERO;
-    Value             d2 = NumberTraits<Value>::ZERO;
-    Graph             graph;
-    DistanceToPoint   d2pfct( Distance(), p );
-    DistanceVisitor   visitor( graph, d2pfct, p );
-
-
-    Value last = d2pfct( p );
-    MyNode node;
-    while ( ! visitor.finished() )
-    {
-      node = visitor.current();
-      if ( ( node.second != last )) break; // all the vertices of the same layer have been processed.
-      if ( node.second > myR2Max ) { d2 = m * myR2Max; break; }
-      if ( myMeasure.domain().isInside( node.first ) )
-	  {
-		  last = node.second;
-          visitor.expand();
-	  }
-      else
-        visitor.ignore();
-    }
-    return d2 / m;
-  }
-
-public:
-  const ImageFct& myMeasure;
-  ImageFct myDistance2;
-  Value myR2Max;
+	Point p;
+	float d;
 };
+
+
+template <typename ImageFct, typename WeightedPoint, typename Point>
+void checkPointForMedialAxis(ImageFct& imageFct, vector<WeightedPoint>& vPoints , const Point& p, float d) {
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space,2> Distance;
+	typedef DistanceToPointFunctor<Distance>         DistanceToPoint;
+	typedef MetricAdjacency<Z3i::Space, 3>                Graph;
+	typedef DistanceBreadthFirstVisitor< Graph, DistanceToPoint, std::set<Point> >
+		DistanceVisitor;
+	typedef typename DistanceVisitor::Node MyNode;
+	typedef typename DistanceVisitor::Scalar MySize;	
+	Graph             graph;
+	DistanceToPoint   d2pfct( Distance(), p );
+	DistanceVisitor   visitor( graph, d2pfct, p );
+//trace.info() << "last= " << last << endl;
+	MyNode node;
+	bool add = true;
+	visitor.expand(); //Go to the first neighbour	
+	while ( ! visitor.finished() )
+	{
+	
+		node = visitor.current(); // all the vertices of the same layer have been processed.
+		
+		if (node.second > 1) break; // we want to analyse only the direct neighbourhood (4- or 6- connexity)
+		if (imageFct.domain().isInside(node.first) && node.second == 1) { //is inside domain
+			float distanceToBoundary = imageFct(node.first);
+			float minEnclosingRadius = sqrt(1+pow(d, 2));
+			if (d <= 1 || distanceToBoundary >= minEnclosingRadius) {
+				add = false;
+			}
+			visitor.expand();
+		}
+		else
+			visitor.ignore();
+	}
+	if (add) {
+		vPoints.push_back(WeightedPoint(p, d));
+	}
+}
+
+
+template <typename Point, typename WeightedPoint>
+void checkPointForMedialAxisNaive( vector<WeightedPoint>& vPoints, const Point& p, float d )
+{
+	typedef Z3i::Space Space;
+	typedef Ball3D<Space> Ball3d;
+	
+	Ball3d ball(p[0], p[1], p[2], d);
+	Point currentBallLowerBound = ball.getLowerBound();
+	Point currentBallUpperBound = ball.getUpperBound();
+	bool add = true;
+	for (typename vector<WeightedPoint>::iterator it = vPoints.begin(), itE = vPoints.end(); it != itE; ++it) {
+		Ball3d otherBall((*it).p[0], (*it).p[1], (*it).p[2], (*it).d);
+		Point otherBallLowerBound = otherBall.getLowerBound();
+		Point otherBallUpperBound = otherBall.getUpperBound();
+		if (currentBallLowerBound >= otherBallLowerBound &&
+			currentBallUpperBound <= otherBallUpperBound) {
+			add = false;
+		}
+	}
+	if (add) {
+		vPoints.push_back(WeightedPoint( p, d ));
+	}
+}
+
+
+template <typename Point, typename DGtalPoint>
+void smallestEnclosingBall(set<DGtalPoint>& points, vector<Point>& sebPoints) {
+	
+	for (typename set<DGtalPoint>::iterator it = points.begin(),
+			 itE = points.end();
+		 it != itE;
+		 ++it) {
+		Point p(DGtalPoint::dimension, (*it).begin());
+		sebPoints.push_back(p);
+	}
+}
+
+template <typename ImageFct, typename WeightedPoint, typename Point>
+void checkPointForLambdaMedialAxis(const ImageFct& imageFct, vector<WeightedPoint>& vPoints, const Point& p, float d, double lambda)  {
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space,2> Distance;
+	typedef DistanceToPointFunctor<Distance>         DistanceToPoint;
+	typedef MetricAdjacency<Z3i::Space, 1>                Graph;
+	typedef DistanceBreadthFirstVisitor< Graph, DistanceToPoint, std::set<Point> >
+		DistanceVisitor;
+	typedef typename DistanceVisitor::Node MyNode;
+	typedef typename DistanceVisitor::Scalar MySize;
+
+	//smallest enclosing ball
+	typedef typename Seb::Smallest_enclosing_ball<double> Miniball;
+	typedef Seb::Point<double> SebPoint;
+	
+	Graph             graph;
+	DistanceToPoint   d2pfct( Distance(), p );
+	DistanceVisitor   visitor( graph, d2pfct, p );
+	//trace.info() << "last= " << last << endl;
+	MyNode node;
+
+	set<Point> ballPoints;
+	visitor.expand(); //Go to the first neighbour
+	
+	while ( ! visitor.finished() )
+	{
+		node = visitor.current(); // all the vertices of the same layer have been processed.
+		
+		if (node.second > 1) break; // we want to analyse only the direct neighbourhood (4- or 6- connexity) 
+		if (imageFct.domain().isInside(node.first) && node.second == 1) { //is inside domain
+			float distanceToBoundary = imageFct(node.first);
+			if ( d > 1 && distanceToBoundary < d ) { 
+				//Extended projection
+				Point q = imageFct.getVoronoiVector(node.first);
+				ballPoints.insert(q);
+			}
+ 			visitor.expand();
+		}
+		else {
+			visitor.ignore();
+		}
+	}
+	vector<SebPoint> sebPoints;
+	smallestEnclosingBall(ballPoints, sebPoints);
+	if (sebPoints.size() > 0) {
+		Miniball ball(Point::dimension, sebPoints);
+		if (ball.radius() >= lambda * d) {
+			vPoints.push_back(WeightedPoint(p, d));
+		}
+	}
+   
+	
+}
+
+template <typename Point>
+void computeVCM(Viewer3D<> &viewer, vector<Point> & points, float R, float r, int T) {
+	typedef typename vector<Point>::iterator Iterator;
+	typedef Z3i::Space Space;
+	typedef HyperRectDomain<Space> Domain;
+	typedef ExactPredicateLpSeparableMetric<Space, 2> Metric;          // L2-metric type
+	typedef functors::HatPointFunction<Point,double>  KernelFunction;  // chi function type 
+	typedef EigenDecomposition<3,double> LinearAlgebraTool;
+	typedef LinearAlgebraTool::Matrix Matrix;
+	typedef Z3i::KSpace KSpace;
+	typedef VoronoiCovarianceMeasure<Space,Metric> VCM;
+	typedef functors::HatPointFunction<Point,double> KernelFunction;
+	typedef Z3i::RealPoint RealPoint;
+	typedef Z3i::RealVector RealVector;
+	typedef KSpace::Cell Cell;
+	typedef ChordNaivePlaneComputer<Z3i::Space, Z3i::Point, int32_t> PlaneComputer;
+
+	Iterator it = points.begin();
+    Iterator itE = points.end();
+	
+	Metric l2;
+	VCM vcm(R,r, l2, true);
+	vcm.init( points.begin(), points.end() );
+	Domain domain = vcm.domain();
+	KernelFunction chi( 1.0, r );
+	//ks.init( image.domain().lowerBound(),
+	//		 image.domain().upperBound(), true );
+	// Flat zones are metallic blue, slightly curved zones are white,
+	// more curved zones are yellow till red.
+	GradientColorMap<double> colormap( 0.0, T );
+	colormap.addColor( Color( 128, 128, 255,255 ) );
+	colormap.addColor( Color( 255, 255, 255,255 ) );
+	colormap.addColor( Color( 255, 255, 0, 255 ) );
+	colormap.addColor( Color( 255, 0, 0, 255 ) );
+	Matrix vcm_r, evec;
+	RealVector eval;
+	Cell dummy;
+	double size = 1.0;
+	for (; it != itE; ++it )
+	{
+		// Compute VCM and diagonalize it.
+		vcm_r = vcm.measure( chi, *it );
+		LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
+		double feature = eval[ 1 ] / ( eval[ 0 ] +  eval[ 1 ] + eval[2] );
+		// Display normal
+		RealVector n = evec.column( 1 );
+		RealVector n2 = evec.column( 0 );
+
+		
+		RealPoint rp( (*it)[ 0 ], (*it)[ 1 ], (*it)[2] );
+		Point p1((*it)[0] + n[0] * 2 + n2[0] * 2, (*it)[1] + n[1] * 2 + n2[1] * 2 , (*it)[2] + n[2] * 2 + n2[2] * 2);
+		Point p2((*it)[0] + n[0] * -2 +  n2[0] * 2, (*it)[1] + n[1] * -2 + n2[1] * 2, (*it)[2] + n[2] * -2 + n2[2] * 2 );
+		Point p3((*it)[0] + n[0] * 2 + n2[0] * -2 , (*it)[1] + n[1] * 2 + n2[1] * -2 , (*it)[2] + n[2] * 2 + n2[2] * -2 );
+		Point p4((*it)[0] + n[0] * -2 + n2[0] * -2 , (*it)[1] + n[1] * -2 + n2[1] * -2 , (*it)[2] + n[2] * -2 + n2[2] * -2 );						
+		//viewer.setFillColor( colormap( 0.0 ) );
+		viewer.setFillColor(Color::Red);
+		//viewer.addQuad(p1, p3, p4, p2);
+		viewer.setFillColor( Color( 100, 100, 140, 150 ) );
+		viewer << (*it);
+		n *= size;
+		viewer.setLineColor( Color::Black );
+		viewer.addLine( rp + n, rp - n, 0.3 );
+	}
+}
+
+
 
 int main( int argc, char** argv )
 {
-  using namespace DGtal;
-  using namespace DGtal::Z3i;
-  typedef ImageSelector<Z3i::Domain, unsigned char>::Type Image;
-  typedef ImageSelector<Z3i::Domain, float>::Type FloatImage;
-  typedef DistanceToMeasure<FloatImage>                 Distance;
-  typedef functors::IntervalForegroundPredicate<Image> Binarizer;
-  typedef  DistanceTransformation<Z3i::Space, Binarizer, Z3i::L2Metric> DTL2;
-  if ( argc <= 2 ) return 1;
-  Image img  = VolReader<Image>::importVol( argv[ 1 ] );
-  Z3i::Domain domain = img.domain();
-  double           rmax = atof( argv[ 2 ] );
+	using namespace DGtal;
+	using namespace DGtal::Z3i;
+	typedef ImageSelector<Z3i::Domain, unsigned char>::Type Image;
+	typedef ImageSelector<Z3i::Domain, float>::Type FloatImage;
+	typedef functors::IntervalForegroundPredicate<Image> Binarizer;
+	typedef WeightedPoint<Point> WeightedPoint;
+	typedef functors::NotPointPredicate<Binarizer> NotPredicate;
+	typedef  DistanceTransformation<Z3i::Space, Binarizer, Z3i::L2Metric> DTL2;
 
 
-  Binarizer binarizer(img, 0, 135);
-  
-  trace.beginBlock("Computing distance map");
-  DTL2 dtL2(&domain, &binarizer, &Z3i::l2Metric);
-  trace.endBlock();
-  
-  FloatImage     fimg( dtL2.domain() );
-  FloatImage::Iterator outIt = fimg.begin();
-  unsigned int max = 0;
-  for(DTL2::ConstRange::ConstIterator it = dtL2.constRange().begin(), 
-			itend=dtL2.constRange().end();
-		it!=itend;
-		++it)
-    {
-		if( (*it) > max ) 
-			max=(*it);
-    }
+	if ( argc <= 2 ) return 1;
 
-  
-  
-  for ( Image::ConstIterator it = img.begin(), itE = img.end();
-        it != itE; ++it )
-    {
-      float v = ((float)*it) / max;
-      *outIt++ = v;
-    }
-  trace.beginBlock( "Computing delta-distance." );
-  Distance     delta( fimg, rmax );
-  const FloatImage& d2 = delta.myDistance2;
-  trace.endBlock();
+	QApplication app(argc, argv);
+	Viewer3D<> viewer;
+	Cell dummy;
+	viewer << SetMode3D( dummy.className(), "Basic" );
+	viewer.show();
 
-  float m = 0.0;
-  for ( Domain::ConstIterator it = d2.domain().begin(),
-          itE = d2.domain().end(); it != itE; ++it )
-    {
-      Point p = *it;
-      float v = sqrt( d2( p ) );
-      m = std::max( v, m );
-    }
+	Image img  = VolReader<Image>::importVol( argv[ 1 ] );
 
-  GradientColorMap<float> cmap_grad( 0,  m);
-  cmap_grad.addColor( Color( 255, 255, 255 ) );
-  cmap_grad.addColor( Color( 255, 255, 0 ) );
-  cmap_grad.addColor( Color( 255, 0, 0 ) );
-  cmap_grad.addColor( Color( 0, 255, 0 ) );
-  cmap_grad.addColor( Color( 0,   0, 255 ) );
-  cmap_grad.addColor( Color( 0,   0, 0 ) );
-  Board3D<Space, KSpace> board;
-  //  board << SetMode3D( d2.domain().className(), "Paving" );
+	
+	double lambda = atof(argv[2]);
+	Z3i::Domain domain = img.domain();
 
+	Binarizer binarizer(img, 0, 255);
+	NotPredicate nBinarizer(binarizer);
+	
+	trace.beginBlock("Computing distance map");
+    DTL2 dtL2(&domain, &binarizer, &Z3i::l2Metric);
+	trace.endBlock();
 
-  for ( typename Domain::ConstIterator it = d2.domain().begin(),
-          itE = d2.domain().end(); it != itE; ++it )
-    {
-      Point p = *it;
-      float v = sqrt( d2( p ) );
-      v = std::max( v, 0.0f );
-      board  << p;
-    }
-  std::cout << endl;
-  board.saveOBJ("delta2.obj");
-  return 0;
+	trace.beginBlock("Computing medial axis");
+	set<WeightedPoint> pSet;
+	for (DTL2::Domain::Iterator it = domain.begin(), itE = domain.end(); it != itE; ++it) {
+		if (img(*it) >= 1)
+			pSet.insert( WeightedPoint( (*it), dtL2(*it) ) );
+	}
+	vector<WeightedPoint> vPoints;
+	vPoints.push_back( *(pSet.begin()) );
+	set<WeightedPoint>::iterator it = pSet.begin();
+	++it;
+
+	int nb = pSet.size();
+	int i = 0;
+	for (set<WeightedPoint>::iterator itE = pSet.end(); it != itE; ++it, ++i) {
+	    checkPointForMedialAxis(dtL2, vPoints, (*it).p, (*it).d);
+		trace.progressBar(i, nb);
+	}
+	trace.endBlock();
+
+	trace.beginBlock("Displaying");
+
+	Board3D<Space, KSpace> board;
+	//  board << SetMode3D( d2.domain().className(), "Paving" );
+	
+	board << SetMode3D(domain.className(), "Paving");
+	Color color(100,100,140,150);
+	vector<Point> points;
+	for ( vector<WeightedPoint>::iterator it = vPoints.begin(), itE = vPoints.end(); it != itE; ++it) 
+	{
+		//	viewer  << CustomColors3D(color, color) << (*it).p;
+		points.push_back( (*it).p );
+	}
+	computeVCM(viewer, points, 5, 3, 0.3);
+	
+	viewer << Viewer3D<>::updateDisplay;
+	app.exec();
+	std::cout << endl;
+	trace.endBlock();
+	return 0;
 }
 

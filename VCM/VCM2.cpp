@@ -28,127 +28,311 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 #include <iostream>
+#include <QtGui/qapplication.h>
+#include "DGtal/kernel/sets/DigitalSetBySTLSet.h"
+#include "DGtal/base/Common.h"
+#include "DGtal/helpers/StdDefs.h"
+#include "DGtal/kernel/BasicPointPredicates.h"
+#include "DGtal/math/linalg/EigenDecomposition.h"
+#include "DGtal/topology/helpers/Surfaces.h"
+#include "DGtal/topology/DigitalSurface.h"
+#include "DGtal/topology/ImplicitDigitalSurface.h"
+#include "DGtal/images/ImageSelector.h"
+#include "DGtal/images/IntervalForegroundPredicate.h"
+#include "DGtal/geometry/volumes/distance/ExactPredicateLpSeparableMetric.h"
+#include "DGtal/geometry/surfaces/estimation/VoronoiCovarianceMeasureOnDigitalSurface.h"
+#include "DGtal/io/colormaps/GradientColorMap.h"
+#include "DGtal/io/viewers/Viewer3D.h"
+#include "DGtal/io/readers/GenericReader.h"
+#include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
 
-#include "DGtal/base/Common.h"
-#include "DGtal/helpers/StdDefs.h"
 
-//! [Voro2D-header]
-#include "DGtal/kernel/BasicPointPredicates.h"
-#include "DGtal/images/ImageContainerBySTLVector.h"
-#include "DGtal/kernel/BasicPointPredicates.h"
-//#include "DGtal/images/imagesSetsUtils/SimpleThresholdForegroundPredicate.h"
-#include "DGtal/geometry/volumes/distance/ExactPredicateLpSeparableMetric.h"
-#include "DGtal/geometry/volumes/distance/VoronoiMap.h"
-#include "DGtal/geometry/volumes/distance/DistanceTransformation.h"
-
-#include "DGtal/io/colormaps/HueShadeColorMap.h"
-#include "DGtal/io/boards/Board2D.h"
-//! [Voro2D-header]
 
 ///////////////////////////////////////////////////////////////////////////////
 
 using namespace std;
-
-typedef DGtal::Z2i::Space Space;
-typedef DGtal::Z2i::Vector Vector;
-typedef DGtal::Z2i::Point Point;
-typedef DGtal::HyperRectDomain<Space> Domain;
-typedef DGtal::ImageContainerBySTLVector<Domain,bool> CharacteristicSet;
-typedef DGtal::ExactPredicateLpSeparableMetric<Space, 2> Metric; // L2-metric
-
-// Model of CPointPredicate
-struct CharacteristicSetPredicate {
-  typedef CharacteristicSetPredicate Self;
-  typedef DGtal::Z2i::Point Point;
-  CharacteristicSetPredicate() : ptrSet( 0 ) {}
-  CharacteristicSetPredicate( const CharacteristicSet& aSet) : ptrSet( &aSet ) {}
-  CharacteristicSetPredicate( const Self& other ) : ptrSet( other.ptrSet ) {}
-  Self& operator=( const Self& other ) { ptrSet = other.ptrSet; return *this; }
-  bool operator()( const Point& p ) const
-  { 
-    ASSERT( ptrSet != 0 );
-    return (*ptrSet)( p );
-  }
-private:
-  const CharacteristicSet* ptrSet;
-};
-
 using namespace DGtal;
 
+namespace po = boost::program_options;
+
+
+typedef Z3i::Space Space;
+typedef Z3i::KSpace KSpace;
+typedef Z3i::Point Point;
+typedef Z3i::RealPoint RealPoint;
+typedef Z3i::RealVector RealVector;
+typedef HyperRectDomain<Space> Domain;
+typedef KSpace::Surfel Surfel;
+typedef KSpace::Cell Cell;
+
+typedef ImageSelector<Domain, unsigned char>::Type Image;
+typedef functors::IntervalForegroundPredicate<Image> ThresholdedImage;
+typedef ImplicitDigitalSurface< KSpace, ThresholdedImage > DigitalSurfaceContainer;
+
+//! [DVCM3D-typedefs]
+typedef ExactPredicateLpSeparableMetric<Space, 2> Metric;          // L2-metric type
+typedef functors::HatPointFunction<Point,double>  KernelFunction;  // chi function type 
+typedef EigenDecomposition<3,double> LinearAlgebraTool;
+typedef LinearAlgebraTool::Matrix Matrix;
+
+typedef VoronoiCovarianceMeasure<Space,Metric> VCM;
+typedef ExactPredicateLpSeparableMetric<Space, 2> Metric;          // L2-metric type
+typedef functors::HatPointFunction<Point,double>  KernelFunction;  // chi function type 
+typedef VoronoiCovarianceMeasureOnDigitalSurface< DigitalSurfaceContainer, Metric,
+												  KernelFunction > VCMOnSurface;
+typedef VCMOnSurface::Surfel2Normals::const_iterator S2NConstIterator;
+
+
+
+
+
+
+
+//typedef  DigitalSetBySTLSet<DGtal::HyperRectDomain<DGtal::SpaceND<3u, int> >, std::less<DGtal::PointVector<3u, int, boost::array<int, 3ul> > > >::Iterator Iterator;
+typedef Z3i::DigitalSet::Iterator Iterator;
 ///////////////////////////////////////////////////////////////////////////////
+
+RealVector computeOrthogonalVectors(Point pt1, Point pt2) {
+	RealVector v((pt2[0] - pt1[0]), (pt2[1] - pt1[1]), (pt2[2] - pt1[2]));
+	int x = 0, y = 0, z = 0;
+	if (v[0] != 0)
+		y = -v[0];
+	if (v[1] != 0)
+		x = -v[1];
+	return RealVector(x,y,z);
+}
+
+
 int main( int argc, char** argv )
 {
+	QApplication application(argc,argv);
+	
 
-  // parse command line ----------------------------------------------
-  const string examplesPath = "/home/florent/bin/DGtal/examples/samples/";
-  
-  int R = 20;
 
-  // Récupère les points.
-  vector<unsigned int> vPos;
-  vPos.push_back(0);
-  vPos.push_back(1);
-  std::string inputSDP = examplesPath + "flower-30-8-3.sdp";
-  trace.info() << "Reading input 2d discrete points file: " << inputSDP; 
-  std::vector<Point> vectPoints=  PointListReader<Point>::getPointsFromFile(inputSDP, vPos); 
-  trace.info() << " [done] " << std::endl ; 
+// parse command line ----------------------------------------------
+	po::options_description general_opt("Allowed options are: ");
+	general_opt.add_options()
+		("help,h", "display this message")
+		("input,i", po::value<std::string>(), "vol file (.vol) , pgm3d (.p3d or .pgm3d, pgm (with 3 dims)) file or sdp (sequence of discrete points)" )
+		("featureThreshold,T", po::value<double>()->default_value(0.1), "Feature for sharp edges threshold")
+		("thresholdMin,m",  po::value<int>()->default_value(0), "threshold min to define binary shape" ) 
+		("thresholdMax,M",  po::value<int>()->default_value(255), "threshold max to define binary shape" )    
+		("transparency,t",  po::value<uint>()->default_value(255), "transparency") ; 
 
-  // Calcule le domaine englobant.
-  Point lower = *vectPoints.begin();
-  Point upper = *vectPoints.begin();
-  for ( std::vector<Point>::const_iterator it = vectPoints.begin()+1, itE = vectPoints.end();
-        it != itE; ++it )
-    {
-      lower = lower.inf( *it );
-      upper = upper.sup( *it );
-    }
-  lower -= Point::diagonal( R );
-  upper += Point::diagonal( R );
-  Domain domain( lower, upper );
+	bool parseOK=true;
+	po::variables_map vm;
+	try{
+		po::store(po::parse_command_line(argc, argv, general_opt), vm);  
+	}catch(const std::exception& ex){
+		parseOK=false;
+		trace.info()<< "Error checking program options: "<< ex.what()<< endl;
+	}
+	po::notify(vm);    
+	if( !parseOK || vm.count("help")||argc<=1)
+	{
+		std::cout << "Usage: " << argv[0] << " [input]\n"
+				  << "Display volume file as a voxel set by using QGLviewer"<< endl
+				  << general_opt << "\n";
+		return 0;
+	}  
+	if(!vm.count("input"))
+	{
+		trace.error() << " The file name was defined" << endl;      
+		return 0;
+	}
+	string inputFilename = vm["input"].as<std::string>();
+	int thresholdMin = vm["thresholdMin"].as<int>();
+	int thresholdMax = vm["thresholdMax"].as<int>();
+	unsigned char transp = vm["transparency"].as<uint>();
+	double T = vm["featureThreshold"].as<double>();
+ 
+	trace.info() << "File             = " << inputFilename << std::endl;
+	trace.info() << "Min image thres. = " << thresholdMin << std::endl;
+	trace.info() << "Max image thres. = " << thresholdMax << std::endl;
+	const double R = 5;
+	trace.info() << "Big radius     R = " << R << std::endl;
+	const double r = 3;
+	trace.info() << "Small radius   r = " << r << std::endl;
+	const double trivial_r = 3;
+	trace.info() << "Trivial radius t = " << trivial_r << std::endl; // for orienting the directions given by the tensor.
+	trace.info() << "Feature thres. T = " << T << std::endl; // threshold for displaying features as red.
 
-  // Définit les points de X.
-  CharacteristicSet charSet( domain );
-  for ( std::vector<Point>::const_iterator it = vectPoints.begin(), itE = vectPoints.end();
-        it != itE; ++it )
-    charSet.setValue( *it, true );
+	const double size = 1.0; // size of displayed normals.
+	KSpace ks;
+// Reads the volume
+	trace.beginBlock( "Loading image into memory and build digital surface." );
+	//Image image = GenericReader<Image>::import(inputFilename);
+	//ThresholdedImage thresholdedImage( image, thresholdMin, thresholdMax );
+	//std::vector<Point> points = PointListReader<Point>::getPointsFromFile(inputFilename);
+	Image image = VolReader<Image>::importVol(inputFilename);
+	ThresholdedImage thresholdedImage(image, thresholdMin, thresholdMax);
+	ks.init( image.domain().lowerBound(),
+			 image.domain().upperBound(), true );
+	SurfelAdjacency<KSpace::dimension> surfAdj(true); // interior in all directions.
+	
+	Surfel bel = Surfaces<KSpace>::findABel( ks, thresholdedImage, 10000 );
 
-  // Display input set.
-  Board2D board;
-  for ( Domain::ConstIterator it = domain.begin(), itE = domain.end();
-        it != itE; ++it )
-    if ( charSet( *it ) ) board << *it;
+	DigitalSurfaceContainer* container = 
+		new DigitalSurfaceContainer( ks, thresholdedImage, surfAdj, bel, true  );
 
-  // Le diagramme de Voronoi est calculé sur le complément de X.
-  CharacteristicSetPredicate inCharSet( charSet );
-  typedef DGtal::functors::NotPointPredicate<CharacteristicSetPredicate> NotPredicate;
-  NotPredicate notSetPred( inCharSet);
+	DigitalSurface< DigitalSurfaceContainer > surface( container ); //acquired
 
-  trace.beginBlock ( "Calcul du diagramme de Voronoi 2D" );
-  typedef VoronoiMap<Z2i::Space, NotPredicate, Metric > Voronoi2D;
-  Metric l2;
-  Voronoi2D voronoimap(domain,notSetPred,l2);
+	trace.info() << "Digital surface has " << surface.size() << " surfels." << std::endl;
+	trace.endBlock();
+
+//! [DVCM3D-instantiation]
+	Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel; 
+	Metric l2;                                // Euclidean L2 metric 
+	KernelFunction chi( 1.0, r );             // hat function with support of radius r
+	VCMOnSurface vcm_surface( surface, embType, R, r, 
+							  chi, trivial_r, l2, true );
+//! [DVCM3D-instantiation]
+
+	trace.beginBlock( "Displaying VCM" );
+	Viewer3D<> viewer( ks );
+	Cell dummy;
+	viewer.setWindowTitle("3D VCM viewer");
+	viewer << SetMode3D( dummy.className(), "Basic" );
+	viewer.show();
+
+	GradientColorMap<double> grad( 0, T );
+	grad.addColor( Color( 128, 128, 255 ) );
+	grad.addColor( Color( 255, 255, 255 ) );
+	grad.addColor( Color( 255, 255, 0 ) );
+	grad.addColor( Color( 255, 0, 0 ) );
+	RealVector lambda; // eigenvalues of chi-vcm
+	for ( S2NConstIterator it = vcm_surface.mapSurfel2Normals().begin(), 
+			  itE = vcm_surface.mapSurfel2Normals().end(); it != itE; ++it )
+	{
+		Surfel s = it->first;
+		Point kp = ks.sKCoords( s );
+		RealPoint rp( 0.5 * (double) kp[ 0 ], 0.5 * (double) kp[ 1 ], 0.5 * (double) kp[ 2 ] );
+		RealVector n = it->second.vcmNormal;
+		vcm_surface.getChiVCMEigenvalues( lambda, s );
+		double ratio = lambda[ 1 ] / ( lambda[ 0 ] + lambda[ 1 ] + lambda[ 2 ] ); 
+		viewer.setFillColor( grad( ratio > T ? T : ratio ) );
+		viewer << ks.unsigns( s );
+		n *= size;
+		viewer.setLineColor( Color::Black );
+		viewer.addLine( rp + n, rp - n, 0.1 );
+	}
+	viewer << Viewer3D<>::updateDisplay;
+	application.exec();
+	trace.endBlock();
+	return 0;
+}
+// trace.info() << set3d.size() << endl;
+// Metric l2;
+// VCM vcm(R,r, l2, true);
+// vcm.init( set3d.begin(), set3d.end() );
+// Domain domain = vcm.domain();
+// KernelFunction chi( 1.0, r );
+// //ks.init( image.domain().lowerBound(),
+// //		 image.domain().upperBound(), true );
+// // Flat zones are metallic blue, slightly curved zones are white,
+// // more curved zones are yellow till red.
+// GradientColorMap<double> colormap( 0.0, T );
+// colormap.addColor( Color( 128, 128, 255,(transp/255.0f) ) );
+// colormap.addColor( Color( 255, 255, 255,(transp/255.0f) ) );
+// colormap.addColor( Color( 255, 255, 0,(transp/255.0f) ) );
+// colormap.addColor( Color( 255, 0, 0, (transp/255.0f) ) );
+
+// Matrix vcm_r, evec;
+// RealVector eval;
+// Viewer3D<> viewer;
+// Cell dummy;
+// viewer.setWindowTitle("3D VCM viewer");
+// viewer << SetMode3D( dummy.className(), "Basic" );
+// viewer.show();
+// double totalDistance = 0.0;
+// Iterator it = set3d.begin();
+// Iterator itE = set3d.end();
+// for (; it != itE; ++it )
+// {
+// 	// Compute VCM and diagonalize it.
+// 	vcm_r = vcm.measure( chi, *it );
+// 	LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
+// 	double feature = eval[ 1 ] / ( eval[ 0 ] +  eval[ 1 ] + eval[2] );
+// 	// Display normal
+// 	RealVector n = evec.column( 1 );
+// 	RealPoint rp( (*it)[ 0 ], (*it)[ 1 ], (*it)[2] ); 
+// 	viewer.setFillColor( colormap( feature > T ? T : feature ) );
+// 	viewer << (*it);
+// 	//n *= size;
+// 	viewer.setLineColor( Color::Black );
+// 	viewer.addLine( rp + n, rp - n, 0.3 );
+// }
+// trace.info() << "Total distance= " << totalDistance << "size= " << set3d.size() << endl;
+// viewer << Viewer3D<>::updateDisplay;
+// application.exec();
+// return 0;
+
+
+
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
+
+/*void function3D() {
+  trace.endBlock();
+  trace.beginBlock( "Extracting boundary by scanning the space. " );
+  trace.info() << image.domain().lowerBound() << " upperBound= " << image.domain().upperBound() << endl;
+  ks.init( image.domain().lowerBound(),
+  image.domain().upperBound(), true );
+  SurfelAdjacency<KSpace::dimension> surfAdj(true); // interior in all directions.
+  Surfel bel = Surfaces<KSpace>::findABel( ks, thresholdedImage, 100 );
+
+  DigitalSurfaceContainer* container = 
+  new DigitalSurfaceContainer( ks, thresholdedImage, surfAdj, bel, true  );
+
+  DigitalSurface< DigitalSurfaceContainer > surface( container ); //acquired
+  trace.info() << "Digital surface has " << surface.size() << " surfels." << std::endl;
   trace.endBlock();
 
-  // On affiche le vecteur vers le site le plus proche seulement si il est à distance <= 4.
-  // board.clear();
-  // board << domain;
-  for(Voronoi2D::Domain::ConstIterator it = voronoimap.domain().begin(),
-      itend = voronoimap.domain().end(); it != itend; ++it)
-  {
-    Voronoi2D::Value site = voronoimap( *it );   //closest site to (*it)
-    if (site != (*it))
-      {
-        double d = l2( site, *it );
-        if( d <= (double)R )
-        { 
-            Display2DFactory::draw( board,   site - (*it), (*it)); //Draw an arrow
-        }
-      }
-  }
-  board.saveSVG("voronoimap-voro-R.svg");
+//! [DVCM3D-instantiation]
+Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel; 
+Metric l2;                                // Euclidean L2 metric 
+KernelFunction chi( 1.0, r );             // hat function with support of radius r
+VCMOnSurface vcm_surface( surface, embType, R, r, 
+chi, trivial_r, l2, true );
+//! [DVCM3D-instantiation]
 
-  return 0;
+trace.beginBlock( "Displaying VCM" );
+Viewer3D<> viewer( ks );
+Cell dummy;
+viewer.setWindowTitle("3D VCM viewer");
+viewer << SetMode3D( dummy.className(), "Basic" );
+viewer.show();
+
+GradientColorMap<double> grad( 0, T );
+grad.addColor( Color( 128, 128, 255 ) );
+grad.addColor( Color( 255, 255, 255 ) );
+grad.addColor( Color( 255, 255, 0 ) );
+grad.addColor( Color( 255, 0, 0 ) );
+RealVector lambda; // eigenvalues of chi-vcm
+for ( S2NConstIterator it = vcm_surface.mapSurfel2Normals().begin(), 
+itE = vcm_surface.mapSurfel2Normals().end(); it != itE; ++it )
+{
+Surfel s = it->first;
+Point kp = ks.sKCoords( s );
+RealPoint rp( 0.5 * (double) kp[ 0 ], 0.5 * (double) kp[ 1 ], 0.5 * (double) kp[ 2 ] );
+RealVector n = it->second.vcmNormal;
+vcm_surface.getChiVCMEigenvalues( lambda, s );
+double ratio = lambda[ 1 ] / ( lambda[ 0 ] + lambda[ 1 ] + lambda[ 2 ] ); 
+viewer.setFillColor( grad( ratio > T ? T : ratio ) );
+viewer << ks.unsigns( s );
+n *= size;
+viewer.setLineColor( Color::Black );
+viewer.addLine( rp + n, rp - n, 0.1 );
 }
+viewer << Viewer3D<>::updateDisplay;
+application.exec();
+trace.endBlock();
+return 0;
+}*/
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
+
+

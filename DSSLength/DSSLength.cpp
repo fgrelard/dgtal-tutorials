@@ -25,7 +25,7 @@
 //  *
 //  * This file is part of the DGtal library.
 //  */
-
+// DSS LENGTH
 ///////////////////////////////////////////////////////////////////////////////
 #include <iostream>
 #include <QtGui/qapplication.h>
@@ -49,11 +49,11 @@
 #include "DGtal/topology/helpers/Surfaces.h"
 #include "DGtal/base/BasicFunctors.h"
 #include "DGtal/geometry/curves/StandardDSS6Computer.h"
-#include "DGtal/geometry/curves/SaturatedSegmentation.h"
+#include "DGtal/geometry/curves/GreedySegmentation.h"
 #include "DGtal/geometry/curves/FP.h"
 #include "DGtal/io/viewers/Viewer3D.h"
-
-
+#include "StandardDSS26Computer.h"
+#include "DGtal/geometry/curves/SaturatedSegmentation.h"
 ///////////////////////////////////////////////////////////////////////////////
 
 using namespace std;
@@ -64,21 +64,29 @@ namespace po = boost::program_options;
 
 typedef Z3i::Space Space;
 typedef Z3i::KSpace KSpace;
+typedef KhalimskySpaceND<3, int> K3;
 typedef Z3i::Point Point;
 typedef Z3i::RealPoint RealPoint;
 typedef Z3i::RealVector RealVector;
 typedef HyperRectDomain<Space> Domain;
 typedef KSpace::Surfel Surfel;
 typedef KSpace::Cell Cell;
-
 typedef ImageContainerBySTLMap<Domain, int> Image;
 typedef vector<Point>::const_iterator PointIterator;
 typedef  DigitalSetBySTLSet<DGtal::HyperRectDomain<DGtal::SpaceND<3u, int> >, std::less<DGtal::PointVector<3u, int, boost::array<int, 3ul> > > >::Iterator Iterator;
 
+
+const Color  AXIS_COLOR( 0, 0, 0, 255 );
+const double AXIS_LINESIZE = 0.1;
+const Color  XY_COLOR( 0, 0, 255, 50 );
+const Color  XZ_COLOR( 0, 255, 0, 50 );
+const Color  YZ_COLOR( 255, 0, 0, 50 );
+
+
 template <typename KSPace, typename Space>
 double estimateLength(const vector<Point> & points, Viewer3D<Space, KSPace> & viewer, bool display=false) {
 	typedef typename PointIterator::value_type Point3d;
-	typedef StandardDSS6Computer<PointIterator,int,4> SegmentComputer;
+	typedef StandardDSS6Computer<PointIterator,int,8> SegmentComputer;
 	typedef SaturatedSegmentation<SegmentComputer> Decomposition;
 	typedef typename Decomposition::SegmentComputerIterator SegmentComputerIterator;
 	HueShadeColorMap<int> cmap_hue( 0, 3, 1 );
@@ -88,17 +96,18 @@ double estimateLength(const vector<Point> & points, Viewer3D<Space, KSPace> & vi
 	viewer << SetMode3D( algo.className(), "BoundingBox" );
 	int c = 0;
 	for (SegmentComputerIterator i = decomp.begin(); i != decomp.end(); ++i) {
+		SegmentComputerIterator tmp = i;
 		SegmentComputer ms3d(*i);
 		Point3d first = *ms3d.begin();
-		Point3d last = *(ms3d.end() - 1);
+		Point3d last = *(ms3d.end() -1);
 		trace.info() << "-  MS3D,"
 					 << " [" << first[ 0 ] << "," << first[ 1 ] << ","<< first[ 2 ] << "]"
 					 << "->[" << last[ 0 ] << "," << last[ 1 ] << ","<< last[ 2 ] << "]" << endl;
-		double distanceDSS = sqrt(pow((last[0] - first[0]), 2) + pow((last[1] - first[1]), 2) + pow((last[2] - first[2]), 2)); 
+		double distanceDSS = sqrt(pow((last[0] - first[0]), 2) + pow((last[1] - first[1]), 2) + pow((last[2] - first[2]), 2));
 		totalEstimatedLength += distanceDSS;
 		Color color3d = cmap_hue(c);
 		if (display) {
-			viewer << CustomColors3D(color3d, color3d) << ms3d;
+			viewer << CustomColors3D(Color::Red, Color::Red) << ms3d;
 		}
 		c++;
 	}
@@ -106,7 +115,38 @@ double estimateLength(const vector<Point> & points, Viewer3D<Space, KSPace> & vi
 }
 
 
-template <typename KSPace, typename Space>
+
+template <typename KSpace, typename StandardDSS6Computer, typename space, typename kspace >
+void displayProj2d( Viewer3D<space, kspace> & viewer,
+		    const KSpace & ks, const StandardDSS6Computer & dss3d,
+		    const DGtal::Color & color2d )
+{
+  typedef typename StandardDSS6Computer::ArithmeticalDSSComputer2d ArithmeticalDSSComputer2d;
+  typedef typename ArithmeticalDSSComputer2d::ConstIterator ConstIterator2d;
+  typedef typename ArithmeticalDSSComputer2d::Point Point2d;
+  typedef typename KSpace::Cell Cell;
+  typedef typename KSpace::Point Point3d;
+  Point3d b = ks.lowerBound();
+  for ( DGtal::Dimension i = 0; i < 3; ++i )
+    {
+      const ArithmeticalDSSComputer2d & dss2d = dss3d.arithmeticalDSS2d( i );
+      for ( ConstIterator2d itP = dss2d.begin(), itPEnd = dss2d.end(); itP != itPEnd; ++itP )
+	{
+	  Point2d p = *itP;
+	  Point3d q;
+	  switch (i) {
+	  case 0: q = Point3d( 2*b[ i ]  , 2*p[ 0 ]+1, 2*p[ 1 ]+1 ); break;
+	  case 1: q = Point3d( 2*p[ 0 ]+1, 2*b[ i ]  , 2*p[ 1 ]+1 ); break;
+	  case 2: q = Point3d( 2*p[ 0 ]+1, 2*p[ 1 ]+1, 2*b[ i ]   ); break;
+	  }
+	  Cell c = ks.uCell( q );
+	  trace.info() << c << endl;
+//	  viewer << CustomColors3D( color2d, color2d ) << c;
+	}
+    }
+}
+
+/*template <typename KSPace, typename Space>
 double estimateLengthWithFP(const vector<Point> &points, Viewer3D<Space, KSPace> & viewer, bool display = false) {
 	typedef FP<PointIterator, int, 4> MariannePolygon;
 	double totalEstimatedLength = 0.0;
@@ -125,7 +165,7 @@ double estimateLengthWithFP(const vector<Point> &points, Viewer3D<Space, KSPace>
 		}
 	}
 	return totalEstimatedLength;
-}
+	}*/
 
 
 
@@ -134,7 +174,7 @@ int main( int argc, char** argv )
 {
 	const string examplesPath = "/home/florent/bin/DGtal/examples/samples/";
 	QApplication application(argc,argv);
-	Viewer3D<Space, KSpace> viewer;
+	Viewer3D<> viewer;
 	
 
 // parse command line ----------------------------------------------
@@ -176,7 +216,6 @@ int main( int argc, char** argv )
 	trace.info() << "Min image thres. = " << thresholdMin << std::endl;
 	trace.info() << "Max image thres. = " << thresholdMax << std::endl;
 
-	KSpace ks;
 
 // Reads the volume
 	trace.beginBlock( "Loading image into memory and build digital surface." );
@@ -188,15 +227,28 @@ ks.init(image.domain().lowerBound(), image.domain().upperBound(), false);
 //SetFromImage<Z3i::DigitalSet>::append<Image>(set3d, image, thresholdMin, thresholdMax);
 */
 
+
+    K3 ks;
+	Point lowerBound = points[ 0 ];
+	Point upperBound = points[ 0 ];
+	for ( unsigned int j = 1; j < points.size(); ++j )
+    {
+		lowerBound = lowerBound.inf( points[ j ] );
+		upperBound = upperBound.sup( points[ j ] );
+    }
+	lowerBound -= Point::diagonal( 3 );
+	upperBound += Point::diagonal( 4 );
+	ks.init(lowerBound, upperBound, true);
+		
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	viewer.show();
 	for (vector<Point>::iterator it = points.begin(); it != points.end(); ++it) {
 		trace.info() << (*it) << endl;
 		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);
 	}
-
-	
-	trace.info() << "DSS estimated length = " << estimateLengthWithFP(points, viewer, true) << endl;
+	const string mode = "WIRED";
+	//displayAxes<Point, SpaceND<3, int>::RealPoint, Z3i::Space, Z3i::KSpace>(viewer, ks.lowerBound(), ks.upperBound(), mode);
+	trace.info() << "DSS estimated length = " << estimateLength<>(points, viewer, true) << endl;
 
 	viewer << Viewer3D<>::updateDisplay;
 	application.exec();

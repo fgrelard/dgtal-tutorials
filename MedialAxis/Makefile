@@ -102,41 +102,41 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named MedialAxis
+# Target rules for targets named surface2points
 
 # Build rule for target.
-MedialAxis: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 MedialAxis
-.PHONY : MedialAxis
+surface2points: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 surface2points
+.PHONY : surface2points
 
 # fast build rule for target.
-MedialAxis/fast:
-	$(MAKE) -f CMakeFiles/MedialAxis.dir/build.make CMakeFiles/MedialAxis.dir/build
-.PHONY : MedialAxis/fast
+surface2points/fast:
+	$(MAKE) -f CMakeFiles/surface2points.dir/build.make CMakeFiles/surface2points.dir/build
+.PHONY : surface2points/fast
 
-MedialAxis.o: MedialAxis.cpp.o
-.PHONY : MedialAxis.o
+surface2points.o: surface2points.cpp.o
+.PHONY : surface2points.o
 
 # target to build an object file
-MedialAxis.cpp.o:
-	$(MAKE) -f CMakeFiles/MedialAxis.dir/build.make CMakeFiles/MedialAxis.dir/MedialAxis.cpp.o
-.PHONY : MedialAxis.cpp.o
+surface2points.cpp.o:
+	$(MAKE) -f CMakeFiles/surface2points.dir/build.make CMakeFiles/surface2points.dir/surface2points.cpp.o
+.PHONY : surface2points.cpp.o
 
-MedialAxis.i: MedialAxis.cpp.i
-.PHONY : MedialAxis.i
+surface2points.i: surface2points.cpp.i
+.PHONY : surface2points.i
 
 # target to preprocess a source file
-MedialAxis.cpp.i:
-	$(MAKE) -f CMakeFiles/MedialAxis.dir/build.make CMakeFiles/MedialAxis.dir/MedialAxis.cpp.i
-.PHONY : MedialAxis.cpp.i
+surface2points.cpp.i:
+	$(MAKE) -f CMakeFiles/surface2points.dir/build.make CMakeFiles/surface2points.dir/surface2points.cpp.i
+.PHONY : surface2points.cpp.i
 
-MedialAxis.s: MedialAxis.cpp.s
-.PHONY : MedialAxis.s
+surface2points.s: surface2points.cpp.s
+.PHONY : surface2points.s
 
 # target to generate assembly for a file
-MedialAxis.cpp.s:
-	$(MAKE) -f CMakeFiles/MedialAxis.dir/build.make CMakeFiles/MedialAxis.dir/MedialAxis.cpp.s
-.PHONY : MedialAxis.cpp.s
+surface2points.cpp.s:
+	$(MAKE) -f CMakeFiles/surface2points.dir/build.make CMakeFiles/surface2points.dir/surface2points.cpp.s
+.PHONY : surface2points.cpp.s
 
 # Help Target
 help:
@@ -144,12 +144,12 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
-	@echo "... MedialAxis"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... MedialAxis.o"
-	@echo "... MedialAxis.i"
-	@echo "... MedialAxis.s"
+	@echo "... surface2points"
+	@echo "... surface2points.o"
+	@echo "... surface2points.i"
+	@echo "... surface2points.s"
 .PHONY : help
 
 

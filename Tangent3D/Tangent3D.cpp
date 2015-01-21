@@ -104,17 +104,18 @@ public:
 	void compute_tangent(vector<Tangent> tangents) {
 		Vector v;
 	    double weighted_eccentricity = 0.;
+		
 		for (auto it = tangents.begin(), itE = tangents.end(); it != itE; ++it) {
-			float weight = lambda(it->eccentricity);
+			float weight = triangle(it->eccentricity);
 			Vector direction = (Vector)it->v / (float) it->v.norm();
 			(weight == 0.) ? direction *= 1 : direction *= weight; 
 			v += direction;	
-			weighted_eccentricity += lambda(it->eccentricity);
+			weighted_eccentricity += triangle(it->eccentricity);
 		}
+		
 		if (weighted_eccentricity != 0.)
 			tangent = v / weighted_eccentricity;
 		else if (v == v) { // checking if nan
-			trace.info() << "v= "<< v;
 			tangent = v;
 		}
 	}
@@ -147,13 +148,11 @@ vector<Pencil> computeTangentialCover(Iterator itB, Iterator itE,
 			for (auto sitPointB = sitB->begin(), sitPointE = sitB->end(); sitPointB != sitPointE; ++sitPointB) {
 				//If the point we re looking at is the same as the one in one of the segments
 				if (*itB == *sitPointB) {
-				   
+				
 					DSS currentSegment(*sitB);
 					//Direction vector
-					Point3D v;
-					Vector3D intercept, omega;
 					// Getting the vector defining the segment
-					currentSegment.getParameters(v, intercept, omega);
+					Vector3D v = *(currentSegment.end()-1) - *currentSegment.begin();
 					tangent = Tangent(position, v);
 					found = true;
 				}
@@ -219,14 +218,21 @@ void orthogonalPlanesWithTangents(Iterator itb, Iterator ite, Viewer3D<> & viewe
 	typedef MSTTangent<Point3D> Tangent;
 	typedef Pencil<Vector3D, Tangent, Vector3D> Pencil;
 
+/*	for (; i != end; ++i) {
+		SegmentComputer currentSegmentComputer(*i); 
+	    viewer << SetMode3D(currentSegmentComputer.className(), "BoundingBox");
+		viewer << CustomColors3D(Color::Blue, Color::Blue);
+		viewer << currentSegmentComputer;
+
+		}*/
+
 	
 	vector<Pencil> tangents = computeTangentialCover<Pencil>(itb, ite, s);
-	
 	for (auto it = tangents.begin(), itE = tangents.end(); it != itE; ++it) {
-	 	//SegmentComputer currentSegmentComputer(*i); 
-		//viewer << SetMode3D(currentSegmentComputer.className(), "BoundingBox");
+	 	// SegmentComputer currentSegmentComputer(*i); 
+		// viewer << SetMode3D(currentSegmentComputer.className(), "BoundingBox");
 		viewer << CustomColors3D(Color::Red, Color::Red);
-		//viewer << currentSegmentComputer;
+		// viewer << currentSegmentComputer;
 		Point3D point = it->getPoint();
 		Vector3D tangent = it->getTangent();
 		int size_factor = 2;
@@ -239,9 +245,9 @@ void orthogonalPlanesWithTangents(Iterator itb, Iterator ite, Viewer3D<> & viewe
 		Vector3D p2 = (Vector3D) point + plane[1] * size_factor;
 		Vector3D p3 = (Vector3D) point + plane[2] * size_factor;
 		Vector3D p4 = (Vector3D) point + plane[3] * size_factor;
-		viewer.addQuad(p1, p2, p4, p3);
+	viewer.addQuad(p1, p2, p4, p3);
 	} 
-
+	
 }
 
 double triangle(double x) {
@@ -329,7 +335,7 @@ int main(int argc, char **argv)
 	// ordered sequentially by their connexity
 	// Otherwise we have a point container with points which are not neighbours
 	// and this impairs maximal segment recognition
-	typedef MetricAdjacency<Z3i::Space, 3>                Graph;
+	typedef MetricAdjacency<Z3i::Space, 3> Graph;
 	typedef DepthFirstVisitor<Graph> Visitor;
 	typedef typename Visitor::Node MyNode;
 	
@@ -340,7 +346,9 @@ int main(int argc, char **argv)
 	while ( !visitor.finished() )
 	{
   		node = visitor.current();
-		if (image.domain().isInside(node.first) && image(node.first) >= 1) { //is inside domain
+		if ( image.domain().isInside(node.first) &&
+			image(node.first) >= thresholdMin &&
+			image(node.first) <= thresholdMax ) { //is inside domain
 			vPoints.push_back(node.first);
 			visitor.expand();
 		}
