@@ -235,6 +235,8 @@ CMakeFiles/Tangent3D.dir/Tangent3D.cpp.o
  /usr/local/include/DGtal/geometry/curves/FrechetShortcut.ih
  /usr/local/include/DGtal/geometry/curves/FreemanChain.h
  /usr/local/include/DGtal/geometry/curves/FreemanChain.ih
+ /usr/local/include/DGtal/geometry/curves/GreedySegmentation.h
+ /usr/local/include/DGtal/geometry/curves/GreedySegmentation.ih
  /usr/local/include/DGtal/geometry/curves/GridCurve.h
  /usr/local/include/DGtal/geometry/curves/GridCurve.ih
  /usr/local/include/DGtal/geometry/curves/SaturatedSegmentation.h
@@ -264,6 +266,8 @@ CMakeFiles/Tangent3D.dir/Tangent3D.cpp.o
  /usr/local/include/DGtal/graph/DepthFirstVisitor.ih
  /usr/local/include/DGtal/graph/Expander.h
  /usr/local/include/DGtal/graph/Expander.ih
+ /usr/local/include/DGtal/graph/GraphVisitorRange.h
+ /usr/local/include/DGtal/graph/GraphVisitorRange.ih
  /usr/local/include/DGtal/helpers/StdDefs.h
  /usr/local/include/DGtal/images/CConstImage.h
  /usr/local/include/DGtal/images/CImage.h
@@ -348,6 +352,8 @@ CMakeFiles/Tangent3D.dir/Tangent3D.cpp.o
  /usr/local/include/DGtal/kernel/NumberTraits.ih
  /usr/local/include/DGtal/kernel/PointVector.h
  /usr/local/include/DGtal/kernel/PointVector.ih
+ /usr/local/include/DGtal/kernel/RegularPointEmbedder.h
+ /usr/local/include/DGtal/kernel/RegularPointEmbedder.ih
  /usr/local/include/DGtal/kernel/SpaceND.h
  /usr/local/include/DGtal/kernel/domains/CDomain.h
  /usr/local/include/DGtal/kernel/domains/DomainPredicate.h
@@ -379,8 +385,16 @@ CMakeFiles/Tangent3D.dir/Tangent3D.cpp.o
  /usr/local/include/DGtal/math/linalg/CMatrix.h
  /usr/local/include/DGtal/math/linalg/CVector.h
  /usr/local/include/DGtal/math/linalg/CVectorSpace.h
+ /usr/local/include/DGtal/shapes/CDigitalBoundedShape.h
+ /usr/local/include/DGtal/shapes/CDigitalOrientedShape.h
+ /usr/local/include/DGtal/shapes/CEuclideanBoundedShape.h
+ /usr/local/include/DGtal/shapes/CEuclideanOrientedShape.h
+ /usr/local/include/DGtal/shapes/GaussDigitizer.h
+ /usr/local/include/DGtal/shapes/GaussDigitizer.ih
  /usr/local/include/DGtal/shapes/Mesh.h
  /usr/local/include/DGtal/shapes/Mesh.ih
+ /usr/local/include/DGtal/shapes/Shapes.h
+ /usr/local/include/DGtal/shapes/Shapes.ih
  /usr/local/include/DGtal/shapes/fromPoints/CircleFrom2Points.h
  /usr/local/include/DGtal/shapes/fromPoints/CircleFrom2Points.ih
  /usr/local/include/DGtal/shapes/fromPoints/CircleFrom3Points.h
@@ -389,6 +403,10 @@ CMakeFiles/Tangent3D.dir/Tangent3D.cpp.o
  /usr/local/include/DGtal/shapes/fromPoints/Point2ShapePredicate.ih
  /usr/local/include/DGtal/shapes/fromPoints/StraightLineFrom2Points.h
  /usr/local/include/DGtal/shapes/fromPoints/StraightLineFrom2Points.ih
+ /usr/local/include/DGtal/shapes/parametric/Ball2D.h
+ /usr/local/include/DGtal/shapes/parametric/Ball2D.ih
+ /usr/local/include/DGtal/shapes/parametric/StarShaped2D.h
+ /usr/local/include/DGtal/shapes/parametric/StarShaped2D.ih
  /usr/local/include/DGtal/topology/CAdjacency.h
  /usr/local/include/DGtal/topology/CCellEmbedder.h
  /usr/local/include/DGtal/topology/CCellularGridSpaceND.h
