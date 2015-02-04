@@ -22,27 +22,38 @@
 // Drawing
 #include "DGtal/io/boards/Board3D.h"
 #include "DGtal/images/imagesSetsUtils/ImageFromSet.h"
+#include "DGtal/io/writers/VolWriter.h"
 ///////////////////////////////////////////////////////////////////////////////
 
-#define INCREMENT 0.01
+
 using namespace std;
 using namespace DGtal;
 
+double INCREMENT = 0.01;
 /**
  * Board: where to draw2
  * range: range in z axis to draw the curve
  **/
-
+template <typename Point>
+class PointDeletable : public Point {
+	typedef typename Point::Component Scalar;
+public:
+	PointDeletable() : Point() {}
+	PointDeletable(const Scalar& x, const Scalar& y, const Scalar& z) : Point(x,y,z) {}
+	bool myMarkedToDelete = false;
+};
 
 typedef DigitalSetSelector<Z3i::Domain,  HIGH_ITER_DS + MEDIUM_DS>::Type DigitalSet;
 typedef Z3i::Space Space;
 typedef Z3i::KSpace KSpace;
 typedef Z3i::Curve::ArrowsRange Range;
-typedef Z3i::Point Point;
+typedef PointDeletable<Z3i::Point> Point;
 typedef Range::ConstIterator ConstIterator;
 typedef RosenProffittLocalLengthEstimator<Range::ConstIterator> LengthEstimator; 
 typedef vector<Point>::const_iterator PointIterator;
 typedef  DigitalSetBySTLSet<DGtal::HyperRectDomain<DGtal::SpaceND<3u, int> >, std::less<DGtal::PointVector<3u, int, boost::array<int, 3ul> > > >::Iterator Iterator;
+
+
 
 void saveToPL(vector<Point> & vPoints, std::string filename) {
 	ofstream s(filename.c_str());
@@ -52,12 +63,58 @@ void saveToPL(vector<Point> & vPoints, std::string filename) {
 	s.close();
 }
 
-void add(const Point & p, vector<Point> & v) {
+void add(const Point& p, vector<Point> & v) {
 	if (find(v.begin(), v.end(), p) != v.end()) {
 		return;
 	} else {
 		v.push_back(p);
 	}
+}
+
+/**
+ * This function finds if the 6 neighbour of a given point p lie on the same orientation
+ * If there are more than 2 direct neighbours, then we don't have the same orientation
+ * that is to say we dont have a curve
+ * This function allows to determine points which can be removed
+ **/
+ 
+bool sameDirection6Neighbour(const vector<Point> & v, Point & p) {
+	typedef Z3i::Space Space;
+	typedef MetricAdjacency<Space, 1> MetricAdjacency;
+
+	vector<Point> neighbours6;
+	for (auto it = v.begin(), itE = v.end(); it != itE; ++it) {
+		if (MetricAdjacency::isAdjacentTo(*it, p) && *it != p) {
+		    neighbours6.push_back(*it);
+		}
+	}
+
+	bool sameDirection = true;
+	for (unsigned int i = 0; i < neighbours6.size() - 1; i++) {
+		Point current = neighbours6[i];
+		Point next = neighbours6[i+1];
+		if (!current.myMarkedToDelete && !next.myMarkedToDelete && current[0] != next[0] && current[1] != next[1]) {
+			sameDirection = false;
+			p.myMarkedToDelete = true;
+		}
+	}
+	return sameDirection;
+}
+
+/**
+ * Allows to obtain a 26 connected curve
+ **/
+void construct26ConnectedCurve(vector<Point> & vectorPoints) {
+	vectorPoints.erase(
+		std::remove_if(
+			vectorPoints.begin(), vectorPoints.end(), [&vectorPoints](Point& other) {
+				//the points removed correspond to those having neighbours with different direction
+				return (!sameDirection6Neighbour(vectorPoints, other));
+				
+			}
+			),
+		vectorPoints.end()
+		);
 }
 
 void drawCircle(vector<Point> & vectorPoints, float radius, float cx, float cy, float z) {
@@ -66,11 +123,12 @@ void drawCircle(vector<Point> & vectorPoints, float radius, float cx, float cy, 
     while (angle <= 2 * M_PI){
 		x = radius * cos( angle );
 		y = radius * sin( angle );
-		add(Point(x+cx, y+cy, z), vectorPoints);
-		angle += 0.01f;
+		add(Point((int)x+cx, (int)y+cy, (int)z), vectorPoints);
+		angle += INCREMENT;
 	}
-}
+	construct26ConnectedCurve(vectorPoints);
 
+}
 /*
  * Radius Winding : radius of the loop
  * RadiusSpiral: radius of the volume
@@ -99,7 +157,7 @@ void createHelixCurve( vector<Point> &point, int range, int radius, int pitch) {
 
 void createStraightLine(vector<Point> & points, int range) {
 	for (int i = 0; i < range; i++) {
-		Point p(i, i, 0);
+		Point p (i, i, 0);
 	    add(p, points);
 	}
 }
@@ -109,51 +167,6 @@ double lengthHelixCurve(int range, int radius, int pitch) {
 	return range * sqrt(pow(radius, 2) + pow(pitch, 2));
 }
 
-double estimateLength(vector<Point> v) {
-    GridCurve<Z3i::KSpace> c;
-	c.initFromVector(v);
-	Range range = c.getArrowsRange();
-	ConstIterator it = range.begin();
-	ConstIterator itE = range.end();
-
-//trace.info() << (*it).first << endl;
-	
-
-	LengthEstimator length;
-	length.init(1, it, itE, true);
-    return length.eval();
-}
-
-//template <typename KSPace, typename Space>
-double estimateLength(const vector<Point> & points, /*Viewer3D<Space, KSPace> & viewer,*/ bool display=false) {
-	typedef typename PointIterator::value_type Point3d;
-	typedef StandardDSS6Computer<PointIterator,int,18> SegmentComputer;
-	typedef SaturatedSegmentation<SegmentComputer> Decomposition;
-	typedef typename Decomposition::SegmentComputerIterator SegmentComputerIterator;
-	HueShadeColorMap<int> cmap_hue( 0, 3, 1 );
-	SegmentComputer algo;
-	Decomposition decomp(points.begin(), points.end(), algo);
-	double totalEstimatedLength= 0.0;
-//	viewer << SetMode3D( algo.className(), "BoundingBox" );
-	int c = 0;
-	for (SegmentComputerIterator i = decomp.begin(); i != decomp.end(); ++i) {
-		SegmentComputerIterator tmp = i;
-		SegmentComputer ms3d(*i);
-		Point3d first = *ms3d.begin();
-		Point3d last = *(ms3d.end() -1);
-/*		trace.info() << "-  MS3D,"
-					 << " [" << first[ 0 ] << "," << first[ 1 ] << ","<< first[ 2 ] << "]"
-					 << "->[" << last[ 0 ] << "," << last[ 1 ] << ","<< last[ 2 ] << "]" << endl;*/
-		double distanceDSS = sqrt(pow((last[0] - first[0]), 2) + pow((last[1] - first[1]), 2) + pow((last[2] - first[2]), 2));
-		totalEstimatedLength += distanceDSS;
-		Color color3d = cmap_hue(c);
-		if (display) {
-			//viewer << CustomColors3D(color3d, color3d) << ms3d;
-		}
-		c++;
-	}
-	return totalEstimatedLength;
-}
 
 int main( int argc, char** argv )
 {
@@ -163,6 +176,7 @@ int main( int argc, char** argv )
 	}
 	const string examplesPath = "/home/florent/bin/DGtal/examples/samples/";
 	string filename = argv[1];
+	INCREMENT = atof(argv[2]);
 	typedef ImageContainerBySTLVector<Z3i::Domain, unsigned char> Image3D;
 	typedef ImageFromSet<Image3D> SetConverter;
 
@@ -172,15 +186,16 @@ int main( int argc, char** argv )
 	
 	vector<Point> vectorPoints;
 	
-	Z3i::Domain domain(Z3i::Point(-radius,-radius,-pitch*range), Z3i::Point(radius,radius,pitch*range));
+	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 100, 100));
 	//Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100,100,100));
 
 	//createStraightLine(vectorPoints, 50);
-    createHelixCurve(vectorPoints, range, radius, pitch);
+	//createHelixCurve(vectorPoints, range, radius, pitch);
+	drawCircle(vectorPoints, 50.0, 0., 0., 0.);
 	Image3D anImage3D(domain);
 	imageFromRangeAndValue(vectorPoints.begin(), vectorPoints.end(), anImage3D, 150);
     //GenericWriter<Image3D>::exportFile(examplesPath + filename, anImage3D);
-	saveToPL(vectorPoints, examplesPath + filename);
+    VolWriter<Image3D>::exportVol(examplesPath + filename, anImage3D);
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	/*viewer.show();
 	for (vector<Point>::iterator it = vectorPoints.begin() ; it != vectorPoints.end(); ++it) {
@@ -189,8 +204,6 @@ int main( int argc, char** argv )
 
 
 	trace.info() << "saved" << endl;
-	trace.info() << "Expected= " << lengthHelixCurve(range, radius, pitch) << endl;
-	trace.info() << "Measured= " << estimateLength(vectorPoints, /*viewer,*/ true) << endl;
 	//Display3dfactory<Space, KSpace>::draw(board, anImage3D);
     //VolWriter<ImageThree>::exportVol("aFilename.vol", anImage3D);
     //anImage3D >> "test.vol"; anImage3D << Z3i::Point(1,1,1);

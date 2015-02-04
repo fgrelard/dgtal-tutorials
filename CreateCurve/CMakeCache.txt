@@ -173,6 +173,9 @@ Curve_SOURCE_DIR:STATIC=/home/florent/Documents/DGtal/tutorials-copy/CreateCurve
 //The directory containing a CMake configuration file for DGtal.
 DGtal_DIR:PATH=/usr/local/share/DGtal/CMake
 
+//The directory containing a CMake configuration file for ITK.
+ITK_DIR:PATH=/usr/local/lib/cmake/ITK-4.6
+
 //Path to a library.
 QT_ARTHURPLUGIN_PLUGIN_DEBUG:FILEPATH=QT_ARTHURPLUGIN_PLUGIN_DEBUG-NOTFOUND
 
