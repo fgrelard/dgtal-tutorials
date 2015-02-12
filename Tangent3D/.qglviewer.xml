@@ -7,15 +7,15 @@
   <Display axisIsDrawn="false" gridIsDrawn="false" FPSIsDisplayed="false" cameraIsEdited="false"/>
   <Geometry fullScreen="false" width="600" posX="55" height="400" posY="14"/>
   <Camera>
-    <Parameters fieldOfView="0.785398" sceneRadius="267.477" Type="PERSPECTIVE" zNearCoefficient="0.005" orthoCoef="0.00472563" zClippingCoefficient="1.73205">
-      <SceneCenter x="242.048" y="265.695" z="231.66"/>
+    <Parameters fieldOfView="0.785398" sceneRadius="266.129" Type="PERSPECTIVE" zNearCoefficient="0.005" orthoCoef="0.00469951" zClippingCoefficient="1.73205">
+      <SceneCenter x="242.444" y="265.693" z="232.933"/>
     </Parameters>
-    <Stereo focusDistance="645.748" physScreenWidth="0.5" IODist="0.062"/>
+    <Stereo focusDistance="642.493" physScreenWidth="0.5" IODist="0.062"/>
     <ManipulatedCameraFrame>
-      <position x="192.234" y="295.348" z="242.729"/>
-      <orientation q0="-0.764456" q1="-0.00112267" q2="-0.0280635" q3="0.644064"/>
+      <position x="242.444" y="265.693" z="928.363"/>
+      <orientation q0="0" q1="0" q2="0" q3="1"/>
       <ManipulatedParameters transSens="1" rotSens="1" wheelSens="1" spinSens="0.3"/>
-      <ManipulatedCameraParameters flySpeed="2.67477">
+      <ManipulatedCameraParameters flySpeed="2.66129">
         <flyUpVector x="0" y="1" z="0"/>
       </ManipulatedCameraParameters>
     </ManipulatedCameraFrame>

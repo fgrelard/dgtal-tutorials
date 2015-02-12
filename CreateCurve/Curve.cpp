@@ -24,16 +24,16 @@
 #include "DGtal/images/imagesSetsUtils/ImageFromSet.h"
 #include "DGtal/io/writers/VolWriter.h"
 ///////////////////////////////////////////////////////////////////////////////
-
+#include <Eigen/Geometry>
+#include <Eigen/Dense>
 
 using namespace std;
 using namespace DGtal;
 
 double INCREMENT = 0.01;
-/**
- * Board: where to draw2
- * range: range in z axis to draw the curve
- **/
+template <typename Point>
+double euclideanDistance(Point, Point);
+
 template <typename Point>
 class PointDeletable : public Point {
 	typedef typename Point::Component Scalar;
@@ -41,6 +41,32 @@ public:
 	PointDeletable() : Point() {}
 	PointDeletable(const Scalar& x, const Scalar& y, const Scalar& z) : Point(x,y,z) {}
 	bool myMarkedToDelete = false;
+};
+
+template <typename Point>
+class Ball {
+public:
+	Ball() : myRadius(0), myCenter({0,0,0}) {}
+	Ball(const Point& center, int radius) : myCenter(center), myRadius(radius) {}
+	bool contains(const Point& point) const {return euclideanDistance(point, myCenter) <= myRadius;}
+	vector<Point> pointsInBall() const {
+		vector<Point> points;
+		for (int i = -myRadius + myCenter[0], iend = myRadius + myCenter[0] + 1; i < iend; i++) {
+			for (int j = -myRadius + myCenter[1], jend = myRadius + myCenter[1] + 1; j < jend; j++) {
+				for (int k = -myRadius + myCenter[2], kend = myRadius + myCenter[2] + 1; k < kend; k++) {
+					Point p(i, j, k);
+					if (contains(p)) {
+						points.push_back(p);
+					}
+				}
+			}
+		}
+		return points;
+	};
+	bool operator!=(const Ball & other) const {return (myCenter != other.myCenter || myRadius != other.myRadius);}
+private:
+	Point myCenter;
+	int myRadius;
 };
 
 typedef DigitalSetSelector<Z3i::Domain,  HIGH_ITER_DS + MEDIUM_DS>::Type DigitalSet;
@@ -53,7 +79,10 @@ typedef RosenProffittLocalLengthEstimator<Range::ConstIterator> LengthEstimator;
 typedef vector<Point>::const_iterator PointIterator;
 typedef  DigitalSetBySTLSet<DGtal::HyperRectDomain<DGtal::SpaceND<3u, int> >, std::less<DGtal::PointVector<3u, int, boost::array<int, 3ul> > > >::Iterator Iterator;
 
-
+template <typename Point>
+double euclideanDistance(Point p, Point other) {
+	return sqrt(pow( (p[0] - other[0]), 2) + pow( (p[1] - other[1]), 2) + pow( (p[2] - other[2]), 2) );
+}
 
 void saveToPL(vector<Point> & vPoints, std::string filename) {
 	ofstream s(filename.c_str());
@@ -70,6 +99,7 @@ void add(const Point& p, vector<Point> & v) {
 		v.push_back(p);
 	}
 }
+
 
 /**
  * This function finds if the 6 neighbour of a given point p lie on the same orientation
@@ -129,8 +159,45 @@ void drawCircle(vector<Point> & vectorPoints, float radius, float cx, float cy, 
 	construct26ConnectedCurve(vectorPoints);
 
 }
+
+double euclideanDistance(float x1, float y1, float x2, float y2) {
+	return sqrt( pow( (x2 - x1), 2) + pow( (y2 - y1), 2));
+}
+
+void drawDisk(Eigen::Matrix<float, Eigen::Dynamic, 4> & m, float radius, float cx, float cy, float cz, long int &row) {
+	for (int x = cx - radius, xend = cx + radius + 1; x < xend; x++) {
+		for (int y = cy - radius, yend = cy + radius +  1; y < yend; y++) {
+			if (euclideanDistance(x, y, cx, cy) <= radius) {
+				m(row, 0) = x;
+				m(row, 1) = y;
+				m(row, 2) = cz;
+				m(row, 3) = 0;
+				row++;
+				m.conservativeResize(row+1, 4);
+			}
+		}
+	}
+}
+
+void drawCylinder(Eigen::Matrix<float, Eigen::Dynamic, 4> & m, int length, int radius, float cz, float rotationAngle) {
+	int progress = 0;
+	long int row = 0;
+    while (progress < length) {
+		drawDisk(m, radius, 0, 0, cz+progress, row);
+		progress++;
+	}
+	//Deletes
+	m.conservativeResize(row, 4);
+	//Rotation with rotationAngle
+	Eigen::Affine3f rot(Eigen::AngleAxisf(rotationAngle, Eigen::Vector3f::UnitX()));
+	if (rotationAngle != 0.0) {
+		m = m * rot.matrix();
+	}
+}
+
+
 /*
- * Radius Winding : radius of the loop
+ * Radius  Winding : radius of the loop
  * RadiusSpiral: radius of the volume
  */
 void createHelixCurve(vector<Point> & vectorPoints, int range, int radiusWinding, int radiusSpiral, int pitch) {
@@ -167,6 +234,58 @@ double lengthHelixCurve(int range, int radius, int pitch) {
 	return range * sqrt(pow(radius, 2) + pow(pitch, 2));
 }
 
+void createSyntheticAirwayTree(vector<Point> & v, int branchNumber, int lengthTrachea, int z, float rotationAngle, Point firstPoint) {
+	if (branchNumber == 0) return;
+	int radius = lengthTrachea / 6;
+	cout << radius << " " << rotationAngle << endl;
+	Eigen::Matrix<float, Eigen::Dynamic, 4> *matrix = new Eigen::Matrix<float, Eigen::Dynamic, 4>(1, 4);
+	//Creates a rotated cylinder
+	drawCylinder(*matrix, lengthTrachea, radius, z, rotationAngle);
+	//Filling the vector with points from matrix
+	for (int i = 0; i < matrix->innerSize(); i++) {
+		if ((*matrix)(i, 0) != 0 || (*matrix)(i, 1) != 0 || (*matrix)(i, 2) != 0) {
+			int posx = (*matrix)(i, 0);
+			//Translation after rotation
+			int posy = (*matrix)(i, 1) - (z - ((radius * 2) / sqrt(2))) * sin(rotationAngle) + firstPoint[1];
+			int posz = (*matrix)(i, 2) - (z - ((radius * 2) / sqrt(2))) * cos(rotationAngle) + firstPoint[2];
+			add(Point(posx, posy, posz), v);
+		}
+	}
+	z += lengthTrachea;
+	//Determining initial starting point for new branches
+	firstPoint += Point(0, lengthTrachea * sin(rotationAngle), lengthTrachea * cos(rotationAngle));
+	//matrix.resize(0, 0);
+	matrix->resize(0,0);
+	delete matrix;
+	createSyntheticAirwayTree(v, branchNumber - 1, lengthTrachea * 0.6, z, rotationAngle + 0.2 * M_PI, firstPoint);
+	createSyntheticAirwayTree(v, branchNumber - 1, lengthTrachea * 0.6, z, rotationAngle - 0.2 * M_PI, firstPoint);
+}
+
+void createLogarithmicCurve(vector<Point> & curve, int range) {
+	for (float i = 1; i < range; i+=INCREMENT) {
+		float x = i;
+		float y = i;
+		float z = 20*log(i);
+		add(Point((int)x, (int)y, (int)z), curve);
+	}
+}
+
+void createVolumeFromCurve(const vector<Point> & curve, set<Point> & volume, int ballRadius) {
+	vector<Ball<Point> > ballVector;
+	for (Point point : curve) {
+		ballVector.push_back(Ball<Point>(point, ballRadius));
+	}
+	for (const Ball<Point>& current : ballVector) {
+		for (Point& point : current.pointsInBall()) {
+			for (const Ball<Point>& other : ballVector) {
+				if (other != current && !other.contains(point)) {
+					volume.insert(point);
+				}
+			}
+		}
+	}
+	
+}
 
 int main( int argc, char** argv )
 {
@@ -184,28 +303,24 @@ int main( int argc, char** argv )
 	int pitch =  20;
 	int radius = 10;
 	
-	vector<Point> vectorPoints;
-	
-	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 100, 100));
-	//Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100,100,100));
+	//set<Point> vectorPoints;
+	vector<Point> curve;
+	//createLogarithmicCurve(curve, 50);
+	//createVolumeFromCurve(curve, vectorPoints, 20);
 
-	//createStraightLine(vectorPoints, 50);
+	vector<Point> vectorPoints;
+	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 100, 300));
+
+
 	//createHelixCurve(vectorPoints, range, radius, pitch);
-	drawCircle(vectorPoints, 50.0, 0., 0., 0.);
+//	drawCircle(vectorPoints, 50.0, 0., 0., 0.);
+	createSyntheticAirwayTree(vectorPoints, 5, 100, 0, 0, {0,0,0});
 	Image3D anImage3D(domain);
 	imageFromRangeAndValue(vectorPoints.begin(), vectorPoints.end(), anImage3D, 150);
-    //GenericWriter<Image3D>::exportFile(examplesPath + filename, anImage3D);
     VolWriter<Image3D>::exportVol(examplesPath + filename, anImage3D);
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
-	/*viewer.show();
-	for (vector<Point>::iterator it = vectorPoints.begin() ; it != vectorPoints.end(); ++it) {
-		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);
-		}*/
 
 
 	trace.info() << "saved" << endl;
-	//Display3dfactory<Space, KSpace>::draw(board, anImage3D);
-    //VolWriter<ImageThree>::exportVol("aFilename.vol", anImage3D);
-    //anImage3D >> "test.vol"; anImage3D << Z3i::Point(1,1,1);
 }
 ///////////////////////////////////////////////////////////////////////////////

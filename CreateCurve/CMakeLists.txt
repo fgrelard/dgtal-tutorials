@@ -21,5 +21,9 @@ if ( Boost_FOUND )
    message(STATUS ${Boost_LIBRAIRIES})  
 endif( Boost_FOUND )
 
+
+find_package( PkgConfig )
+pkg_check_modules( EIGEN3 REQUIRED eigen3 )
+include_directories( ${EIGEN3_INCLUDE_DIRS} )
 ADD_EXECUTABLE(Curve Curve.cpp)
 TARGET_LINK_LIBRARIES(Curve ${DGTAL_LIBRARIES})

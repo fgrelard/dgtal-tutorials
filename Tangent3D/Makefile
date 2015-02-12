@@ -138,6 +138,30 @@ Tangent3D.cpp.s:
 	$(MAKE) -f CMakeFiles/Tangent3D.dir/build.make CMakeFiles/Tangent3D.dir/Tangent3D.cpp.s
 .PHONY : Tangent3D.cpp.s
 
+TangentUtils.o: TangentUtils.cpp.o
+.PHONY : TangentUtils.o
+
+# target to build an object file
+TangentUtils.cpp.o:
+	$(MAKE) -f CMakeFiles/Tangent3D.dir/build.make CMakeFiles/Tangent3D.dir/TangentUtils.cpp.o
+.PHONY : TangentUtils.cpp.o
+
+TangentUtils.i: TangentUtils.cpp.i
+.PHONY : TangentUtils.i
+
+# target to preprocess a source file
+TangentUtils.cpp.i:
+	$(MAKE) -f CMakeFiles/Tangent3D.dir/build.make CMakeFiles/Tangent3D.dir/TangentUtils.cpp.i
+.PHONY : TangentUtils.cpp.i
+
+TangentUtils.s: TangentUtils.cpp.s
+.PHONY : TangentUtils.s
+
+# target to generate assembly for a file
+TangentUtils.cpp.s:
+	$(MAKE) -f CMakeFiles/Tangent3D.dir/build.make CMakeFiles/Tangent3D.dir/TangentUtils.cpp.s
+.PHONY : TangentUtils.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -150,6 +174,9 @@ help:
 	@echo "... Tangent3D.o"
 	@echo "... Tangent3D.i"
 	@echo "... Tangent3D.s"
+	@echo "... TangentUtils.o"
+	@echo "... TangentUtils.i"
+	@echo "... TangentUtils.s"
 .PHONY : help
 
 

@@ -19,5 +19,6 @@ if ( Boost_FOUND )
    SET(DGtalLibInc ${Boost_INCLUDE_DIRS})
 endif( Boost_FOUND )
 
-ADD_EXECUTABLE(Tangent3D Tangent3D.cpp)
+file(GLOB src TangentUtils.cpp)
+ADD_EXECUTABLE(Tangent3D Tangent3D.cpp ${src})
 TARGET_LINK_LIBRARIES(Tangent3D ${DGTAL_LIBRARIES} ${Boost_LIBRAIRIES} ${Boost_PROGRAM_OPTIONS_LIBRARY} )
