@@ -305,7 +305,7 @@ int main(int argc, char **argv)
 			visitor.ignore();
 	}
 	vector<Pencil> tangents = orthogonalPlanesWithTangents<Pencil>(vPoints.begin(), vPoints.end(), viewer);
-
+//	visualize(tangents, viewer);
 	if (vm.count("output") && vm.count("input2")) {
 		string inputFileName2 = vm["input2"].as<std::string>();
 		Image volume = GenericReader<Image>::import(inputFileName2);

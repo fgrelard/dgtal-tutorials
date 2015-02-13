@@ -189,7 +189,7 @@ void drawCylinder(Eigen::Matrix<float, Eigen::Dynamic, 4> & m, int length, int r
 	//Deletes
 	m.conservativeResize(row, 4);
 	//Rotation with rotationAngle
-	Eigen::Affine3f rot(Eigen::AngleAxisf(rotationAngle, Eigen::Vector3f::UnitX()));
+	Eigen::Affine3f rot(Eigen::AngleAxisf(rotationAngle, Eigen::Vector3f((1/sqrt(2)),1/sqrt(2),0)));
 	if (rotationAngle != 0.0) {
 		m = m * rot.matrix();
 	}
@@ -238,25 +238,26 @@ void createSyntheticAirwayTree(vector<Point> & v, int branchNumber, int lengthTr
 	if (branchNumber == 0) return;
 	int radius = lengthTrachea / 6;
 	cout << radius << " " << rotationAngle << endl;
-	Eigen::Matrix<float, Eigen::Dynamic, 4> *matrix = new Eigen::Matrix<float, Eigen::Dynamic, 4>(1, 4);
+	Eigen::Matrix<float, Eigen::Dynamic, 4> matrix(1, 4);
 	//Creates a rotated cylinder
-	drawCylinder(*matrix, lengthTrachea, radius, z, rotationAngle);
+	drawCylinder(matrix, lengthTrachea, radius, z, rotationAngle);
 	//Filling the vector with points from matrix
-	for (int i = 0; i < matrix->innerSize(); i++) {
-		if ((*matrix)(i, 0) != 0 || (*matrix)(i, 1) != 0 || (*matrix)(i, 2) != 0) {
-			int posx = (*matrix)(i, 0);
+	for (int i = 0; i < matrix.innerSize(); i++) {
+		if (matrix(i, 0) != 0 || matrix(i, 1) != 0 || matrix(i, 2) != 0) {
+			int posx = matrix(i, 0) + (-matrix(0, 0) + firstPoint[0]);
 			//Translation after rotation
-			int posy = (*matrix)(i, 1) - (z - ((radius * 2) / sqrt(2))) * sin(rotationAngle) + firstPoint[1];
-			int posz = (*matrix)(i, 2) - (z - ((radius * 2) / sqrt(2))) * cos(rotationAngle) + firstPoint[2];
+			int posy = matrix(i, 1) + (-matrix(0, 1) + firstPoint[1]);
+			int posz = matrix(i, 2) + (-matrix(0, 2) + firstPoint[2]);
 			add(Point(posx, posy, posz), v);
 		}
 	}
 	z += lengthTrachea;
 	//Determining initial starting point for new branches
-	firstPoint += Point(0, lengthTrachea * sin(rotationAngle), lengthTrachea * cos(rotationAngle));
-	//matrix.resize(0, 0);
-	matrix->resize(0,0);
-	delete matrix;
+	int fx = (*(v.end()-1))[0]  - radius;
+	int fy = (*(v.end()-1))[1] ;
+	int fz = (*(v.end()-1))[2] ;
+	firstPoint = Point(fx, fy, fz);
+	matrix.resize(0,0);
 	createSyntheticAirwayTree(v, branchNumber - 1, lengthTrachea * 0.6, z, rotationAngle + 0.2 * M_PI, firstPoint);
 	createSyntheticAirwayTree(v, branchNumber - 1, lengthTrachea * 0.6, z, rotationAngle - 0.2 * M_PI, firstPoint);
 }
@@ -303,13 +304,13 @@ int main( int argc, char** argv )
 	int pitch =  20;
 	int radius = 10;
 	
-	//set<Point> vectorPoints;
-	vector<Point> curve;
-	//createLogarithmicCurve(curve, 50);
-	//createVolumeFromCurve(curve, vectorPoints, 20);
+	// set<Point> vectorPoints;
+	// vector<Point> curve;
+	// createLogarithmicCurve(curve, 50);
+	// createVolumeFromCurve(curve, vectorPoints, 20);
 
 	vector<Point> vectorPoints;
-	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 100, 300));
+	Z3i::Domain domain(Z3i::Point(-20,-20,-20), Z3i::Point(100, 100, 300));
 
 
 	//createHelixCurve(vectorPoints, range, radius, pitch);

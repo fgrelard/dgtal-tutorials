@@ -25,40 +25,35 @@ void SliceUtils::slicesFromPlanes(Viewer3D<>& viewer, const std::vector<Pencil> 
 	//! [ExampleViewer3D2DImagesExtractImagesNonSliceType]
 	typedef DGtal::ConstImageAdapter<Image3D,Z2i::Domain,DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain>,Value, DGtal::functors::Identity> ImageAdapterExtractor;
 
-
+	const int IMAGE_PATCH_WIDTH = 100;  
+	// Setting the image domain of the resulting image to be displayed in 3D:
+	//DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
+	//								  DGtal::Z2i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH)); 
+	//! [ExampleViewer3D2DImagesExtractImagesNonSliceParam]
+	unsigned int sliceNumber = 0;
+	Z3i::Domain domain3Dyup(volume.domain().lowerBound() + Z3i::Point(-IMAGE_PATCH_WIDTH, -IMAGE_PATCH_WIDTH, -IMAGE_PATCH_WIDTH), volume.domain().upperBound() + Z3i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH));
+	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
+											  DGtal::Z2i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH));
 	DGtal::functors::Identity idV;
-  
+	for (auto it = vectorPlanes.begin(), itE = vectorPlanes.end(); it != itE; ++it) {
 
-  const int IMAGE_PATCH_WIDTH = 20;  
-  // Setting the image domain of the resulting image to be displayed in 3D:
-  DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
-                                    DGtal::Z2i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH)); 
-  //! [ExampleViewer3D2DImagesExtractImagesNonSliceParam]
-  
-  
-  
-  unsigned int sliceNumber = 0;
-	
-  for (auto it = vectorPlanes.begin(), itE = vectorPlanes.end(); it != itE; ++it) {
-typename Pencil::Vector3d planeNormal = it->getTangent();
+		typename Pencil::Vector3d planeNormal = it->getTangent();
+		typename Pencil::P origin = it->getPoint();
+		DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(domain3Dyup, origin, planeNormal, IMAGE_PATCH_WIDTH);
+		ImageAdapterExtractor extractedImage(volume, domainImage2D, embedder, idV);
+		std::string outName;
+		outName += outFileName + "_" + std::to_string(sliceNumber) + ".pgm";
+		GenericWriter<ImageAdapterExtractor>::exportFile(outName, extractedImage);
 
-	  typename Pencil::P origin = it->getPoint();
-	  DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(volume.domain(), origin, planeNormal, IMAGE_PATCH_WIDTH);
-	  ImageAdapterExtractor extractedImage(volume, domainImage2D, embedder, idV);
-	  std::string outName;
-	  outName += outFileName + "_" + std::to_string(sliceNumber) + ".pgm";
-	  //GenericWriter<ImageAdapterExtractor>::exportFile(outName, extractedImage);
-	  sliceNumber++;
-	  DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
-                                    DGtal::Z2i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH)); 
-	  viewer << extractedImage;
-	  viewer << DGtal::UpdateImage3DEmbedding<Z3i::Space, Z3i::KSpace>(sliceNumber, 
-                                                                     embedder(Z2i::RealPoint(0,0)),
-                                                                     embedder(Z2i::RealPoint(IMAGE_PATCH_WIDTH,0)),
-                                                                     embedder(domainImage2D.upperBound()),
-                                                                     embedder(Z2i::RealPoint(0, IMAGE_PATCH_WIDTH)));
-	  if (sliceNumber >= 10) break;
-  }
+	  
+		viewer << extractedImage;
+		viewer << DGtal::UpdateImage3DEmbedding<Z3i::Space, Z3i::KSpace>(sliceNumber, 
+																		 embedder(Z2i::RealPoint(0,0)),
+																		 embedder(Z2i::RealPoint(IMAGE_PATCH_WIDTH,0)),
+																		 embedder(domainImage2D.upperBound()),
+																		 embedder(Z2i::RealPoint(0, IMAGE_PATCH_WIDTH)));
+		sliceNumber++;
+	}
 }
 
 #endif

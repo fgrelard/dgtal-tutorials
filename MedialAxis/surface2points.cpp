@@ -344,7 +344,7 @@ int main( int argc, char** argv )
 	int nb = pSet.size();
 	int i = 0;
 	for (set<WeightedPoint>::iterator itE = pSet.end(); it != itE; ++it, ++i) {
-	    checkPointForMedialAxis(dtL2, vPoints, (*it).p, (*it).d);
+	    checkPointForLambdaMedialAxis(dtL2, vPoints, (*it).p, (*it).d, lambda);
 		trace.progressBar(i, nb);
 	}
 	trace.endBlock();
@@ -359,10 +359,10 @@ int main( int argc, char** argv )
 	vector<Point> points;
 	for ( vector<WeightedPoint>::iterator it = vPoints.begin(), itE = vPoints.end(); it != itE; ++it) 
 	{
-		//	viewer  << CustomColors3D(color, color) << (*it).p;
+	  	viewer  << CustomColors3D(color, color) << (*it).p;
 		points.push_back( (*it).p );
 	}
-	computeVCM(viewer, points, 5, 3, 0.3);
+//	computeVCM(viewer, points, 5, 3, 0.3);
 	
 	viewer << Viewer3D<>::updateDisplay;
 	app.exec();
