@@ -11,6 +11,10 @@ namespace TangentUtils {
 	std::vector<Pencil> computeTangentialCover(Iterator itB, Iterator itE,
 											   const Segmentation& s);
 
+
+	template <typename Pencil, typename Iterator>
+	std::vector<Pencil> theoreticalTangentsOnBoudin(Iterator itB, Iterator itE, float logFactor);
+
 }
 
 
@@ -23,7 +27,6 @@ std::vector<Pencil> TangentUtils::computeTangentialCover(Iterator itB, Iterator 
 										   const Segmentation& s) {
 	typedef typename Segmentation::SegmentComputerIterator SegmentComputerIterator;
 	typedef typename Segmentation::SegmentComputer DSS;
-	typedef typename DSS::Vector3d Point3D;
 	typedef typename Pencil::T Tangent;
 	typedef typename Pencil::Vector3d Vector3D;
 	std::vector<Pencil> pencils;
@@ -62,5 +65,20 @@ std::vector<Pencil> TangentUtils::computeTangentialCover(Iterator itB, Iterator 
 	}
 	return pencils;
 }
+
+template <typename Pencil, typename Iterator>
+std::vector<Pencil> TangentUtils::theoreticalTangentsOnBoudin(Iterator itb, Iterator ite, float logFactor) {
+	std::vector<Pencil> tangents;
+	for (;itb != ite; ++itb) {
+		typename Pencil::P point = *itb;
+		double t = exp(point[2]/logFactor);
+		double ztang = logFactor/t;
+	    typename Pencil::Vector3d p1 = {1+(double)point[0],1+(double)point[1], ztang+(double)point[2]};
+	    typename Pencil::Vector3d p2 = {-1+(double)point[0], -1+(double)point[1], -ztang+(double)point[2]};
+		tangents.push_back({point, p1 - p2});
+	}
+	return tangents;
+}
+
 
 #endif

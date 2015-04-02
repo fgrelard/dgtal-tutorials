@@ -43,6 +43,7 @@
 #include "DGtal/geometry/surfaces/estimation/VoronoiCovarianceMeasureOnDigitalSurface.h"
 #include "DGtal/io/colormaps/GradientColorMap.h"
 #include "DGtal/io/viewers/Viewer3D.h"
+#include "DGtal/math/linalg/EigenDecomposition.h"
 #include "DGtal/io/readers/GenericReader.h"
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
@@ -160,12 +161,15 @@ int main( int argc, char** argv )
 	viewer << SetMode3D( dummy.className(), "Basic" );
 	viewer.show();
 
+	typedef EigenDecomposition<3,double> LinearAlgebraTool;
+	typedef LinearAlgebraTool::Matrix Matrix;
 	GradientColorMap<double> grad( 0, T );
 	grad.addColor( Color( 128, 128, 255 ) );
 	grad.addColor( Color( 255, 255, 255 ) );
 	grad.addColor( Color( 255, 255, 0 ) );
 	grad.addColor( Color( 255, 0, 0 ) );
 	RealVector lambda; // eigenvalues of chi-vcm
+	Matrix m;
 	for ( S2NConstIterator it = vcm_surface.mapSurfel2Normals().begin(), 
 			  itE = vcm_surface.mapSurfel2Normals().end(); it != itE; ++it )
     {
@@ -173,7 +177,7 @@ int main( int argc, char** argv )
 		Point kp = ks.sKCoords( s );
 		RealPoint rp( 0.5 * (double) kp[ 0 ], 0.5 * (double) kp[ 1 ], 0.5 * (double) kp[ 2 ] );
 		RealVector n = it->second.vcmNormal;
-		vcm_surface.getChiVCMEigenvalues( lambda, s );
+		vcm_surface.getChiVCMEigenStructure( lambda, m, s );
 		double ratio = lambda[ 1 ] / ( lambda[ 0 ] + lambda[ 1 ] + lambda[ 2 ] ); 
 		viewer.setFillColor( grad( ratio > T ? T : ratio ) );
 		viewer << ks.unsigns( s );

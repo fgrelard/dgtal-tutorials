@@ -1,0 +1,31 @@
+setMouseBindingDescription(int state,...) is deprecated. Use the modifier/button equivalent
+[0m[1mNew Block [Reading file...][0m
+[0m[1mEndBlock [Reading file...] (253.713 ms)[0m
+[0m[1mNew Block [Extracting boundary by tracking from an initial bel.][0m
+  (-20,1,79,+)(-20,1,77,+)(-20,2,79,-)[PointVector] {0, -1, -2}
+  [PointVector] {0, -1, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {0, 0, -1}
+  [PointVector] {0, 1, 0}
+  [PointVector] {0, 1, 0}
+  [PointVector] {0, 1, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {0, 1, 0}
+  [PointVector] {0, 1, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {0, 1, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {0, 1, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {0, 1, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {1, 0, 0}
+  [PointVector] {0, 1, 0}
+  [PointVector] {0, 0, -1}
+  [PointVector] {0, 1, 0}
+  [PointVector] {-1, 0, 0}
+  [PointVector] {-1, 0, 0}
+  [PointVector] {-1, 0, 0}

@@ -88,93 +88,34 @@ namespace po = boost::program_options;
 ///////////////////////////////////////////////////////////////////////////////
 
 
-float deduceCoordinateFromEquationThreeUnknown(float a, float b, float c, float first_value, float second_value) {
-	return (-(a * first_value + b * second_value) / c); 
-}
-
-template <typename Point, typename Vector>
-vector<Point> computePlaneFromNormalVector(Vector normal) {
-	double a = normal[0];
-	double b = normal[1];
-	double c = normal[2];
-	vector<Point> fourPointsForPlane;
-
-	float x, y, z;
-	Point p1, p2, p3, p4;
-	if (a != 0) {
-		y = 1;
-		z = 1;
-		x = deduceCoordinateFromEquationThreeUnknown(b, c, a, y, z);
-		p1 = Vector(x, y, z).getNormalized();
-		y = -1;
-		x = deduceCoordinateFromEquationThreeUnknown(b, c, a, y, z);
-		p2 = Vector(x, y, z).getNormalized();
-		z = -1;
-		x = deduceCoordinateFromEquationThreeUnknown(b, c, a, y, z);
-		p3 = Vector(x, y, z).getNormalized();
-		y = 1;
-		x = deduceCoordinateFromEquationThreeUnknown(b, c, a, y, z);
-		p4 = Vector(x, y, z).getNormalized();
-	} else if (b != 0) {
-		x = 1;
-		z = 1;
-		y = deduceCoordinateFromEquationThreeUnknown(a, c, b, x, z);
-		p1 = Vector(x, y, z).getNormalized();
-		x = -1;
-		y = deduceCoordinateFromEquationThreeUnknown(a, c, b, x, z);
-		p2 = Vector(x, y, z).getNormalized();
-		z = -1;
-		y = deduceCoordinateFromEquationThreeUnknown(a, c, b, x, z);
-		p3 = Vector(x, y, z).getNormalized();
-		x = 1;
-		y = deduceCoordinateFromEquationThreeUnknown(a, c, b, x, z);
-		p4 = Vector(x, y, z).getNormalized();
-	} else if (c != 0) {
-		x = 1;
-		y = 1;
-		z = deduceCoordinateFromEquationThreeUnknown(a, b, c, x, y);
-		p1 = Vector(x, y, z).getNormalized();
-		y = -1;
-		z = deduceCoordinateFromEquationThreeUnknown(a, b, c, x, y);
-		p2 = Vector(x, y, z).getNormalized();
-		x = -1;
-		z = deduceCoordinateFromEquationThreeUnknown(a, b, c, x, y);
-		p3 = Vector(x, y, z).getNormalized();
-		y = 1;
-		z = deduceCoordinateFromEquationThreeUnknown(a, b, c, x, y);
-		p4 = Vector(x, y, z).getNormalized();
-	}
-	fourPointsForPlane = {p1, p2, p3, p4};
-    
-	return fourPointsForPlane;
-}
-
 template <typename Pencil>
 void visualize(const vector<Pencil> & tangents, Viewer3D<> & viewer) {
 	typedef DGtal::PointVector<3, double> Vector3D;
 	typedef DGtal::PointVector<3, int> Point3D;
 	int size_factor = 0;
 	int plane_factor = 3;
+	int i = 0;
 	for (auto it = tangents.begin(), itE = tangents.end(); it != itE; ++it) {
 		if (!it->isUndefined()) {
-			// SegmentComputer currentSegmentComputer(*i); 
-			// viewer << SetMode3D(currentSegmentComputer.className(), "BoundingBox");
 			viewer << CustomColors3D(Color::Red, Color::Red);
-			//viewer << currentSegmentComputer;
+
 			Point3D point = it->getPoint();
 			Vector3D tangent = it->getTangent();
 
-			viewer.addLine(point - (tangent * size_factor), point + (tangent * size_factor), 0.1);
-			vector<Vector3D> plane = computePlaneFromNormalVector<Vector3D>(it->getTangent());
+			//viewer.addLine(point - (tangent * size_factor), point + (tangent * size_factor), 0.1);
+			vector<Vector3D> plane = SliceUtils::computePlaneFromNormalVector(it->getTangent());
 			Color planeColor(0, 0, 255, 128);
 			//viewer << CustomColors3D(planeColor, planeColor);
 
-			
-			Vector3D p1 = (Vector3D) point + plane[0] * plane_factor;
-			Vector3D p2 = (Vector3D) point + plane[1] * plane_factor;
-			Vector3D p3 = (Vector3D) point + plane[2] * plane_factor;
-			Vector3D p4 = (Vector3D) point + plane[3] * plane_factor;
-			viewer.addQuad(p1, p2, p3, p4);
+			if (((i >865 && i <870) || (i >870 && i <878)) || (i > 2296 && i < 2316)) {
+				Vector3D p1 = (Vector3D) point + plane[0] * plane_factor;
+				Vector3D p2 = (Vector3D) point + plane[1] * plane_factor;
+				Vector3D p3 = (Vector3D) point + plane[2] * plane_factor;
+				Vector3D p4 = (Vector3D) point + plane[3] * plane_factor;
+				viewer.setFillTransparency(150);
+				viewer.addQuad(p1, p2, p3, p4);
+			}
+			i++;
 		}
 	}
 }
@@ -184,7 +125,7 @@ void visualize(const vector<Pencil> & tangents, Viewer3D<> & viewer) {
  * saturated segmentation of a (sub)range
  */
 template <typename Pencil, typename Iterator>
-vector<Pencil> orthogonalPlanesWithTangents(Iterator itb, Iterator ite, Viewer3D<> & viewer)
+vector<Pencil> orthogonalPlanesWithTangents(Iterator itb, Iterator ite, Viewer3D<>& viewer)
 {
 	typedef StandardDSS6Computer<Iterator,int,8> SegmentComputer;  
 	typedef SaturatedSegmentation<SegmentComputer> Segmentation;
@@ -194,20 +135,33 @@ vector<Pencil> orthogonalPlanesWithTangents(Iterator itb, Iterator ite, Viewer3D
 	s.setMode("MostCentered++");
 	typename Segmentation::SegmentComputerIterator i = s.begin();
 	typename Segmentation::SegmentComputerIterator end = s.end();
-	
-	
-	for (; i != end; ++i) {
-		SegmentComputer currentSegmentComputer(*i); 
-		viewer << SetMode3D(currentSegmentComputer.className(), "BoundingBox");
-		viewer << CustomColors3D(Color::Green, Color::Green);
-	   	viewer << currentSegmentComputer;
-	}
 
+
+	for (; i != end; ++i) {
+		 SegmentComputer currentSegmentComputer(*i); 
+		 viewer << SetMode3D(currentSegmentComputer.className(), "BoundingBox");
+		 viewer << CustomColors3D(Color(0,255,0,255), Color(0,255,0,255))<<currentSegmentComputer;
+	}
 	
 	vector<Pencil> tangents = TangentUtils::computeTangentialCover<Pencil>(itb, ite, s);
 	//visualize(tangents, viewer);
     return tangents;
 }
+
+
+template <typename Pencil, typename Iterator>
+vector<Pencil> orthogonalPlanesWithNaiveTangents(Iterator itb, Iterator ite) {
+	vector<Pencil> tangents;
+	for (; itb != ite; ++itb) {
+		auto nextIt = itb;
+		++nextIt;
+		Z3i::Point point = *itb;
+		Z3i::Point tangent =  *nextIt - *itb;
+		tangents.push_back({point, tangent});
+	}
+	return tangents;
+}
+
 
 
 /////////////////////////////////////////////////////////////////////////
@@ -265,7 +219,7 @@ int main(int argc, char **argv)
 	typedef DGtal::PointVector<3, double> Vector3D;
 	typedef DGtal::PointVector<3, int> Point3D;
 	typedef MSTTangent<Point3D> Tangent;
-	typedef Pencil<Vector3D, Tangent, Vector3D> Pencil;
+	typedef Pencil<Point3D, Tangent, Vector3D> Pencil;
 	
 	KSpace ks;
 	
@@ -304,19 +258,32 @@ int main(int argc, char **argv)
 		else
 			visitor.ignore();
 	}
-	vector<Pencil> tangents = orthogonalPlanesWithTangents<Pencil>(vPoints.begin(), vPoints.end(), viewer);
-//	visualize(tangents, viewer);
+	vector<Pencil> tangents = TangentUtils::theoreticalTangentsOnBoudin<Pencil>(vPoints.begin(), vPoints.end(), 20.0);
+	visualize(tangents, viewer);
 	if (vm.count("output") && vm.count("input2")) {
 		string inputFileName2 = vm["input2"].as<std::string>();
 		Image volume = GenericReader<Image>::import(inputFileName2);
 		string outName = vm["output"].as<std::string>();
 		SliceUtils::slicesFromPlanes(viewer, tangents, volume, outName);
+
+		for (auto it = volume.domain().begin(),itE = volume.domain().end(); it!=itE; ++it) {
+			if (volume(*it) > thresholdMin) {
+				viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+			}
+		}
+
 	}
 	
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	for (auto it = vPoints.begin(); it != vPoints.end(); ++it) {
 		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);
 	}
+
+
+	int pos = 63;
+	viewer << CustomColors3D(Color::Red, Color::Red);
+	viewer << tangents[pos].getPoint();
+    viewer.addLine(tangents[pos].getPoint()-tangents[pos].getTangent()*2, tangents[pos].getPoint()+tangents[pos].getTangent()*2, 5.0);
 	
 	viewer << Viewer3D<>::updateDisplay;
 	application.exec();
