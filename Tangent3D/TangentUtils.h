@@ -13,7 +13,7 @@ namespace TangentUtils {
 
 
 	template <typename Pencil, typename Iterator>
-	std::vector<Pencil> theoreticalTangentsOnBoudin(Iterator itB, Iterator itE, float logFactor);
+	std::vector<Pencil> theoreticalTangentsOnBoudin(Iterator itB, Iterator itE,double logFactor);
 
 }
 
@@ -67,14 +67,14 @@ std::vector<Pencil> TangentUtils::computeTangentialCover(Iterator itB, Iterator 
 }
 
 template <typename Pencil, typename Iterator>
-std::vector<Pencil> TangentUtils::theoreticalTangentsOnBoudin(Iterator itb, Iterator ite, float logFactor) {
+std::vector<Pencil> TangentUtils::theoreticalTangentsOnBoudin(Iterator itb, Iterator ite, double logFactor) {
 	std::vector<Pencil> tangents;
 	for (;itb != ite; ++itb) {
 		typename Pencil::P point = *itb;
 		double t = exp(point[2]/logFactor);
 		double ztang = logFactor/t;
-	    typename Pencil::Vector3d p1 = {1+(double)point[0],1+(double)point[1], ztang+(double)point[2]};
-	    typename Pencil::Vector3d p2 = {-1+(double)point[0], -1+(double)point[1], -ztang+(double)point[2]};
+	    typename Pencil::Vector3d p1 = {1.+(double)point[0],1.+(double)point[1], ztang+(double)point[2]};
+	    typename Pencil::Vector3d p2 = {-1.+(double)point[0], -1.+(double)point[1], -ztang+(double)point[2]};
 		tangents.push_back({point, p1 - p2});
 	}
 	return tangents;

@@ -73,6 +73,7 @@
 #include "DGtal/graph/GraphVisitorRange.h"
 #include "DGtal/geometry/curves/StandardDSS6Computer.h"
 
+
 // Local includes
 #include "Pencil.h"
 #include "MSTTangent.h"

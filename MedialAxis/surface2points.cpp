@@ -194,6 +194,7 @@ void checkPointForLambdaMedialAxis(const ImageFct& imageFct, vector<WeightedPoin
 	Graph             graph;
 	DistanceToPoint   d2pfct( Distance(), p );
 	DistanceVisitor   visitor( graph, d2pfct, p );
+	//trace.info() << "last= " << last << endl;
 	MyNode node;
 
 	set<Point> ballPoints;

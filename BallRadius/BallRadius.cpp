@@ -71,11 +71,20 @@
 #include "DGtal/io/readers/GenericReader.h"
 #include "DGtal/graph/DepthFirstVisitor.h"
 #include "DGtal/graph/GraphVisitorRange.h"
+#include "DGtal/graph/BreadthFirstVisitor.h"
 #include "DGtal/geometry/curves/StandardDSS6Computer.h"
 #include "DGtal/topology/CanonicSCellEmbedder.h"
 #include "DGtal/topology/DigitalSurface.h"
 #include "DGtal/topology/LightImplicitDigitalSurface.h"
+#include "DGtal/kernel/BasicPointPredicates.h"
+#include "DGtal/graph/CVertexPredicate.h"
 
+
+// Local includes
+#include "SurfacePoint.h"
+#include "WeightedDigitalSurface.h"
+#include "../CreateCurve/Distance.h"
+#include "Statistics.h"
 using namespace DGtal;
 using namespace std;
 using namespace Z3i;
@@ -85,90 +94,38 @@ namespace po = boost::program_options;
 // Functions for testing class GreedySegmentation
 ///////////////////////////////////////////////////////////////////////////////
 
-template <typename SCellSet, typename SurfelPredicate >
-void constructSubGraph( SCellSet & surface,
-						const KSpace & K,
-						const SurfelAdjacency<KSpace::dimension> & surfel_adj,
-						const SurfelPredicate & sp,
-						const SCell & start_surfel,
-						const SCell & end_surfel,
-						Viewer3D<>& viewer)
-{
-	BOOST_CONCEPT_ASSERT(( concepts::CSurfelPredicate<SurfelPredicate> ));
 
-	SCell b;  // current surfel
-	SCell bn; // neighboring surfel
-	ASSERT( K.sIsSurfel( start_surfel ) );
-	surface.clear(); // boundary being extracted.
-
-	SurfelNeighborhood<KSpace> SN;
-	SN.init( &K, &surfel_adj, start_surfel );
-	std::queue<SCell> qbels;
-	qbels.push( start_surfel );
-	surface.insert( start_surfel );
-	// For all pending bels
-	map<Z3i::SCell, Z3i::SCell> aMapPrevious;
-	while ( ! qbels.empty() )
-    {
-		b = qbels.front();
-		qbels.pop();
-		SN.setSurfel( b );
-		if (b == end_surfel) {
-			vector<SCell> path;
-			SCell previous = end_surfel;
-			while (previous != start_surfel) {
-				path.push_back(previous);
-				viewer << CustomColors3D(Color::Black, Color::Black) << previous;
-				previous = aMapPrevious[previous];
-			}
-			cout << "Other path size" << path.size() << endl;
-		}
-		for ( auto q = K.sDirs( b ); q != 0; ++q )
-        {
-			Dimension track_dir = *q;
-			// ----- 1st pass with positive orientation ------
-			if ( SN.getAdjacentOnSurfelPredicate( bn, sp, track_dir, true ) )
-            {
-				if ( surface.find( bn ) == surface.end() )
-                {
-					surface.insert( bn );
-					qbels.push( bn );
-					aMapPrevious[bn] = b;
-                }
-            }
-			// ----- 2nd pass with negative orientation ------
-			if ( SN.getAdjacentOnSurfelPredicate( bn, sp, track_dir, false ) )
-            {
-				if ( surface.find( bn ) == surface.end() )
-                {
-					surface.insert( bn );
-					qbels.push( bn );
-					aMapPrevious[bn] = b;
-                }
-            }
-        } // for ( DirIterator q = K.sDirs( b ); q != 0; ++q )
-    } // while ( ! qbels.empty() )
+template <typename Point>
+void visualizePlane(const Point& p, int size, int delta, Viewer3D<> & viewer) {
+	int direction = (size - delta) / 2;
+	Point n(direction, 0, -delta);
+	Point n2(0 , direction, -delta);
+	viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
 }
 
-
-float deduceCoordinateFromEquationThreeUnknown(float a, float b, float c, float first_value, float second_value) {
-	return (-(a * first_value + b * second_value) / c); 
-}
-
-
-
-
-template <typename Pencil, typename Iterator>
-vector<Pencil> orthogonalPlanesWithNaiveTangents(Iterator itb, Iterator ite) {
-	typedef typename Pencil::P Vector;
-	vector<Pencil> tangents;
-	for (; itb != ite; ++itb) {
-		Iterator nextIt = itb;
-		++nextIt;
-		Vector naiveTangent = (*nextIt) - (*itb);
-		tangents.push_back(Pencil(*itb, naiveTangent));
+template <typename Surfel>
+void visualizePath(const Surfel& start, const Surfel& end, map<Surfel, Surfel>& previous, Viewer3D<>& viewer, const Color& color) {
+	Surfel tmp = end;
+	while (tmp != start) {
+		viewer << CustomColors3D(color, color) << tmp;
+	    tmp = previous[tmp];
 	}
-	return tangents;
+
+}
+
+template <typename Surfel, typename Point, typename KSpace>
+bool checkSymmetry(const KSpace& ks, const set<Surfel>& path1, const set<Surfel>& path2, const Point & center) {
+	int foundOneSymmetry = 0;
+	for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
+		Point currentPoint = ks.sCoords(*it);
+		Point vectorToCenter = center - currentPoint;
+		Point symmetryCurrent = center + vectorToCenter;
+		for (auto itS = path2.begin(), itSE = path2.end(); itS != itSE; ++itS) {
+			if (symmetryCurrent == ks.sCoords(*itS))
+				foundOneSymmetry++;
+		}
+	}
+	return (foundOneSymmetry > (path1.size() / 10) + 1);
 }
 
 template <typename Point>
@@ -208,9 +165,9 @@ bool multipleDirection(const vector<Point>& aVector, int& cpt) {
 	return (xOrientation && yOrientation) || (xOrientation && zOrientation) || (zOrientation && yOrientation);
 }
 
-template <typename KSpace, typename Surfel, typename Point>
-map<Surfel, int> computeSurfelWeight(const KSpace & ks, const DigitalSet & set3d, const set<Surfel>& surfelSet, set<Point> & surfaceVoxelSet) {
-	map<Surfel, int> weightedSurfelMap;
+template <typename KSpace, typename Surfel, typename Point, typename SurfacePoint>
+vector<SurfacePoint> computeSurfelWeight(const KSpace & ks, const DigitalSet & set3d, const set<Surfel>& surfelSet, set<Point> & surfaceVoxelSet) {
+	vector<SurfacePoint> weightedSurfaceVector;
 	for (auto it = set3d.begin(), itE = set3d.end(); it != itE; ++it) {
 		vector<Surfel> aSurfelV;
 		SCell current = ks.sSpel(*it);
@@ -230,13 +187,22 @@ map<Surfel, int> computeSurfelWeight(const KSpace & ks, const DigitalSet & set3d
 				aSurfelV.push_back(*itSurfel);
 			}
 		}
-		for (auto it = aSurfelV.begin(), itE = aSurfelV.end(); it != itE; ++it) {
-			weightedSurfelMap[*it] = number;
-		}
+		weightedSurfaceVector.push_back({*it, number, aSurfelV});
 		if (number > 0)
 			surfaceVoxelSet.insert(ks.sCoords(current));
 	}
-	return weightedSurfelMap;
+	return weightedSurfaceVector;
+}
+
+template <typename Point>
+vector<Point> nearestPointsFromCenter(const vector<Point> & points, const Point & center, double radius) {
+	vector<Point> nearestPointV;
+	for (const Point& point : points) {
+		if (euclideanDistance(point, center) <= radius) {
+			nearestPointV.push_back(point);
+		}
+	}
+	return nearestPointV;
 }
 
 
@@ -292,11 +258,13 @@ int main(int argc, char **argv)
 	typedef DGtal::PointVector<3, double> Vector3D;
 	typedef DGtal::PointVector<3, int> Point3D;
 	typedef LightImplicitDigitalSurface<KSpace, Z3i::DigitalSet >   MyDigitalSurfaceContainer;
+	typedef SurfacePoint<Z3i::Point, SCell> SurfacePoint;
 	typedef DigitalSurface<MyDigitalSurfaceContainer> MyDigitalSurface;
 	typedef MetricAdjacency<Space, 2> Graph;
 	typedef BreadthFirstVisitor<MyDigitalSurface> MyBreadthFirstVisitor;
 	typedef MyBreadthFirstVisitor::Node MyNode;
 	typedef MyBreadthFirstVisitor::Size MySize;
+	
 	
 	trace.beginBlock("Reading file...");
 	Image image = VolReader<Image>::importVol(inputFilename);
@@ -309,10 +277,9 @@ int main(int argc, char **argv)
 	SetFromImage<Z3i::DigitalSet>::append<Image> (set3d, image, 
 												  thresholdMin, thresholdMax);
 	trace.info() << "Finding a bel" << endl;
-	Z3i::SCell bel = Surfaces<KSpace>::findABel( ks, set3d, 1000000 );
-
+	Z3i::SCell bel = Surfaces<KSpace>::findABel( ks, set3d, 10000 );
+	//bel = Z3i::SCell({465,516,289},false);
 	trace.info() << bel << endl;
-//	bel = Z3i::SCell({-12,1,107},true);
 	typedef SurfelAdjacency<KSpace::dimension> MySurfelAdjacency;
 	MySurfelAdjacency surfAdj( true );
 	MyDigitalSurfaceContainer* ptrSurfContainer = 
@@ -328,131 +295,126 @@ int main(int argc, char **argv)
 		surfelSet.insert(*it);
 		setPredicate.insert(ks.sCoords(*it));
 	}
-
-	map<SCell, int> aWeightSurfelMap = computeSurfelWeight<KSpace, SCell, Point>(ks, set3d, surfelSet, surfaceVoxelSet);
-	functors::SurfelSetPredicate<KSpace::SCellSet, SCell> setP(surfelSet);
-	
-	//! [volBreadthFirstTraversal-ExtractingSurface]
-	trace.beginBlock( "Extracting boundary by tracking from an initial bel." );
+   
 	Graph graph;
-	MyBreadthFirstVisitor visitor( digSurf, bel );
+	
 	MyNode node;
 	 
 	bool isPathFound = false;
-	map<Z3i::SCell, pair<Z3i::SCell, unsigned int> > aMapPrevious;
+	
 	viewer << CustomColors3D(Color::Green, Color::Green) << bel;
     trace.beginBlock("Compute path");
 	Z3i::SCell end;
-	while (!visitor.finished() && !isPathFound) {
-		node = visitor.current();
-		vector<Z3i::SCell> neighbors;
-		back_insert_iterator<vector<Z3i::SCell> > iter(neighbors);
-	    visitor.graph().writeNeighbors(iter, node.first);
-	   
-		for (auto it = neighbors.begin(), itE = neighbors.end(); it != itE; ++it) {
+	int numberToFind = 10;
+	int i = 0;
+	while (i < numberToFind) {
+		bel = Surfaces<KSpace>::findABel( ks, set3d, 10000 );
+		MyBreadthFirstVisitor visitor( digSurf, bel );
+		isPathFound = false;
+		i++;
+		map<Z3i::SCell, Z3i::SCell> aMapPrevious;
+		trace.info() << bel << endl;
+		while (!visitor.finished() && !isPathFound) {
+			if (node.second > 100) isPathFound = true;
+			node = visitor.current();
+			vector<Z3i::SCell> neighbors;
+			back_insert_iterator<vector<Z3i::SCell> > iter(neighbors);
+			visitor.graph().writeNeighbors(iter, node.first);
+			//viewer << CustomColors3D(Color::White, Color::White) << node.first;
+			for (auto it = neighbors.begin(), itE = neighbors.end(); it != itE; ++it) {
 			
-			auto itMapExisting = aMapPrevious.find(*it);
-			if (itMapExisting == aMapPrevious.end())
-		    {
-				aMapPrevious[*it] = pair<Z3i::SCell, unsigned int>(node.first, node.second+1);			
+				auto itMapExisting = aMapPrevious.find(*it);
+				if (itMapExisting == aMapPrevious.end())
+				{
 				
-			}
-			else {
-				Z3i::SCell tmp = node.first;
-				Z3i::SCell tmp2 = aMapPrevious[*it].first;
-				vector<Z3i::Point> aDirectionV;
-				vector<Z3i::Point> anotherDirectionV;
-				set<Z3i::SCell> path1;
-				set<Z3i::SCell> path2;
-				while (tmp != bel) {
-				    path1.insert(tmp);
-					Z3i::SCell previous = aMapPrevious[tmp].first;
-					aDirectionV.push_back(ks.sCoords(tmp) - ks.sCoords(previous));
-					tmp = previous;
-					
+					aMapPrevious[*it] = Z3i::SCell(node.first);			
+				
 				}
+				else {
+					Z3i::SCell tmp = node.first;
+					Z3i::SCell tmp2 = aMapPrevious[*it];
+					vector<Z3i::Point> aDirectionV;
+					vector<Z3i::Point> anotherDirectionV;
+					set<Z3i::SCell> path1;
+					set<Z3i::SCell> path2;
+				
+					while (tmp != bel) {
+						path1.insert(tmp);
+						Z3i::SCell previous = aMapPrevious[tmp];
+						aDirectionV.push_back(ks.sCoords(tmp) - ks.sCoords(previous));
+						tmp = previous;
+					}
 			
-				while (tmp2 != bel) {
-					path2.insert(tmp2);
-					Z3i::SCell previous = aMapPrevious[tmp2].first;
-					anotherDirectionV.push_back(ks.sCoords(tmp2) - ks.sCoords(previous));
-					tmp2 = previous;
-				}
-				float size1 = 0;
-				float size2 = 0;
-				float increment = 3;
-				for (int i = 1; i < aDirectionV.size() - 1; i++) {
-					if (aDirectionV[i] == aDirectionV[i-1] && aDirectionV[i] == aDirectionV[i+1]) 
-						size1 += increment;
-					else
-						size1++;
-					if (anotherDirectionV[i] == anotherDirectionV[i-1] && anotherDirectionV[i] == anotherDirectionV[i+1])
-						size2 += increment;
-					else
-						size2++;
-				}
+					while (tmp2 != bel) {
+						path2.insert(tmp2);
+						Z3i::SCell previous = aMapPrevious[tmp2];
+						anotherDirectionV.push_back(ks.sCoords(tmp2) - ks.sCoords(previous));
+						tmp2 = previous;
+					}
+			
+					/*
+					  double size1 = 0;
+					  double size2 = 0;
+					  float increment = 2.0;
+					  for (int i = 1; i < (int)aDirectionV.size() - 1; i++) {
+					  if (aDirectionV[i] == aDirectionV[i-1] && aDirectionV[i] == aDirectionV[i+1]) 
+					  size1 += increment;
+					  else
+					  size1++;
+					  if (anotherDirectionV[i] == anotherDirectionV[i-1] && anotherDirectionV[i] == anotherDirectionV[i+1])
+					  size2 += increment;
+					  else
+					  size2++;
+					  }*/
+					//if (size1 == size2) {
+
+					//Checking distance to center
+					vector<double> aVector;
+					Z3i::Point center = (ks.sCoords(*it) + ks.sCoords(bel)) / 2;
 				
-				if (size1 == size2) {
-				
-					//check both paths going back
-				
-					
+					for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
+						aVector.push_back(euclideanDistance(ks.sCoords(*it), center));
+					}
+					double ratio = Statistics::stddev(aVector) / Statistics::mean(aVector);
+					//check both paths going back			
 					set<Z3i::SCell> intersection;
 					
 					set_intersection(path1.begin(), path1.end(), path2.begin(), path2.end(), inserter(intersection, intersection.begin()));
 					int cpt = 0;
 					int cpt2 = 0;
-					bool isPath1 = multipleDirection(aDirectionV, cpt);
-					bool isPath2 = multipleDirection(anotherDirectionV, cpt2);
-					if (intersection.size() == 0 && (isPath1 ||  isPath2)) {
-						if (isPath1) {
-							int direction = (path1.size() - cpt) / 2;
-							Point n(direction, 0, -cpt);
-							Point n2(0 , direction, -cpt);
-							Point p = ks.sCoords(bel);
-							viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
-						} else if (isPath2) {
-							int direction = (path2.size() - cpt2) / 2;
-							Point n(direction, 0, -cpt2);
-							Point n2(0 , direction, -cpt2);
-							Point p = ks.sCoords(bel);
-							viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
-						}
-						viewer << CustomColors3D(Color::Yellow, Color::Yellow) << *path1.lower_bound(bel) << *path2.lower_bound(bel);
-						end = *it;
-						KSpace::SCellSet aSCellSet;
-						
-						isPathFound = true;
-						Z3i::SCell start = *it;
-						viewer << CustomColors3D(Color::Green, Color::Green) << node.first;
-						viewer << CustomColors3D(Color::Yellow, Color::Yellow) << start;
-						while (start != bel) {
-							start  = aMapPrevious[start].first;
-							viewer << CustomColors3D(Color::Red, Color::Red) << start;
-						}
-						Z3i::SCell otherStart = node.first;
-						trace.info() << otherStart << *it << endl;
-						while (otherStart != bel) {
-							viewer << CustomColors3D(Color::Aqua, Color::Aqua) << otherStart;
-							otherStart = aMapPrevious[otherStart].first;
+					//bool isPath1 = multipleDirection(aDirectionV, cpt);
+					//bool isPath2 = multipleDirection(anotherDirectionV, cpt2);
 					
+					if (ratio < 0.10 && intersection.size() == 0) {
+						bool symmetry = checkSymmetry(ks, path1, path2, center);
+						if (symmetry){
+							viewer << CustomColors3D(Color::Red, Color::Red) << center;
+							//All conditions are met: a path is found
+							isPathFound = true;
+
+							//Visualize both paths
+							viewer << CustomColors3D(Color::Yellow, Color::Yellow) << *it;
+							visualizePath(bel, *it, aMapPrevious, viewer, Color::Red);
+							visualizePath(bel, node.first, aMapPrevious, viewer, Color::Red);
+						
+							//Visualize corresponding planes
+							/*if (isPath1) {
+							  visualizePlane(ks.sCoords(bel), path1.size(), cpt, viewer);
+							  } else if (isPath2) {
+							  visualizePlane(ks.sCoords(bel), path2.size(), cpt2, viewer);
+							  }
+							  break;*/
 						}
-						break;
 					}
-				}
+					//}
 				
-			}
+				}
 			
+			}
+			visitor.expand();
 		}
-		
-		visitor.expand();
 	}
 	trace.endBlock();
-	const Color  POINT_COLOR( 240, 100, 140, 128 );
-	for (auto it = aWeightSurfelMap.begin(), itE = aWeightSurfelMap.end(); it != itE; ++it) {
-		if (it->second == 2)
-			viewer << CustomColors3D(POINT_COLOR, POINT_COLOR) << it->first;
-	}
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	for (auto it = set3d.begin(); it != set3d.end(); ++it) {
 		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);
