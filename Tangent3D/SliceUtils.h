@@ -120,11 +120,9 @@ void SliceUtils::slicesFromPlanes(Viewer3D<>& viewer, const std::vector<Pencil> 
 		std::string outName;
 		outName += outFileName + "_" + std::to_string(sliceNumber) + ".pgm";
 		GenericWriter<ImageAdapterExtractor>::exportFile(outName, extractedImage);
-		if (sliceNumber == 87) {
-			viewer << extractedImage;
-			viewer << DGtal::UpdateImage3DEmbedding<Z3i::Space, Z3i::KSpace>(sliceNumber-87, embedder(Z2i::RealPoint(0,0)), embedder(Z2i::RealPoint(IMAGE_PATCH_WIDTH,0)), embedder(domainImage2D.upperBound()), embedder(Z2i::RealPoint(0, IMAGE_PATCH_WIDTH)));
-		}
-			sliceNumber++;
+		viewer << extractedImage;
+		viewer << DGtal::UpdateImage3DEmbedding<Z3i::Space, Z3i::KSpace>(sliceNumber, embedder(Z2i::RealPoint(0,0)), embedder(Z2i::RealPoint(IMAGE_PATCH_WIDTH,0)), embedder(domainImage2D.upperBound()), embedder(Z2i::RealPoint(0, IMAGE_PATCH_WIDTH)));
+		sliceNumber++;
 	}
 }
 

@@ -66,6 +66,8 @@
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
 
+#include <Eigen/Dense>
+
 #include "DGtal/images/ImageSelector.h"
 #include "DGtal/io/readers/VolReader.h"
 #include "DGtal/io/readers/GenericReader.h"
@@ -81,6 +83,9 @@
 #include "SurfacePoint.h"
 #include "WeightedDigitalSurface.h"
 #include "../CreateCurve/Distance.h"
+#include "../Tangent3D/SliceUtils.h"
+#include "../Tangent3D/Pencil.h"
+#include "../Tangent3D/MSTTangent.h"
 #include "Statistics.h"
 #include "Ellipse.h"
 
@@ -127,7 +132,7 @@ void shortestPointPath(const DigitalSurface & digSurf, const Surfel& bel, const 
 					path2.push_back(tmp2);
 					tmp2 = aMapPointPrevious[tmp2];
 				}
-				LengthEstimator lengthPath(0.99, 0.01);
+				LengthEstimator lengthPath;
 				double d1 = lengthPath.eval(path1.begin(), path1.end());
 				double d2 = lengthPath.eval(path2.begin(), path2.end());
 				if (d1 > d2) {
@@ -143,15 +148,6 @@ void shortestPointPath(const DigitalSurface & digSurf, const Surfel& bel, const 
 
 }
 
-
-template <typename Point>
-void visualizePlane(const Point& p, int size, int delta, Viewer3D<> & viewer) {
-	int direction = (size - delta) / 2;
-	Point n(direction, 0, -delta);
-	Point n2(0 , direction, -delta);
-	viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
-}
-
 template <typename Surfel>
 void visualizePath(const Surfel& start, const Surfel& end, map<Surfel, Surfel>& previous, Viewer3D<>& viewer, const Color& color) {
 	Surfel tmp = end;
@@ -160,6 +156,28 @@ void visualizePath(const Surfel& start, const Surfel& end, map<Surfel, Surfel>& 
 	    tmp = previous[tmp];
 	}
 
+}
+
+template <typename Vector, typename Point>
+Vector computePlaneNormal(const std::vector<Point> & points) {
+	typedef Eigen::Matrix<double, Eigen::Dynamic, 3> MatrixXi;
+	typedef Eigen::Matrix<double, Eigen::Dynamic, 1> VectorXi;
+	unsigned int size = points.size();
+	MatrixXi A(size, 3);
+	VectorXi b = VectorXi::Zero(size, 1);
+	
+	for (int i = 0; i < size; i++) {
+		A(i, 0) = (double)points[i][0]*1.0;
+		A(i, 1) = (double)points[i][1]*1.0;
+		A(i, 2) = 1.0;
+		b(i, 0) = (double)points[i][2]*1.0;
+	}
+	Eigen::Vector3d x = A.colPivHouseholderQr().solve(b);
+	Vector normal;
+	normal[0] = x(0, 0);
+	normal[1] = x(1, 0);
+	normal[2] = x(2, 0);
+	return normal.getNormalized();
 }
 
 
@@ -176,7 +194,6 @@ bool areAlmostSimilar(const Point& point, const Point& other) {
 	bool sameX = pointx == otherx || pointx == otherx + 1 || pointx == otherx-1;
 	bool sameY = pointy == othery || pointy == othery + 1 || pointy == othery-1;
 	bool sameZ = pointz == otherz || pointz == otherz + 1 || pointz == otherz-1;
-
 	return sameX && sameY && sameZ;
 }
 
@@ -189,7 +206,7 @@ bool checkSymmetry(const KSpace& ks, const vector<Surfel>& path1, const vector<S
 		Point symmetryCurrent = center + vectorToCenter;
 		for (auto itS = path2.begin(), itSE = path2.end(); itS != itSE; ++itS) {
 			Point putativeSymmetric = ks.sCoords(*itS);
-			if (areAlmostSimilar(symmetryCurrent,putativeSymmetric)) {
+			if (areAlmostSimilar(symmetryCurrent,putativeSymmetric) && !areAlmostSimilar(symmetryCurrent, center)) {
 				foundOneSymmetry++;
 				break;
 			}
@@ -315,7 +332,6 @@ int main(int argc, char **argv)
 	int thresholdMin = vm["thresholdMin"].as<int>();
 	int thresholdMax = vm["thresholdMax"].as<int>();
 	
-	typedef PointVector<3,int> Point;
 	QApplication application(argc,argv);
 	Viewer3D<> viewer;
 	viewer.show();
@@ -339,7 +355,9 @@ int main(int argc, char **argv)
 	typedef MyBreadthFirstVisitor::Size MySize;
 
 	typedef RosenProffittLengthEstimator<vector<SCell>> LengthEstimator;
-	
+	typedef MSTTangent<Point3D> Tangent;
+	typedef Pencil<Point3D, Tangent, Vector3D> Pencil;
+		
 	trace.beginBlock("Reading file...");
 	Image image = VolReader<Image>::importVol(inputFilename);
 	trace.endBlock();
@@ -377,8 +395,9 @@ int main(int argc, char **argv)
 	viewer << CustomColors3D(Color::Green, Color::Green) << bel;
     trace.beginBlock("Compute path");
 	Z3i::SCell end;
-	int numberToFind = 1;
+	int numberToFind = 5;
 	int i = 0;
+	vector<Pencil> pencils;
 	while (i < numberToFind) {
 		bel = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
 //		bel = {{1,14,29}, false};
@@ -448,7 +467,7 @@ int main(int argc, char **argv)
 					// bool isPath1 = multipleDirection(aDirectionV, cpt);
 					// bool isPath2 = multipleDirection(anotherDirectionV, cpt2);
 
-					if (path1.size() > 50 && intersection.size() == 0) {
+					if (intersection.size() == 0) {
 						bool symmetry = checkSymmetry(ks, path1, path2, center);
 
 						typedef StandardDSS6Computer<vector<Z3i::Point>::iterator,int,4> SegmentComputer;  
@@ -482,20 +501,18 @@ int main(int argc, char **argv)
 							visualizePath(bel, node.first, aMapPrevious, viewer, Color::Cyan);
 							LengthEstimator le;
 							trace.info() << "Distance " << le.eval(path1.begin(), path1.end()) << endl;
-							//Visualize corresponding planes
-							/*if (isPath1) {
-							  visualizePlane(ks.sCoords(bel), path1.size(), cpt, viewer);
-							  } else if (isPath2) {
-							  visualizePlane(ks.sCoords(bel), path2.size(), cpt2, viewer);
-							  }
-							  break;*/
+							for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
+								correspondingPointInPath.push_back(ks.sCoords(*it));
+							}
+							Vector3D normal = computePlaneNormal<Vector3D>(correspondingPointInPath);
+							pencils.push_back({center, normal});
 						}
 					}
 				}
 				
 				if (isPathFound) {
 					trace.beginBlock("Computing complement");
-//					shortestPointPath<MyBreadthFirstVisitor>(digSurf, bel, end, viewer);
+					shortestPointPath<MyBreadthFirstVisitor>(digSurf, bel, end, viewer);
 					trace.endBlock();
 					break;
 				}
@@ -505,7 +522,8 @@ int main(int argc, char **argv)
 		}
 	}
 	trace.endBlock();
-
+	
+	//SliceUtils::slicesFromPlanes(viewer, pencils, image, "lalal");
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	for (auto it = set3d.begin(); it != set3d.end(); ++it) {
 		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);
