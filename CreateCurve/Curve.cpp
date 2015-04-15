@@ -98,13 +98,12 @@ int main( int argc, char** argv )
 	int radius = 10;
 	
 	vector<PointVector<3, double>> curve;
-	
-	createContinuousLogarithmicCurve(curve, 50, increment);
-//	createStraightLine(curve, 50, increment);
+//	createContinuousLogarithmicCurve(curve, 50, increment);
+	createStraightLine(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
 	set<PointVector<3,double>> vectorPoints;
-	createVolumeFromCurve(curve, vectorPoints, 20);
-	thinVolume<Pencil>(curve, vectorPoints, 20.0);
+	createVolumeFromCurve(curve, vectorPoints, 5);
+//	thinVolume<Pencil>(curve, vectorPoints, 20.0);
 //	drawDeformedCylinder(vectorPoints, 50, 5, increment);
 //  createStraightLine(curve, 50);
 	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 300, 300));

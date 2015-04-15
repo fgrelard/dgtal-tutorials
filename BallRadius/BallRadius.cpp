@@ -72,19 +72,18 @@
 #include "DGtal/graph/DepthFirstVisitor.h"
 #include "DGtal/graph/GraphVisitorRange.h"
 #include "DGtal/graph/BreadthFirstVisitor.h"
-#include "DGtal/geometry/curves/StandardDSS6Computer.h"
-#include "DGtal/topology/CanonicSCellEmbedder.h"
 #include "DGtal/topology/DigitalSurface.h"
 #include "DGtal/topology/LightImplicitDigitalSurface.h"
 #include "DGtal/kernel/BasicPointPredicates.h"
-#include "DGtal/graph/CVertexPredicate.h"
-
+#include "RosenProffittLengthEstimator.h"
 
 // Local includes
 #include "SurfacePoint.h"
 #include "WeightedDigitalSurface.h"
 #include "../CreateCurve/Distance.h"
 #include "Statistics.h"
+#include "Ellipse.h"
+
 using namespace DGtal;
 using namespace std;
 using namespace Z3i;
@@ -93,6 +92,56 @@ namespace po = boost::program_options;
 ///////////////////////////////////////////////////////////////////////////////
 // Functions for testing class GreedySegmentation
 ///////////////////////////////////////////////////////////////////////////////
+
+
+template <typename BreadthFirstVisitor, typename Surfel, typename Viewer, typename DigitalSurface>
+void shortestPointPath(const DigitalSurface & digSurf, const Surfel& bel, const Surfel& end, Viewer& viewer) {
+	typedef RosenProffittLengthEstimator<vector<Surfel>> LengthEstimator;
+	map<Surfel, Surfel> aMapPointPrevious;
+	BreadthFirstVisitor pvisitor(digSurf, bel);
+	while (!pvisitor.finished()) {
+		typename BreadthFirstVisitor::Node node = pvisitor.current();
+		vector<Surfel> neighbors;
+		back_insert_iterator<vector<Surfel>> iter(neighbors);
+		pvisitor.graph().writeNeighbors(iter, node.first);
+		for (auto it = neighbors.begin(), itE = neighbors.end(); it != itE; ++it) {
+			auto itMapExisting = aMapPointPrevious.find(*it);
+			if (itMapExisting == aMapPointPrevious.end())
+			{
+				aMapPointPrevious[*it] = node.first;
+				if (*it == end) break;
+			}
+			else {
+				//Compute Rosen Proffitt distance with previous map
+				Surfel tmp = *it;
+				vector<Surfel> path1;
+				while (tmp != bel) {
+					path1.push_back(tmp);
+					tmp = aMapPointPrevious[tmp];
+				}
+				
+				Surfel tmp2 = node.first;
+				vector<Surfel> path2;
+				path2.push_back(*it);
+				while (tmp2 != bel) {
+					path2.push_back(tmp2);
+					tmp2 = aMapPointPrevious[tmp2];
+				}
+				LengthEstimator lengthPath(0.99, 0.01);
+				double d1 = lengthPath.eval(path1.begin(), path1.end());
+				double d2 = lengthPath.eval(path2.begin(), path2.end());
+				if (d1 > d2) {
+					aMapPointPrevious[*it] = node.first;
+				}
+					
+			}
+		}
+		pvisitor.expand();
+				
+	}
+	visualizePath(bel, end, aMapPointPrevious, viewer, Color::Green);
+
+}
 
 
 template <typename Point>
@@ -113,19 +162,40 @@ void visualizePath(const Surfel& start, const Surfel& end, map<Surfel, Surfel>& 
 
 }
 
+
+template <typename Point>
+bool areAlmostSimilar(const Point& point, const Point& other) {
+	typename Point::Scalar otherx = other[0];
+	typename Point::Scalar othery = other[1];
+	typename Point::Scalar otherz = other[2];
+
+	typename Point::Scalar pointx = point[0];
+	typename Point::Scalar pointy = point[1];
+	typename Point::Scalar pointz = point[2];
+	
+	bool sameX = pointx == otherx || pointx == otherx + 1 || pointx == otherx-1;
+	bool sameY = pointy == othery || pointy == othery + 1 || pointy == othery-1;
+	bool sameZ = pointz == otherz || pointz == otherz + 1 || pointz == otherz-1;
+
+	return sameX && sameY && sameZ;
+}
+
 template <typename Surfel, typename Point, typename KSpace>
-bool checkSymmetry(const KSpace& ks, const set<Surfel>& path1, const set<Surfel>& path2, const Point & center) {
+bool checkSymmetry(const KSpace& ks, const vector<Surfel>& path1, const vector<Surfel>& path2, const Point & center) {
 	int foundOneSymmetry = 0;
 	for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
 		Point currentPoint = ks.sCoords(*it);
 		Point vectorToCenter = center - currentPoint;
 		Point symmetryCurrent = center + vectorToCenter;
 		for (auto itS = path2.begin(), itSE = path2.end(); itS != itSE; ++itS) {
-			if (symmetryCurrent == ks.sCoords(*itS))
+			Point putativeSymmetric = ks.sCoords(*itS);
+			if (areAlmostSimilar(symmetryCurrent,putativeSymmetric)) {
 				foundOneSymmetry++;
+				break;
+			}
 		}
 	}
-	return (foundOneSymmetry > (path1.size() / 10) + 1);
+	return (foundOneSymmetry >= path1.size());
 }
 
 template <typename Point>
@@ -165,7 +235,7 @@ bool multipleDirection(const vector<Point>& aVector, int& cpt) {
 	return (xOrientation && yOrientation) || (xOrientation && zOrientation) || (zOrientation && yOrientation);
 }
 
-template <typename KSpace, typename Surfel, typename Point, typename SurfacePoint>
+template <typename SurfacePoint, typename KSpace, typename Surfel, typename Point>
 vector<SurfacePoint> computeSurfelWeight(const KSpace & ks, const DigitalSet & set3d, const set<Surfel>& surfelSet, set<Point> & surfaceVoxelSet) {
 	vector<SurfacePoint> weightedSurfaceVector;
 	for (auto it = set3d.begin(), itE = set3d.end(); it != itE; ++it) {
@@ -260,24 +330,28 @@ int main(int argc, char **argv)
 	typedef LightImplicitDigitalSurface<KSpace, Z3i::DigitalSet >   MyDigitalSurfaceContainer;
 	typedef SurfacePoint<Z3i::Point, SCell> SurfacePoint;
 	typedef DigitalSurface<MyDigitalSurfaceContainer> MyDigitalSurface;
-	typedef MetricAdjacency<Space, 2> Graph;
+	typedef WeightedDigitalSurface<MyDigitalSurfaceContainer, SurfacePoint> MyWeightedDigitalSurface;
+	typedef MetricAdjacency<Space, 3> Graph;
 	typedef BreadthFirstVisitor<MyDigitalSurface> MyBreadthFirstVisitor;
+	typedef BreadthFirstVisitor<MyWeightedDigitalSurface> MyWeightedBreathFirstVisitor;
+	typedef BreadthFirstVisitor<Graph, std::set<Z3i::Point> > PointBreadthFirstVisitor;
 	typedef MyBreadthFirstVisitor::Node MyNode;
 	typedef MyBreadthFirstVisitor::Size MySize;
-	
+
+	typedef RosenProffittLengthEstimator<vector<SCell>> LengthEstimator;
 	
 	trace.beginBlock("Reading file...");
 	Image image = VolReader<Image>::importVol(inputFilename);
 	trace.endBlock();
 	KSpace ks;
 	ks.init( image.domain().lowerBound(), 
-			 image.domain().upperBound(), false );
+			 image.domain().upperBound(), true );
 	KSpace::SCellSet boundary;
 	Z3i::DigitalSet set3d (image.domain());
 	SetFromImage<Z3i::DigitalSet>::append<Image> (set3d, image, 
 												  thresholdMin, thresholdMax);
 	trace.info() << "Finding a bel" << endl;
-	Z3i::SCell bel = Surfaces<KSpace>::findABel( ks, set3d, 10000 );
+	Z3i::SCell bel;// = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
 	//bel = Z3i::SCell({465,516,289},false);
 	trace.info() << bel << endl;
 	typedef SurfelAdjacency<KSpace::dimension> MySurfelAdjacency;
@@ -295,20 +369,20 @@ int main(int argc, char **argv)
 		surfelSet.insert(*it);
 		setPredicate.insert(ks.sCoords(*it));
 	}
-   
-	Graph graph;
-	
+	vector<SurfacePoint> weightedSurfaceV = computeSurfelWeight<SurfacePoint>(ks, set3d, surfelSet, surfaceVoxelSet);
+	MyWeightedDigitalSurface weightedSurface(digSurf, weightedSurfaceV);
 	MyNode node;
-	 
 	bool isPathFound = false;
 	
 	viewer << CustomColors3D(Color::Green, Color::Green) << bel;
     trace.beginBlock("Compute path");
 	Z3i::SCell end;
-	int numberToFind = 10;
+	int numberToFind = 1;
 	int i = 0;
 	while (i < numberToFind) {
-		bel = Surfaces<KSpace>::findABel( ks, set3d, 10000 );
+		bel = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
+//		bel = {{1,14,29}, false};
+		viewer << CustomColors3D(Color::Green, Color::Green) << bel;
 		MyBreadthFirstVisitor visitor( digSurf, bel );
 		isPathFound = false;
 		i++;
@@ -320,83 +394,94 @@ int main(int argc, char **argv)
 			vector<Z3i::SCell> neighbors;
 			back_insert_iterator<vector<Z3i::SCell> > iter(neighbors);
 			visitor.graph().writeNeighbors(iter, node.first);
-			//viewer << CustomColors3D(Color::White, Color::White) << node.first;
 			for (auto it = neighbors.begin(), itE = neighbors.end(); it != itE; ++it) {
-			
+				
 				auto itMapExisting = aMapPrevious.find(*it);
 				if (itMapExisting == aMapPrevious.end())
 				{
-				
-					aMapPrevious[*it] = Z3i::SCell(node.first);			
-				
+					aMapPrevious[*it] = node.first;
 				}
 				else {
 					Z3i::SCell tmp = node.first;
 					Z3i::SCell tmp2 = aMapPrevious[*it];
 					vector<Z3i::Point> aDirectionV;
 					vector<Z3i::Point> anotherDirectionV;
-					set<Z3i::SCell> path1;
-					set<Z3i::SCell> path2;
+					vector<Z3i::SCell> path1;
+					vector<Z3i::SCell> path2;
 				
 					while (tmp != bel) {
-						path1.insert(tmp);
+						path1.push_back(tmp);
 						Z3i::SCell previous = aMapPrevious[tmp];
 						aDirectionV.push_back(ks.sCoords(tmp) - ks.sCoords(previous));
 						tmp = previous;
 					}
 			
 					while (tmp2 != bel) {
-						path2.insert(tmp2);
+						path2.push_back(tmp2);
 						Z3i::SCell previous = aMapPrevious[tmp2];
 						anotherDirectionV.push_back(ks.sCoords(tmp2) - ks.sCoords(previous));
 						tmp2 = previous;
 					}
 			
-					/*
-					  double size1 = 0;
-					  double size2 = 0;
-					  float increment = 2.0;
-					  for (int i = 1; i < (int)aDirectionV.size() - 1; i++) {
-					  if (aDirectionV[i] == aDirectionV[i-1] && aDirectionV[i] == aDirectionV[i+1]) 
-					  size1 += increment;
-					  else
-					  size1++;
-					  if (anotherDirectionV[i] == anotherDirectionV[i-1] && anotherDirectionV[i] == anotherDirectionV[i+1])
-					  size2 += increment;
-					  else
-					  size2++;
-					  }*/
-					//if (size1 == size2) {
-
 					//Checking distance to center
 					vector<double> aVector;
-					Z3i::Point center = (ks.sCoords(*it) + ks.sCoords(bel)) / 2;
+					
 				
+					Z3i::Point center = (ks.sCoords(*it) + ks.sCoords(bel)) / 2;
 					for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
 						aVector.push_back(euclideanDistance(ks.sCoords(*it), center));
 					}
 					double ratio = Statistics::stddev(aVector) / Statistics::mean(aVector);
 					//check both paths going back			
-					set<Z3i::SCell> intersection;
-					
-					set_intersection(path1.begin(), path1.end(), path2.begin(), path2.end(), inserter(intersection, intersection.begin()));
+					vector<Z3i::SCell> intersection;
+					for (auto it = path1.begin(), itE = path1.end(); it!=itE; ++it) {
+						for (auto it2 = path2.begin(), itE2 = path2.end(); it2!=itE2; ++it2) {
+							if (*it == *it2) {
+								intersection.push_back(*it);
+							}
+						}
+					}
+					//set_intersection(path1.begin(), path1.end(), path2.begin(), path2.end(), back_inserter(intersection));
+				
 					int cpt = 0;
 					int cpt2 = 0;
-					//bool isPath1 = multipleDirection(aDirectionV, cpt);
-					//bool isPath2 = multipleDirection(anotherDirectionV, cpt2);
-					
-					if (ratio < 0.10 && intersection.size() == 0) {
+					// bool isPath1 = multipleDirection(aDirectionV, cpt);
+					// bool isPath2 = multipleDirection(anotherDirectionV, cpt2);
+
+					if (path1.size() > 50 && intersection.size() == 0) {
 						bool symmetry = checkSymmetry(ks, path1, path2, center);
-						if (symmetry){
+
+						typedef StandardDSS6Computer<vector<Z3i::Point>::iterator,int,4> SegmentComputer;  
+						typedef GreedySegmentation<SegmentComputer> Segmentation;
+						vector<Z3i::Point> correspondingPointInPath;
+						for (auto it = path2.begin(), itE = path2.end(); it != itE; ++it) {
+							correspondingPointInPath.push_back(ks.sCoords(*it));
+						}
+						SegmentComputer algo;
+						Segmentation s(correspondingPointInPath.begin(), correspondingPointInPath.end(), algo);
+						int cpt = 0; //Cpt corresponds to the number of straight lines in path
+						
+						for (auto er = s.begin(), erE = s.end(); er!=erE; ++er) {
+							SegmentComputer current(*er);
+							Z3i::Point direction;
+							PointVector<3, double> intercept, thickness;
+							current.getParameters(direction, intercept, thickness);
+							if (direction != Z3i::Point::zero)
+								cpt++;
+						}
+						if (symmetry && cpt != 1 ) {
+							s.setMode("MostCentered++");
+							trace.info() << endl;
 							viewer << CustomColors3D(Color::Red, Color::Red) << center;
 							//All conditions are met: a path is found
 							isPathFound = true;
-
+							end = *it;
 							//Visualize both paths
 							viewer << CustomColors3D(Color::Yellow, Color::Yellow) << *it;
 							visualizePath(bel, *it, aMapPrevious, viewer, Color::Red);
-							visualizePath(bel, node.first, aMapPrevious, viewer, Color::Red);
-						
+							visualizePath(bel, node.first, aMapPrevious, viewer, Color::Cyan);
+							LengthEstimator le;
+							trace.info() << "Distance " << le.eval(path1.begin(), path1.end()) << endl;
 							//Visualize corresponding planes
 							/*if (isPath1) {
 							  visualizePlane(ks.sCoords(bel), path1.size(), cpt, viewer);
@@ -406,15 +491,21 @@ int main(int argc, char **argv)
 							  break;*/
 						}
 					}
-					//}
-				
 				}
-			
+				
+				if (isPathFound) {
+					trace.beginBlock("Computing complement");
+//					shortestPointPath<MyBreadthFirstVisitor>(digSurf, bel, end, viewer);
+					trace.endBlock();
+					break;
+				}
 			}
 			visitor.expand();
+//			viewer << CustomColors3D(Color::White, Color::White) << node.first;
 		}
 	}
 	trace.endBlock();
+
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	for (auto it = set3d.begin(); it != set3d.end(); ++it) {
 		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);
