@@ -36,21 +36,34 @@ eval(Iterator itb, Iterator ite) {
 		nextIt++;
 	else
 		return 0;
-	for (; nextIt != ite; ++itb, ++nextIt) {
+	while (( itb != ite) && (nextIt != ite)) {
 		typename SurfelContainer::value_type::Point difference = nextIt->myCoordinates - itb->myCoordinates;
 		bool nextDirect = abs(difference[0]) > 1 || abs(difference[1]) > 1 || abs(difference[2]) > 1;
 		if (nextDirect) 
-			numberDirect++;
+			numberDirect+=2;
 		else
 			numberDiagonal++;
-	}
+
+		++itb; 
+		if (itb == ite) 
+			continue;
+		++itb;
+ 
+		++nextIt; 
+		if (nextIt == ite) 
+			continue;
+		++nextIt;
+	}   
+   
+	if ( itb!= ite)
+		numberDirect ++;
 	return computeLength(numberDiagonal, numberDirect);
 }
 
 template <typename SurfelContainer>
 double RosenProffittLengthEstimator<SurfelContainer>::
 computeLength(int numberDiagonal, int numberDirect) {
-	return numberDiagonal * myFactorDiagonal + numberDirect * myFactorDirect + myFactorDirect;
+	return numberDiagonal * myFactorDiagonal + numberDirect * myFactorDirect;
 }
 
 #endif

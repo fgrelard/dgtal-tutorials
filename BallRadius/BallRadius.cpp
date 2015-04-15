@@ -110,6 +110,7 @@ void shortestPointPath(const DigitalSurface & digSurf, const Surfel& bel, const 
 		back_insert_iterator<vector<Surfel>> iter(neighbors);
 		pvisitor.graph().writeNeighbors(iter, node.first);
 		for (auto it = neighbors.begin(), itE = neighbors.end(); it != itE; ++it) {
+			
 			auto itMapExisting = aMapPointPrevious.find(*it);
 			if (itMapExisting == aMapPointPrevious.end())
 			{
@@ -136,14 +137,22 @@ void shortestPointPath(const DigitalSurface & digSurf, const Surfel& bel, const 
 				double d1 = lengthPath.eval(path1.begin(), path1.end());
 				double d2 = lengthPath.eval(path2.begin(), path2.end());
 				if (d1 > d2) {
-					aMapPointPrevious[*it] = node.first;
+					if (node.first != bel) {
+						Surfel current = *it;
+						Surfel previous = node.first;  
+						while (current != bel) {
+							aMapPointPrevious[current] = previous;
+							previous = aMapPointPrevious[previous];
+							current = aMapPointPrevious[current];
+						}
+					}
 				}
-					
 			}
 		}
 		pvisitor.expand();
 				
 	}
+	std::cout << "visu" << std::endl;
 	visualizePath(bel, end, aMapPointPrevious, viewer, Color::Green);
 
 }
@@ -395,7 +404,7 @@ int main(int argc, char **argv)
 	viewer << CustomColors3D(Color::Green, Color::Green) << bel;
     trace.beginBlock("Compute path");
 	Z3i::SCell end;
-	int numberToFind = 5;
+	int numberToFind = 1;
 	int i = 0;
 	vector<Pencil> pencils;
 	while (i < numberToFind) {
@@ -444,8 +453,6 @@ int main(int argc, char **argv)
 			
 					//Checking distance to center
 					vector<double> aVector;
-					
-				
 					Z3i::Point center = (ks.sCoords(*it) + ks.sCoords(bel)) / 2;
 					for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
 						aVector.push_back(euclideanDistance(ks.sCoords(*it), center));
@@ -469,7 +476,6 @@ int main(int argc, char **argv)
 
 					if (intersection.size() == 0) {
 						bool symmetry = checkSymmetry(ks, path1, path2, center);
-
 						typedef StandardDSS6Computer<vector<Z3i::Point>::iterator,int,4> SegmentComputer;  
 						typedef GreedySegmentation<SegmentComputer> Segmentation;
 						vector<Z3i::Point> correspondingPointInPath;
