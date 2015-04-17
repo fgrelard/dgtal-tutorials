@@ -12,7 +12,6 @@ public:
 public:
 	RosenProffittLengthEstimator() : myFactorDirect{M_PI * ((sqrt(2) +1)/8.)}, myFactorDiagonal{M_PI * ((sqrt(2) +2)/16.)} {}
 	RosenProffittLengthEstimator(double factorDirect, double factorDiagonal) : myFactorDirect{factorDirect}, myFactorDiagonal{factorDiagonal} {}
-
 	double eval(Iterator itb, Iterator ite);
 
 
@@ -22,7 +21,6 @@ private:
 private:
 	double myFactorDirect;
 	double myFactorDiagonal;
-	double myFactorDiagrect;
 };
 
 template <typename SurfelContainer>
@@ -36,27 +34,17 @@ eval(Iterator itb, Iterator ite) {
 		nextIt++;
 	else
 		return 0;
-	while (( itb != ite) && (nextIt != ite)) {
+	while (nextIt != ite) {
 		typename SurfelContainer::value_type::Point difference = nextIt->myCoordinates - itb->myCoordinates;
 		bool nextDirect = abs(difference[0]) > 1 || abs(difference[1]) > 1 || abs(difference[2]) > 1;
 		if (nextDirect) 
-			numberDirect+=2;
+			numberDirect++;
 		else
 			numberDiagonal++;
-
-		++itb; 
-		if (itb == ite) 
-			continue;
 		++itb;
- 
-		++nextIt; 
-		if (nextIt == ite) 
-			continue;
 		++nextIt;
-	}   
-   
-	if ( itb!= ite)
-		numberDirect ++;
+	}
+	std::cout<< numberDirect << " " << numberDiagonal << std::endl;
 	return computeLength(numberDiagonal, numberDirect);
 }
 

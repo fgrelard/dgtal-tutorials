@@ -38,13 +38,14 @@ writeNeighbors( OutputIterator & it, const Vertex & v) const {
 	OutputIterator tmp(neighbors);
 	Base::writeNeighbors(tmp, v);
 	for (auto itN = neighbors.begin(), itNE = neighbors.end(); itN!=itNE; ++itN) {
+		//	*it++ = *itN;
 		for (auto itSurfPoint = mySurfaceVoxels.begin(),
 				 itSurfPointE = mySurfaceVoxels.end();
 				 itSurfPoint != itSurfPointE; ++itSurfPoint) {
 			SurfacePoint current = *itSurfPoint;
 			if (current.contains(*itN)) {
-				for (const auto& s : current.surfelsAtPoint()) { 
-					*it++ = s; 
+				for (const auto& s : current.surfelsAtPoint()) {
+						*it++ = s; 
 				}
 			}
 		}
@@ -59,6 +60,7 @@ writeNeighbors( OutputIterator & it, const Vertex & v, const VertexPredicate & p
 	OutputIterator tmp(neighbors);
 	Base::writeNeighbors(tmp, v, pred);
 	for (auto itN = neighbors.begin(), itNE = neighbors.end(); itN!=itNE; ++it) {
+		*it++ = *itN;
 		for (auto itSurfPoint = mySurfaceVoxels.begin(),
 				 itSurfPointE = mySurfaceVoxels.end();
 			 itSurfPoint != itSurfPointE; ++itSurfPoint) {

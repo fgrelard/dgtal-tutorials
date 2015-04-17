@@ -138,13 +138,7 @@ void shortestPointPath(const DigitalSurface & digSurf, const Surfel& bel, const 
 				double d2 = lengthPath.eval(path2.begin(), path2.end());
 				if (d1 > d2) {
 					if (node.first != bel) {
-						Surfel current = *it;
-						Surfel previous = node.first;  
-						while (current != bel) {
-							aMapPointPrevious[current] = previous;
-							previous = aMapPointPrevious[previous];
-							current = aMapPointPrevious[current];
-						}
+					    aMapPointPrevious[*it] = node.first;
 					}
 				}
 			}
@@ -185,7 +179,7 @@ Vector computePlaneNormal(const std::vector<Point> & points) {
 	Vector normal;
 	normal[0] = x(0, 0);
 	normal[1] = x(1, 0);
-	normal[2] = x(2, 0);
+	normal[2] = -1;
 	return normal.getNormalized();
 }
 
@@ -206,22 +200,35 @@ bool areAlmostSimilar(const Point& point, const Point& other) {
 	return sameX && sameY && sameZ;
 }
 
-template <typename Surfel, typename Point, typename KSpace>
-bool checkSymmetry(const KSpace& ks, const vector<Surfel>& path1, const vector<Surfel>& path2, const Point & center) {
+template <typename Point>
+bool areAlmostSimilar(const set<Point>& s1, const set<Point>& s2) {
+	int cpt = 0;
+	for (const Point& p1 : s1) {
+		for (const Point& p2 : s2) {
+			if (areAlmostSimilar(p1, p2)) {
+				cpt++;
+				break;
+			}
+		}
+	}
+	return cpt == s1.size();
+}
+template <typename Surfel, typename Point>
+bool checkSymmetry(const map<Surfel, Point>& surfelToPoint, const set<Surfel>& path1, const set<Surfel>& path2, const Point & center) {
 	int foundOneSymmetry = 0;
 	for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
-		Point currentPoint = ks.sCoords(*it);
+		Point currentPoint = surfelToPoint.at(*it);
 		Point vectorToCenter = center - currentPoint;
 		Point symmetryCurrent = center + vectorToCenter;
 		for (auto itS = path2.begin(), itSE = path2.end(); itS != itSE; ++itS) {
-			Point putativeSymmetric = ks.sCoords(*itS);
-			if (areAlmostSimilar(symmetryCurrent,putativeSymmetric) && !areAlmostSimilar(symmetryCurrent, center)) {
+			Point putativeSymmetric = surfelToPoint.at(*itS);
+			if (areAlmostSimilar(putativeSymmetric, symmetryCurrent) && !areAlmostSimilar(center, symmetryCurrent) && !areAlmostSimilar(center, currentPoint)) {
 				foundOneSymmetry++;
 				break;
 			}
 		}
 	}
-	return (foundOneSymmetry >= path1.size());
+	return (foundOneSymmetry == path1.size());
 }
 
 template <typename Point>
@@ -262,7 +269,7 @@ bool multipleDirection(const vector<Point>& aVector, int& cpt) {
 }
 
 template <typename SurfacePoint, typename KSpace, typename Surfel, typename Point>
-vector<SurfacePoint> computeSurfelWeight(const KSpace & ks, const DigitalSet & set3d, const set<Surfel>& surfelSet, set<Point> & surfaceVoxelSet) {
+vector<SurfacePoint> computeSurfelWeight(const KSpace & ks, const DigitalSet & set3d, const set<Surfel>& surfelSet, map<Surfel, Point> & surfaceVoxelSet) {
 	vector<SurfacePoint> weightedSurfaceVector;
 	for (auto it = set3d.begin(), itE = set3d.end(); it != itE; ++it) {
 		vector<Surfel> aSurfelV;
@@ -273,6 +280,7 @@ vector<SurfacePoint> computeSurfelWeight(const KSpace & ks, const DigitalSet & s
 			if (itSurfel != surfelSet.end()) {
 				number++;
 				aSurfelV.push_back(*itSurfel);
+				surfaceVoxelSet[*itSurfel] = *it; 
 			}
 		}
 
@@ -281,11 +289,12 @@ vector<SurfacePoint> computeSurfelWeight(const KSpace & ks, const DigitalSet & s
 			if (itSurfel != surfelSet.end()) {
 				number++;
 				aSurfelV.push_back(*itSurfel);
+				surfaceVoxelSet[*itSurfel] = *it;
 			}
 		}
 		weightedSurfaceVector.push_back({*it, number, aSurfelV});
-		if (number > 0)
-			surfaceVoxelSet.insert(ks.sCoords(current));
+		// if (number > 0)
+		// 	surfaceVoxelSet.insert(ks.sCoords(current));
 	}
 	return weightedSurfaceVector;
 }
@@ -301,6 +310,55 @@ vector<Point> nearestPointsFromCenter(const vector<Point> & points, const Point 
 	return nearestPointV;
 }
 
+template <typename Surfel, typename Point>
+bool areNeighbours(const set<Surfel>& path1, const set<Surfel>& path2, const map<Surfel, Point>& surfelToPoint) {
+	int cpt = 0;
+	for (const auto & surfelInPOne : path1) {
+		Point pp1 = surfelToPoint.at(surfelInPOne);
+		for (const auto & surfelInPTwo : path2) {
+			Point pp2 = surfelToPoint.at(surfelInPTwo);
+			if (areAlmostSimilar(pp1, pp2))
+				cpt++;
+		}
+	}
+	trace.info() << cpt <<endl;
+	return cpt>4;
+}
+
+
+template <typename Point, typename Vector>
+bool checkSymmetry(const vector<Point> & points, const Vector & axis, const Point& center) {
+	typedef Eigen::Matrix<double, Eigen::Dynamic, 4> MatrixXd;
+	typedef Eigen::Matrix<double, Eigen::Dynamic, 1> VectorXd;
+	unsigned int size = points.size();
+	MatrixXd A(size, 3);
+	
+	for (int i = 0; i < size; i++) {
+		A(i, 0) = (double)points[i][0]*1.0;
+		A(i, 1) = (double)points[i][1]*1.0;
+		A(i, 2) = (double)points[i][2]*1.0;
+		A(i, 3) = 1.0;
+	}
+	set<Point> initialSet(points.begin(), points.end());
+	for (double angle = M_PI/4; angle <= 2 * M_PI; angle+=M_PI/4) {
+		set<Point> rotatedSetOfPoints;
+		Eigen::Affine3d rot(Eigen::AngleAxisd(angle, Eigen::Vector3d(axis[0], axis[1], axis[2])));
+		Eigen::Matrix<double, Eigen::Dynamic, 4> m = A * rot.matrix();
+		for (int i = 0; i < size; i++) {
+			if (m(i, 0) != 0 || m(i, 1) != 0 || m(i, 2) != 0) {
+				int posx = m(i, 0);
+				int posy = m(i, 1);
+				int posz = m(i, 2);
+				Point p{posx, posy, posz};
+				rotatedSetOfPoints.insert(p);
+			}
+		}
+		if (areAlmostSimilar(initialSet, rotatedSetOfPoints)) {
+			return true;
+		}
+	}
+	return false;
+}
 
 /////////////////////////////////////////////////////////////////////////
 //////////////// MAIN ///////////////////////////////////////////////////
@@ -341,9 +399,7 @@ int main(int argc, char **argv)
 	int thresholdMin = vm["thresholdMin"].as<int>();
 	int thresholdMax = vm["thresholdMax"].as<int>();
 	
-	QApplication application(argc,argv);
-	Viewer3D<> viewer;
-	viewer.show();
+	
 	
 	typedef Z3i::Space Space;
 	typedef HyperRectDomain<Space> Domain;
@@ -358,15 +414,18 @@ int main(int argc, char **argv)
 	typedef WeightedDigitalSurface<MyDigitalSurfaceContainer, SurfacePoint> MyWeightedDigitalSurface;
 	typedef MetricAdjacency<Space, 3> Graph;
 	typedef BreadthFirstVisitor<MyDigitalSurface> MyBreadthFirstVisitor;
-	typedef BreadthFirstVisitor<MyWeightedDigitalSurface> MyWeightedBreathFirstVisitor;
+	typedef BreadthFirstVisitor<MyWeightedDigitalSurface> MyWeightedBreadthFirstVisitor;
 	typedef BreadthFirstVisitor<Graph, std::set<Z3i::Point> > PointBreadthFirstVisitor;
 	typedef MyBreadthFirstVisitor::Node MyNode;
 	typedef MyBreadthFirstVisitor::Size MySize;
 
-	typedef RosenProffittLengthEstimator<vector<SCell>> LengthEstimator;
+	typedef RosenProffittLengthEstimator<set<SCell>> LengthEstimator;
 	typedef MSTTangent<Point3D> Tangent;
 	typedef Pencil<Point3D, Tangent, Vector3D> Pencil;
-		
+
+	
+	
+	
 	trace.beginBlock("Reading file...");
 	Image image = VolReader<Image>::importVol(inputFilename);
 	trace.endBlock();
@@ -378,7 +437,7 @@ int main(int argc, char **argv)
 	SetFromImage<Z3i::DigitalSet>::append<Image> (set3d, image, 
 												  thresholdMin, thresholdMax);
 	trace.info() << "Finding a bel" << endl;
-	Z3i::SCell bel;// = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
+	Z3i::SCell bel = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
 	//bel = Z3i::SCell({465,516,289},false);
 	trace.info() << bel << endl;
 	typedef SurfelAdjacency<KSpace::dimension> MySurfelAdjacency;
@@ -389,7 +448,7 @@ int main(int argc, char **argv)
 	//! [volBreadthFirstTraversal-SetUpDigitalSurface]
 
     set<SCell> surfelSet;
-	set<Point> surfaceVoxelSet;
+	map<SCell, Point> surfaceVoxelSet;
 	DigitalSet setPredicate(image.domain());
 	
 	for (auto it = digSurf.begin(), itE = digSurf.end(); it!=itE; ++it) {
@@ -401,29 +460,37 @@ int main(int argc, char **argv)
 	MyNode node;
 	bool isPathFound = false;
 	
-	viewer << CustomColors3D(Color::Green, Color::Green) << bel;
     trace.beginBlock("Compute path");
 	Z3i::SCell end;
 	int numberToFind = 1;
 	int i = 0;
 	vector<Pencil> pencils;
+	set<SCell> thePath;
+
+
+	QApplication application(argc,argv);
+	Viewer3D<> viewer( ks);
+	viewer.show();
+	viewer << CustomColors3D(Color::Green, Color::Green) << bel;
 	while (i < numberToFind) {
 		bel = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
-//		bel = {{1,14,29}, false};
+		bel = {{27,10,115}, false};
 		viewer << CustomColors3D(Color::Green, Color::Green) << bel;
 		MyBreadthFirstVisitor visitor( digSurf, bel );
 		isPathFound = false;
 		i++;
 		map<Z3i::SCell, Z3i::SCell> aMapPrevious;
 		trace.info() << bel << endl;
+		int stepForShortestPath = -2;
+		double distanceForShortestPath = numeric_limits<double>::max();
 		while (!visitor.finished() && !isPathFound) {
 			if (node.second > 100) isPathFound = true;
 			node = visitor.current();
 			vector<Z3i::SCell> neighbors;
 			back_insert_iterator<vector<Z3i::SCell> > iter(neighbors);
 			visitor.graph().writeNeighbors(iter, node.first);
+
 			for (auto it = neighbors.begin(), itE = neighbors.end(); it != itE; ++it) {
-				
 				auto itMapExisting = aMapPrevious.find(*it);
 				if (itMapExisting == aMapPrevious.end())
 				{
@@ -434,30 +501,26 @@ int main(int argc, char **argv)
 					Z3i::SCell tmp2 = aMapPrevious[*it];
 					vector<Z3i::Point> aDirectionV;
 					vector<Z3i::Point> anotherDirectionV;
-					vector<Z3i::SCell> path1;
-					vector<Z3i::SCell> path2;
+					set<Z3i::SCell> path1;
+				    set<Z3i::SCell> path2;
 				
 					while (tmp != bel) {
-						path1.push_back(tmp);
+						path1.insert(tmp);
 						Z3i::SCell previous = aMapPrevious[tmp];
 						aDirectionV.push_back(ks.sCoords(tmp) - ks.sCoords(previous));
 						tmp = previous;
 					}
 			
 					while (tmp2 != bel) {
-						path2.push_back(tmp2);
+						path2.insert(tmp2);
 						Z3i::SCell previous = aMapPrevious[tmp2];
 						anotherDirectionV.push_back(ks.sCoords(tmp2) - ks.sCoords(previous));
 						tmp2 = previous;
 					}
-			
-					//Checking distance to center
-					vector<double> aVector;
+				    set<Z3i::SCell> x;
+					set_union(path1.begin(), path1.end(), path2.begin(), path2.end(), inserter(x, x.end()));
+							  
 					Z3i::Point center = (ks.sCoords(*it) + ks.sCoords(bel)) / 2;
-					for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
-						aVector.push_back(euclideanDistance(ks.sCoords(*it), center));
-					}
-					double ratio = Statistics::stddev(aVector) / Statistics::mean(aVector);
 					//check both paths going back			
 					vector<Z3i::SCell> intersection;
 					for (auto it = path1.begin(), itE = path1.end(); it!=itE; ++it) {
@@ -467,69 +530,77 @@ int main(int argc, char **argv)
 							}
 						}
 					}
-					//set_intersection(path1.begin(), path1.end(), path2.begin(), path2.end(), back_inserter(intersection));
-				
-					int cpt = 0;
-					int cpt2 = 0;
-					// bool isPath1 = multipleDirection(aDirectionV, cpt);
-					// bool isPath2 = multipleDirection(anotherDirectionV, cpt2);
-
-					if (intersection.size() == 0) {
-						bool symmetry = checkSymmetry(ks, path1, path2, center);
-						typedef StandardDSS6Computer<vector<Z3i::Point>::iterator,int,4> SegmentComputer;  
-						typedef GreedySegmentation<SegmentComputer> Segmentation;
+					if ((int)node.second == stepForShortestPath + 1) {
+						isPathFound = true;
+					}
+					else if (intersection.size() == 0) {
 						vector<Z3i::Point> correspondingPointInPath;
-						for (auto it = path2.begin(), itE = path2.end(); it != itE; ++it) {
-							correspondingPointInPath.push_back(ks.sCoords(*it));
+						for (auto it = x.begin(), itE = x.end(); it != itE; ++it) {
+							correspondingPointInPath.push_back(surfaceVoxelSet[*it]);
 						}
+						Vector3D normal = computePlaneNormal<Vector3D>(correspondingPointInPath);
+						bool symmetry = checkSymmetry(correspondingPointInPath, normal, center);
+						typedef StandardDSS6Computer<vector<Z3i::Point>::iterator,int,8> SegmentComputer;  
+						typedef GreedySegmentation<SegmentComputer> Segmentation;
 						SegmentComputer algo;
 						Segmentation s(correspondingPointInPath.begin(), correspondingPointInPath.end(), algo);
 						int cpt = 0; //Cpt corresponds to the number of straight lines in path
-						
+						double length = 0;
 						for (auto er = s.begin(), erE = s.end(); er!=erE; ++er) {
 							SegmentComputer current(*er);
 							Z3i::Point direction;
 							PointVector<3, double> intercept, thickness;
 							current.getParameters(direction, intercept, thickness);
-							if (direction != Z3i::Point::zero)
+							if (direction != Z3i::Point::zero) {
 								cpt++;
+								length += euclideanDistance(*(current.end()-1), *(current.begin()));
+							}
 						}
-						if (symmetry && cpt != 1 ) {
-							s.setMode("MostCentered++");
-							trace.info() << endl;
+						if ((int)node.second == stepForShortestPath) {
+							viewer << CustomColors3D(Color::Yellow, Color::Yellow) << *it;
+							double distance = euclideanDistance(surfaceVoxelSet[*it], surfaceVoxelSet[bel]);
+							if(distance < distanceForShortestPath) {
+								distanceForShortestPath = distance;
+							    thePath = x;
+							}
+						}
+						
+						else if (symmetry && stepForShortestPath == -2) {
+							stepForShortestPath = node.second;
 							viewer << CustomColors3D(Color::Red, Color::Red) << center;
-							//All conditions are met: a path is found
-							isPathFound = true;
 							end = *it;
 							//Visualize both paths
 							viewer << CustomColors3D(Color::Yellow, Color::Yellow) << *it;
-							visualizePath(bel, *it, aMapPrevious, viewer, Color::Red);
-							visualizePath(bel, node.first, aMapPrevious, viewer, Color::Cyan);
-							LengthEstimator le;
-							trace.info() << "Distance " << le.eval(path1.begin(), path1.end()) << endl;
-							for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
-								correspondingPointInPath.push_back(ks.sCoords(*it));
+							LengthEstimator l;
+							//double distance = l.eval(x.begin(), x.end());
+							double distance = euclideanDistance(surfaceVoxelSet[*it], surfaceVoxelSet[bel]);
+							if (distance < distanceForShortestPath) {
+								distanceForShortestPath = distance;
+								thePath = x;
 							}
-							Vector3D normal = computePlaneNormal<Vector3D>(correspondingPointInPath);
+
 							pencils.push_back({center, normal});
 						}
+
 					}
 				}
-				
-				if (isPathFound) {
-					trace.beginBlock("Computing complement");
-					shortestPointPath<MyBreadthFirstVisitor>(digSurf, bel, end, viewer);
-					trace.endBlock();
-					break;
-				}
 			}
+//			viewer << CustomColors3D(Color::Green, Color::Green) << node.first;
 			visitor.expand();
-//			viewer << CustomColors3D(Color::White, Color::White) << node.first;
+		}
+		for (auto it = thePath.begin(), itE = thePath.end(); it != itE; ++it) {
+			viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+		}
+		auto visitedV = visitor.visitedVertices();
+		for (auto it = visitedV.begin(), itE = visitedV.end();
+			 it != itE; ++it) {
+			viewer << CustomColors3D(Color::White, Color::White) << *it;
 		}
 	}
 	trace.endBlock();
+
 	
-	//SliceUtils::slicesFromPlanes(viewer, pencils, image, "lalal");
+//	SliceUtils::slicesFromPlanes(viewer, pencils, image, "img/slice");
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	for (auto it = set3d.begin(); it != set3d.end(); ++it) {
 		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);
