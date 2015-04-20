@@ -36,6 +36,8 @@ Ellipse<Point>::Ellipse(const std::vector<Point>& points, const Point& center) {
 
 template <typename Point>
 void Ellipse<Point>::computeParameters(const std::vector<Point>& points) {
+	//need 5 points for ellipse computation
+	if (points.size() < 6) return;
 	double maximum = 0.0;
 	double minimum = std::numeric_limits<double>::max();
 
@@ -86,7 +88,7 @@ bool Ellipse<Point>::computeFocalPoints(Point& focal, Point& otherFocal) {
 	set_intersection(lineMajorAxis.begin(), lineMajorAxis.end(), surfaceBall.begin(), surfaceBall.end(), inserter(intersection, intersection.begin()));
 	if (intersection.size() == 2) {
 		focal = *(intersection.begin());
-		otherFocal = *((intersection.begin())++);
+		otherFocal = *(++(intersection.begin()));
 		return true;
 	}
 	return false;
@@ -98,10 +100,12 @@ bool Ellipse<Point>::distanceConsistentEllipse(const std::vector<Point> & points
 	Point focalTwo;
 
 	bool foundFocalPoints = computeFocalPoints(focalOne, focalTwo);
+	if (focalOne == focalTwo) return false;
 	if (foundFocalPoints) {
 		for (auto it = points.begin(), itE = points.end(); it != itE; ++it) {
 			int sumCeil =  ceil(euclideanDistance(*it, focalOne) + euclideanDistance(*it, focalTwo));
 			int sumFloor = floor(euclideanDistance(*it, focalOne) + euclideanDistance(*it, focalTwo));
+			std::cout << sumCeil << " " << sumFloor << " "<< myMajorAxis << std::endl;
 			if (sumCeil != (int)myMajorAxis && sumFloor != (int)myMajorAxis) {
 				return false;
 			}

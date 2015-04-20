@@ -105,10 +105,10 @@ void SliceUtils::slicesFromPlanes(Viewer3D<>& viewer, const std::vector<Pencil> 
 
 		typename Pencil::Vector3d planeNormal = it->getTangent();
 		typename Pencil::P origin = it->getPoint();
-		std::vector<typename Pencil::Vector3d> pointsForPlane = SliceUtils::computePlaneFromNormalVector(planeNormal);	 
+		std::vector<typename Pencil::Vector3d> pointsForPlane = SliceUtils::computePlaneFromNormalVector(planeNormal);
 		DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(domain3Dyup, origin, planeNormal, IMAGE_PATCH_WIDTH);
 		ImageAdapterExtractor extractedImage(volume, domainImage2D, embedder, idV);
-		extractedImage.setDefaultValue(255);
+		extractedImage.setDefaultValue(0);
 		// Image2D image(domainImage2D);
 		// Z2i::Point center = {50, 50};
 		// for (auto it = extractedImage.domain().begin(), itE = extractedImage.domain().end(); it != itE; ++it) {
