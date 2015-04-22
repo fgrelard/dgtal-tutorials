@@ -162,65 +162,91 @@ bool areAlmostSimilar(const set<Point>& s1, const set<Point>& s2) {
 	return cpt == s1.size();
 }
 
-template <typename Domain>
-bool otherSideOfTheDomain(const Domain & domain, const Point & current, const Point & symmetric) {
-	if (!domain.isInside(current) || !domain.isInside(symmetric)) return false;
-	Point lowerBound = domain.lowerBound();
-	Point upperBound = domain.upperBound();
-	Point directionVector = upperBound - lowerBound;
 
-	double yobs = current[1];
-	double zobs = current[2];
-	double t = (current[0] - lowerBound[0])/(double)directionVector[0];
-	double yth = lowerBound[1] + t*directionVector[1];
-	double zth = lowerBound[2] + t*directionVector[2];
+template <typename Ellipse>
+bool checkIfEllipseFits(const Ellipse& fittedEllipse, const Ellipse& intersectedEllipse) {
+	int majorFitted = (int)fittedEllipse.myMajorAxis;
+	int majorIntersected = (int)intersectedEllipse.myMajorAxis;
 
+	int minorFitted = (int)fittedEllipse.myMinorAxis;
+	int minorIntersected = (int)intersectedEllipse.myMinorAxis;
 
-	double yobsSymmetric = symmetric[1];
-	double zobsSymmetric = symmetric[2];
-	double tSymmetric = (symmetric[0] - lowerBound[0])/(double)directionVector[0];
-	double ythSymmetric = lowerBound[1] + tSymmetric*directionVector[1];
-	double zthSymmetric = lowerBound[2] + tSymmetric*directionVector[2];
+	bool isMajor = majorFitted != 0 && (majorFitted == majorIntersected || majorFitted == majorIntersected - 1 || majorFitted == majorIntersected + 1);
+	bool isMinor = minorFitted != 0 && (minorFitted == minorIntersected || minorFitted == minorIntersected - 1 || minorFitted == minorIntersected + 1);
 
-	bool otherSideY = ((yobs < yth && yobsSymmetric > ythSymmetric) || (yobs > yth && yobsSymmetric < ythSymmetric));
-	bool otherSideZ = ((zobs < zth && zobsSymmetric > zthSymmetric) || (zobs > zth && zobsSymmetric < zthSymmetric));
-	return otherSideY || otherSideZ;
+	return isMajor && isMinor;
 }
 
-template <typename Domain, typename Image>
-bool domainOutside(const Domain & domain, const Image& image, int minThreshold) {
-	Point lower = domain.lowerBound();
-	Point upper = domain.upperBound();
-
-	Point lowerFirstCorner = {lower[0], upper[1], lower[2]};
-	Point lowerSecondCorner = {lower[0], lower[1], upper[2]};
-	Point lowerThirdCorner = {lower[0], upper[1], upper[2]};
-
-	Point upperFirstCorner = {upper[0], lower[1], lower[2]};
-	Point upperSecondCorner = {upper[0], lower[1], upper[2]};
-	Point upperThirdCorner = {upper[0], upper[1], lower[2]};
-	int cpt = 0;
-	cpt = image(lower) < minThreshold ? cpt + 1 : cpt;	
-	cpt = image(lowerSecondCorner) < minThreshold ? cpt + 1 : cpt;
-	cpt = image(lowerFirstCorner) < minThreshold ? cpt + 1 : cpt;
-	cpt = image(lowerThirdCorner) < minThreshold ? cpt + 1 : cpt;
-	cpt = image(upper) < minThreshold ? cpt + 1 : cpt;
-	cpt = image(upperThirdCorner) < minThreshold ? cpt + 1 : cpt;
-	cpt = image(upperSecondCorner) < minThreshold ? cpt + 1 : cpt;
-	cpt = image(upperFirstCorner) < minThreshold ? cpt + 1 : cpt;	
-	return cpt == 8;
+template < typename Domain, typename Point>
+Domain computeBoundingBox(const std::vector<Point> & points) {
+	int maximum = numeric_limits<int>::max();
+	int min_x = maximum, min_y = maximum, min_z = maximum;
+	int max_x = -maximum, max_y = -maximum, max_z = -maximum;
+	for (const Point & point : points) {
+		min_x = point[0] < min_x ? point[0] : min_x;
+		min_y = point[1] < min_y ? point[1] : min_y;
+		min_z = point[2] < min_z ? point[2] : min_z;
+		max_x = point[0] > max_x ? point[0] : max_x;
+		max_y = point[1] > max_y ? point[1] : max_y;
+		max_z = point[2] > max_z ? point[2] : max_z;
+	}
+	Domain domain({min_x, min_y, min_z}, {max_x, max_y, max_z});
+	return domain;
 }
 
-template <typename Surfel, typename Point>
-bool checkSymmetry(const map<Surfel, Point>& surfelToPoint, const set<Surfel>& path1, const set<Surfel>& path2, const Point & center) {
+template <typename Domain, typename Point, typename Surfel>
+vector<Point> surfacePointsOnPaths(const map<Surfel, Point>& surfelToPoint, const set<Point>& surfacePointSet, const set<Surfel>& path) {
+	vector<Point> pathPoints;
+	for (auto it = path.begin(), ite = path.end(); it != ite; ++it) {
+		pathPoints.push_back(surfelToPoint.at(*it));
+	}
+	Domain domain = computeBoundingBox<Domain>(pathPoints);
+	vector<Point> surfacePoints;
+	for (auto it = domain.begin(), ite = domain.end(); it != ite; ++it) {
+	    if (surfacePointSet.find(*it) != surfacePointSet.end()) {
+			surfacePoints.push_back(*it);
+		}
+	}
+	return surfacePoints;
+}
+
+template <typename Point>
+bool isAlmostSurfacePoint(const Point& point, const set<Point>& surfacePointSet) {
+	for (auto it = surfacePointSet.begin(), ite = surfacePointSet.end(); it != ite; ++it) {
+		if (areAlmostSimilar(*it, point)) return true;
+	}
+	return false;
+}
+
+template <typename Domain, typename Surfel, typename Point>
+bool checkSymmetry(const map<Surfel, Point>& surfelToPoint, const set<Point>& surfacePointSet, const set<Surfel>& path1, const set<Surfel>& path2, const Point & center) {
+	if (path2.size() == 0) return false;
 	int foundOneSymmetry = 0;
+	vector<Point> pathPoints = surfacePointsOnPaths<Domain>(surfelToPoint, surfacePointSet, path2);
+	vector<Point> otherPathPoints = surfacePointsOnPaths<Domain>(surfelToPoint, surfacePointSet, path1);
+	vector<Point> intersection;
+	sort(pathPoints.begin(), pathPoints.end());
+	sort(otherPathPoints.begin(), otherPathPoints.end());
+	set_intersection(pathPoints.begin(), pathPoints.end(), otherPathPoints.begin(), otherPathPoints.end(), back_inserter(intersection));
+	//If the two sets of points overlap, then we didnt find the cross section corresponding to a tube (ellipsoidal)
+	if (intersection.size() >= 0.5  * path1.size()) return false;
+	
+	int cpt = 0;
+	for (auto it = path1.begin(), ite = path1.end(); it != ite; ++it) {
+		Point middle = (surfelToPoint.at(*(path1.begin())) + surfelToPoint.at(*it)) /2;
+		if (isAlmostSurfacePoint(middle, surfacePointSet)) {
+			cpt++;
+		}
+	}
+	//If we have all the points in the path almost being surface points, then the path found does not correspond to a cross section
+	if (cpt == path1.size()) return false;
 	for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
 		Point currentPoint = surfelToPoint.at(*it);
 		Point vectorToCenter = center - currentPoint;
 		Point symmetryCurrent = center + vectorToCenter;
-		for (auto itS = path2.begin(), itSE = path2.end(); itS != itSE; ++itS) {
-			Point putativeSymmetric = surfelToPoint.at(*itS);
-			if (areAlmostSimilar(putativeSymmetric, symmetryCurrent) && !areAlmostSimilar(center, symmetryCurrent) && !areAlmostSimilar(center, currentPoint)) {
+		for (auto itS = pathPoints.begin(), itSE = pathPoints.end(); itS != itSE; ++itS) {
+			Point putativeSymmetric = *itS;
+			if (areAlmostSimilar(putativeSymmetric, symmetryCurrent) && !areAlmostSimilar(center, symmetryCurrent) && !areAlmostSimilar(center, currentPoint) && !areAlmostSimilar(putativeSymmetric, currentPoint)) {
 				foundOneSymmetry++;
 				break;
 			}
@@ -229,72 +255,7 @@ bool checkSymmetry(const map<Surfel, Point>& surfelToPoint, const set<Surfel>& p
 	return (foundOneSymmetry == path1.size());
 }
 
-template <typename Surfel, typename Point, typename Domain>
-bool checkSymmetry(const map<Surfel, Point>& surfelToPoint, const set<Surfel>& path1, const Point & center, const Domain& domain) {
-	int foundOneSymmetry = 0;
-	for (auto it = path1.begin(), itE = path1.end(); it != itE; ++it) {
-		Point currentPoint = surfelToPoint.at(*it);
-		Point vectorToCenter = center - currentPoint;
-		Point symmetryCurrent = center + vectorToCenter;
-		if (domain.isInside(symmetryCurrent) && !areAlmostSimilar(center, symmetryCurrent) && !areAlmostSimilar(center, currentPoint)) {
-			foundOneSymmetry++;
-		}
-	}
-	return (foundOneSymmetry == path1.size());
-}
 
-template <typename Vector, typename Point>
-Ellipse<Point> computeEllipseParametersWithIntersection(const set<Point>& surfacePoints, const Vector& normal, const Point& center) {
-	double d = -(normal[0] * center[0] + normal[1] * center[1] + normal[2] * center[2]);
-	vector<Point> ellipsePoints;
-	for (auto it = surfacePoints.begin(), itE = surfacePoints.end(); it != itE; ++it) {
-	    Point current = *it;
-	    double equation = current[0]*normal[0] + normal[1]*current[1] + normal[2]*current[2] + d;
-		float factor = 0.01;
-		if (equation <= factor && equation >= -factor){
-			ellipsePoints.push_back(current);
-		}
-	}
-	Ellipse<Point> ellipse(ellipsePoints, center);
-	return ellipse;
-}
-
-template <typename Point>
-bool multipleDirection(const vector<Point>& aVector, int& cpt) {
-	bool xOrientation = false, yOrientation = false, zOrientation = false;
-    int posx = 0, posy = 0, posz = 0, negx = 0, negy = 0, negz = 0;
-	for (auto it = aVector.begin(), itE = aVector.end(); it != itE; ++it) {
-		Point diff = *it;
-		if (diff[0] > 0) {
-			posx++;
-		}
-		if (diff[0] < 0) {
-			negx++;
-		}
-		if (diff[1] > 0) {
-		    posy++;
-		}
-		if (diff[1] < 0) {
-			negy++;
-		}
-		if (diff[2] > 0) {
-			posz++;
-		}
-		if (diff[2] < 0) {
-			negz++;
-		}
-	}
-	xOrientation = (posx > 0 && negx > 0);
-	yOrientation = (posy > 0 && negy > 0);
-	zOrientation = (posz > 0 && negz > 0);
-	if (xOrientation && yOrientation)
-		cpt = posz > 0 ? posz : negz;
-	else if (xOrientation && zOrientation)
-		cpt = posy > 0 ? posy : negy;
-	else if (zOrientation && yOrientation)
-		cpt = posx > 0 ? posx : negx;
-	return (xOrientation && yOrientation) || (xOrientation && zOrientation) || (zOrientation && yOrientation);
-}
 
 template <typename SurfacePoint, typename KSpace, typename Surfel, typename Point>
 vector<SurfacePoint> computeSurfelWeight(const KSpace & ks, const DigitalSet & set3d, const set<Surfel>& surfelSet, set<Point>& surfacePointSet, map<Surfel, Point> & surfaceVoxelSet) {
@@ -323,8 +284,6 @@ vector<SurfacePoint> computeSurfelWeight(const KSpace & ks, const DigitalSet & s
 			}
 		}
 		weightedSurfaceVector.push_back({*it, number, aSurfelV});
-		// if (number > 0)
-		// 	surfaceVoxelSet.insert(ks.sCoords(current));
 	}
 	return weightedSurfaceVector;
 }
@@ -354,57 +313,27 @@ bool areNeighbours(const set<Surfel>& path1, const set<Surfel>& path2, const map
 	return cpt>4;
 }
 
-template < typename Domain, typename Point>
-Domain computeBoundingBox(const std::vector<Point> & points) {
-	int maximum = numeric_limits<int>::max();
-	int min_x = maximum, min_y = maximum, min_z = maximum;
-	int max_x = -maximum, max_y = -maximum, max_z = -maximum;
-	for (const Point & point : points) {
-		min_x = point[0] < min_x ? point[0] : min_x;
-		min_y = point[1] < min_y ? point[1] : min_y;
-		min_z = point[2] < min_z ? point[2] : min_z;
-		max_x = point[0] > max_x ? point[0] : max_x;
-		max_y = point[1] > max_y ? point[1] : max_y;
-		max_z = point[2] > max_z ? point[2] : max_z;
-	}
-	Domain domain({min_x, min_y, min_z}, {max_x, max_y, max_z});
-	return domain;
-}
 
 
-
-template <typename Point, typename Vector>
-bool checkSymmetry(const vector<Point> & points, const Vector & axis, const Point& center) {
-	typedef Eigen::Matrix<double, Eigen::Dynamic, 4> MatrixXd;
-	typedef Eigen::Matrix<double, Eigen::Dynamic, 1> VectorXd;
-	unsigned int size = points.size();
-	MatrixXd A(size, 4);
-	if (size <= 50) return false;
-	for (int i = 0; i < size; i++) {
-		A(i, 0) = (double)points[i][0]*1.0;
-		A(i, 1) = (double)points[i][1]*1.0;
-		A(i, 2) = (double)points[i][2]*1.0;
-		A(i, 3) = 1.0;
-	}
-	set<Point> initialSet(points.begin(), points.end());
-	for (double angle = M_PI/4; angle <= 2 * M_PI; angle+=M_PI/4) {
-		set<Point> rotatedSetOfPoints;
-		Eigen::Affine3d rot(Eigen::AngleAxisd(angle, Eigen::Vector3d(axis[0], axis[1], axis[2])));
-		Eigen::Matrix<double, Eigen::Dynamic, 4> m = A * rot.matrix();
-		for (int i = 0; i < size; i++) {
-			if (m(i, 0) != 0 || m(i, 1) != 0 || m(i, 2) != 0) {
-				int posx = m(i, 0);
-				int posy = m(i, 1);
-				int posz = m(i, 2);
-				Point p{posx, posy, posz};
-				rotatedSetOfPoints.insert(p);
-			}
-		}
-		if (areAlmostSimilar(initialSet, rotatedSetOfPoints)) {
-			return true;
+template <typename Point>
+double estimateDSSLength(const vector<Point>& points) {
+	typedef StandardDSS6Computer<vector<Z3i::Point>::const_iterator,int,8> SegmentComputer;  
+	typedef GreedySegmentation<SegmentComputer> Segmentation;
+	SegmentComputer algo;
+	Segmentation s(points.cbegin(), points.cend(), algo);
+	int cpt = 0; //Cpt corresponds to the number of straight lines in path
+	double length = 0;
+	for (auto er = s.begin(), erE = s.end(); er!=erE; ++er) {
+		SegmentComputer current(*er);
+		Z3i::Point direction;
+		PointVector<3, double> intercept, thickness;
+		current.getParameters(direction, intercept, thickness);
+		if (direction != Z3i::Point::zero) {
+			cpt++;
+			length += euclideanDistance(*(current.end()-1), *(current.begin()));
 		}
 	}
-	return false;
+	return length;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -470,7 +399,7 @@ int main(int argc, char **argv)
 	typedef MSTTangent<Point3D> Tangent;
 	typedef Pencil<Point3D, Tangent, Vector3D> Pencil;
 
-	
+
 	
 	
 	trace.beginBlock("Reading file...");
@@ -486,7 +415,7 @@ int main(int argc, char **argv)
 	trace.info() << "Finding a bel" << endl;
 	Z3i::SCell bel = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
 	//bel = Z3i::SCell({465,516,289},false);
-	trace.info() << bel << endl;
+//	trace.info() << bel << endl;
 	typedef SurfelAdjacency<KSpace::dimension> MySurfelAdjacency;
 	MySurfelAdjacency surfAdj( true );
 	MyDigitalSurfaceContainer* ptrSurfContainer = 
@@ -509,19 +438,20 @@ int main(int argc, char **argv)
 	
     trace.beginBlock("Compute path");
 	Z3i::SCell end;
-	int numberToFind = 5;
+	int numberToFind = 10;
 	int i = 0;
 	vector<Pencil> pencils;
 	set<SCell> thePath;
-
-
+		
 	QApplication application(argc,argv);
 	Viewer3D<> viewer( ks);
 	viewer.show();
 	viewer << CustomColors3D(Color::Green, Color::Green) << bel;
 	while (i < numberToFind) {
 		bel = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
+//		bel = {{59,32,131}, false};
 //		bel = {{27,10,115}, false};
+//	  	bel = {{109,80,189}, false};
 		viewer << CustomColors3D(Color::Green, Color::Green) << bel;
 		MyBreadthFirstVisitor visitor( digSurf, bel );
 		isPathFound = false;
@@ -530,6 +460,8 @@ int main(int argc, char **argv)
 		trace.info() << bel << endl;
 		int stepForShortestPath = -2;
 		double distanceForShortestPath = numeric_limits<double>::max();
+		Vector3D theNormal;
+
 		while (!visitor.finished() && !isPathFound) {
 			if (node.second > 100) isPathFound = true;
 			node = visitor.current();
@@ -585,20 +517,22 @@ int main(int argc, char **argv)
 						for (auto it = x.begin(), itE = x.end(); it != itE; ++it) {
 							correspondingPointInPath.push_back(surfaceVoxelSet[*it]);
 						}
+						
 						Vector3D normal = computePlaneNormal<Vector3D>(correspondingPointInPath);
-						Ellipse<Point> ellipseIntersection = computeEllipseParametersWithIntersection(surfacePointSet, normal, center);
-						Ellipse<Point> ellipseComputed(correspondingPointInPath, center);
-						bool symmetry = ((int)ellipseIntersection.myMajorAxis == (int)ellipseComputed.myMajorAxis && (int)ellipseIntersection.myMinorAxis == (int)ellipseComputed.myMinorAxis && (int)ellipseIntersection.myMajorAxis !=0 && (int)ellipseIntersection.myMinorAxis != 0);
-						if ((int)node.second == stepForShortestPath) {
+						
+						vector<Point>  symmetricPoints;
+						bool symmetry = checkSymmetry<Domain>(surfaceVoxelSet, surfacePointSet, path1, path2, center);
+						if (symmetry && (int)node.second == stepForShortestPath) {
 							viewer << CustomColors3D(Color::Yellow, Color::Yellow) << *it;
 							double distance = euclideanDistance(surfaceVoxelSet[*it], surfaceVoxelSet[bel]);
 							if(distance < distanceForShortestPath) {
 								distanceForShortestPath = distance;
 							    thePath = x;
+								theNormal = normal;
 							}
 						}
 						
-						if (symmetry && stepForShortestPath == -2) {
+						else if (symmetry && stepForShortestPath == -2) {
 							stepForShortestPath = node.second;
 							viewer << CustomColors3D(Color::Red, Color::Red) << center;
 							end = *it;
@@ -608,6 +542,7 @@ int main(int argc, char **argv)
 							if (distance < distanceForShortestPath) {
 								distanceForShortestPath = distance;
 								thePath = x;
+								theNormal = normal;
 							}
 							pencils.push_back({center, normal});
 						}
@@ -624,11 +559,11 @@ int main(int argc, char **argv)
 		auto visitedV = visitor.visitedVertices();
 		for (auto it = visitedV.begin(), itE = visitedV.end();
 			 it != itE; ++it) {
-//			viewer << CustomColors3D(Color::White, Color::White) << *it;
+			//	viewer << CustomColors3D(Color::White, Color::White) << *it;
 		}
 	}
 	trace.endBlock();
-
+	
 	
 //	SliceUtils::slicesFromPlanes(viewer, pencils, image, "img/slice");
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
