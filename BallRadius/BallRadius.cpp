@@ -79,6 +79,7 @@
 #include "DGtal/kernel/BasicPointPredicates.h"
 #include "RosenProffittLengthEstimator.h"
 
+
 // Local includes
 #include "SurfacePoint.h"
 #include "WeightedDigitalSurface.h"
@@ -88,6 +89,8 @@
 #include "../Tangent3D/MSTTangent.h"
 #include "Statistics.h"
 #include "Ellipse.h"
+#include "SurfaceUtils.h"
+#include "PointUtil.h"
 
 using namespace DGtal;
 using namespace std;
@@ -132,35 +135,6 @@ Vector computePlaneNormal(const std::vector<Point> & points) {
 }
 
 
-template <typename Point>
-bool areAlmostSimilar(const Point& point, const Point& other) {
-	typename Point::Scalar otherx = other[0];
-	typename Point::Scalar othery = other[1];
-	typename Point::Scalar otherz = other[2];
-
-	typename Point::Scalar pointx = point[0];
-	typename Point::Scalar pointy = point[1];
-	typename Point::Scalar pointz = point[2];
-	
-	bool sameX = pointx == otherx || pointx == otherx + 1 || pointx == otherx-1;
-	bool sameY = pointy == othery || pointy == othery + 1 || pointy == othery-1;
-	bool sameZ = pointz == otherz || pointz == otherz + 1 || pointz == otherz-1;
-	return sameX && sameY && sameZ;
-}
-
-template <typename Point>
-bool areAlmostSimilar(const set<Point>& s1, const set<Point>& s2) {
-	int cpt = 0;
-	for (const Point& p1 : s1) {
-		for (const Point& p2 : s2) {
-			if (areAlmostSimilar(p1, p2)) {
-				cpt++;
-				break;
-			}
-		}
-	}
-	return cpt == s1.size();
-}
 
 
 template <typename Ellipse>
@@ -213,7 +187,7 @@ vector<Point> surfacePointsOnPaths(const map<Surfel, Point>& surfelToPoint, cons
 template <typename Point>
 bool isAlmostSurfacePoint(const Point& point, const set<Point>& surfacePointSet) {
 	for (auto it = surfacePointSet.begin(), ite = surfacePointSet.end(); it != ite; ++it) {
-		if (areAlmostSimilar(*it, point)) return true;
+		if (PointUtil::areAlmostSimilar(*it, point)) return true;
 	}
 	return false;
 }
@@ -246,7 +220,7 @@ bool checkSymmetry(const map<Surfel, Point>& surfelToPoint, const set<Point>& su
 		Point symmetryCurrent = center + vectorToCenter;
 		for (auto itS = pathPoints.begin(), itSE = pathPoints.end(); itS != itSE; ++itS) {
 			Point putativeSymmetric = *itS;
-			if (areAlmostSimilar(putativeSymmetric, symmetryCurrent) && !areAlmostSimilar(center, symmetryCurrent) && !areAlmostSimilar(center, currentPoint) && !areAlmostSimilar(putativeSymmetric, currentPoint)) {
+			if (PointUtil::areAlmostSimilar(putativeSymmetric, symmetryCurrent) && !PointUtil::areAlmostSimilar(center, symmetryCurrent) && !PointUtil::areAlmostSimilar(center, currentPoint) && !PointUtil::areAlmostSimilar(putativeSymmetric, currentPoint)) {
 				foundOneSymmetry++;
 				break;
 			}
@@ -256,37 +230,6 @@ bool checkSymmetry(const map<Surfel, Point>& surfelToPoint, const set<Point>& su
 }
 
 
-
-template <typename SurfacePoint, typename KSpace, typename Surfel, typename Point>
-vector<SurfacePoint> computeSurfelWeight(const KSpace & ks, const DigitalSet & set3d, const set<Surfel>& surfelSet, set<Point>& surfacePointSet, map<Surfel, Point> & surfaceVoxelSet) {
-	vector<SurfacePoint> weightedSurfaceVector;
-	for (auto it = set3d.begin(), itE = set3d.end(); it != itE; ++it) {
-		vector<Surfel> aSurfelV;
-		SCell current = ks.sSpel(*it);
-		int number = 0;
-		for (int i = 0; i < 3; i++) {
-			auto itSurfel = surfelSet.find(ks.sIncident(current, i, true));
-			if (itSurfel != surfelSet.end()) {
-				number++;
-				aSurfelV.push_back(*itSurfel);
-				surfaceVoxelSet[*itSurfel] = *it;
-				surfacePointSet.insert(*it);
-			}
-		}
-
-		for (int i = 0; i < 3; i++) {
-			auto itSurfel = surfelSet.find(ks.sIncident(current, i, false));
-			if (itSurfel != surfelSet.end()) {
-				number++;
-				aSurfelV.push_back(*itSurfel);
-				surfaceVoxelSet[*itSurfel] = *it;
-				surfacePointSet.insert(*it);
-			}
-		}
-		weightedSurfaceVector.push_back({*it, number, aSurfelV});
-	}
-	return weightedSurfaceVector;
-}
 
 template <typename Point>
 vector<Point> nearestPointsFromCenter(const vector<Point> & points, const Point & center, double radius) {
@@ -380,7 +323,8 @@ int main(int argc, char **argv)
 	typedef Z3i::Space Space;
 	typedef HyperRectDomain<Space> Domain;
 	typedef ImageSelector<Domain, unsigned char>::Type Image;
-	typedef functors::IntervalForegroundPredicate<Image> ThresholdedImage;
+	typedef functors::IntervalForegroundPredicate<Image> Binarizer;
+	
 	typedef Z3i::KSpace KSpace;
 	typedef DGtal::PointVector<3, double> Vector3D;
 	typedef DGtal::PointVector<3, int> Point3D;
@@ -398,9 +342,6 @@ int main(int argc, char **argv)
 	typedef RosenProffittLengthEstimator<set<SCell>> LengthEstimator;
 	typedef MSTTangent<Point3D> Tangent;
 	typedef Pencil<Point3D, Tangent, Vector3D> Pencil;
-
-
-	
 	
 	trace.beginBlock("Reading file...");
 	Image image = VolReader<Image>::importVol(inputFilename);
@@ -415,7 +356,6 @@ int main(int argc, char **argv)
 	trace.info() << "Finding a bel" << endl;
 	Z3i::SCell bel = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
 	//bel = Z3i::SCell({465,516,289},false);
-//	trace.info() << bel << endl;
 	typedef SurfelAdjacency<KSpace::dimension> MySurfelAdjacency;
 	MySurfelAdjacency surfAdj( true );
 	MyDigitalSurfaceContainer* ptrSurfContainer = 
@@ -431,7 +371,7 @@ int main(int argc, char **argv)
 		surfelSet.insert(*it);
 		setPredicate.insert(ks.sCoords(*it));
 	}
-	vector<SurfacePoint> weightedSurfaceV = computeSurfelWeight<SurfacePoint>(ks, set3d, surfelSet, surfacePointSet, surfaceVoxelSet);
+	vector<SurfacePoint> weightedSurfaceV = SurfaceUtils::computeSurfelWeight<SurfacePoint>(ks, set3d, surfelSet, surfacePointSet, surfaceVoxelSet);
 	MyWeightedDigitalSurface weightedSurface(digSurf, weightedSurfaceV);
 	MyNode node;
 	bool isPathFound = false;
@@ -517,9 +457,7 @@ int main(int argc, char **argv)
 						for (auto it = x.begin(), itE = x.end(); it != itE; ++it) {
 							correspondingPointInPath.push_back(surfaceVoxelSet[*it]);
 						}
-						
 						Vector3D normal = computePlaneNormal<Vector3D>(correspondingPointInPath);
-						
 						vector<Point>  symmetricPoints;
 						bool symmetry = checkSymmetry<Domain>(surfaceVoxelSet, surfacePointSet, path1, path2, center);
 						if (symmetry && (int)node.second == stepForShortestPath) {
@@ -565,7 +503,7 @@ int main(int argc, char **argv)
 	trace.endBlock();
 	
 	
-//	SliceUtils::slicesFromPlanes(viewer, pencils, image, "img/slice");
+	SliceUtils::slicesFromPlanes(viewer, pencils, image, "img/slice");
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	for (auto it = set3d.begin(); it != set3d.end(); ++it) {
 		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);

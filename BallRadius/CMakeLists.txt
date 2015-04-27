@@ -21,4 +21,6 @@ endif( Boost_FOUND )
 
 file(GLOB src )
 ADD_EXECUTABLE(BallRadius BallRadius.cpp ${src})
+ADD_EXECUTABLE(SkeletonBased BallRadiusSkeletonBased.cpp ${src})
 TARGET_LINK_LIBRARIES(BallRadius ${DGTAL_LIBRARIES} ${Boost_LIBRAIRIES} ${Boost_PROGRAM_OPTIONS_LIBRARY} )
+TARGET_LINK_LIBRARIES(SkeletonBased  ${DGTAL_LIBRARIES} ${Boost_LIBRAIRIES} ${Boost_PROGRAM_OPTIONS_LIBRARY})

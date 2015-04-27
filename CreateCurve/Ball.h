@@ -43,7 +43,8 @@ std::set<Point> Ball<Point>::pointsSurfaceBall() const {
 		for (typename Point::Scalar j = -myRadius + myCenter[1], jend = myRadius + myCenter[1] + 1; j < jend; j++) {
 			for (typename Point::Scalar k = -myRadius + myCenter[2], kend = myRadius + myCenter[2] + 1; k < kend; k++) {
 				Point p(i, j, k);
-				if (euclideanDistance(p, myCenter) == myRadius) {
+				double distance = euclideanDistance(p, myCenter);
+				if (distance >= myRadius-1 && distance <= myRadius) {
 					points.insert(p);
 				}
 			}
