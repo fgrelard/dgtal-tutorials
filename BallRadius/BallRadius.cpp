@@ -112,28 +112,6 @@ void visualizePath(const Surfel& start, const Surfel& end, map<Surfel, Surfel>& 
 
 }
 
-template <typename Vector, typename Point>
-Vector computePlaneNormal(const std::vector<Point> & points) {
-	typedef Eigen::Matrix<double, Eigen::Dynamic, 3> MatrixXi;
-	typedef Eigen::Matrix<double, Eigen::Dynamic, 1> VectorXi;
-	unsigned int size = points.size();
-	MatrixXi A(size, 3);
-	VectorXi b = VectorXi::Zero(size, 1);
-	
-	for (int i = 0; i < size; i++) {
-		A(i, 0) = (double)points[i][0]*1.0;
-		A(i, 1) = (double)points[i][1]*1.0;
-		A(i, 2) = 1.0;
-		b(i, 0) = (double)points[i][2]*1.0;
-	}
-	Eigen::Vector3d x = A.colPivHouseholderQr().solve(b);
-	Vector normal;
-	normal[0] = x(0, 0);
-	normal[1] = x(1, 0);
-	normal[2] = -1;
-	return normal.getNormalized();
-}
-
 
 
 
@@ -457,7 +435,7 @@ int main(int argc, char **argv)
 						for (auto it = x.begin(), itE = x.end(); it != itE; ++it) {
 							correspondingPointInPath.push_back(surfaceVoxelSet[*it]);
 						}
-						Vector3D normal = computePlaneNormal<Vector3D>(correspondingPointInPath);
+						Vector3D normal = SliceUtils::computeNormalFromLinearRegression<Vector3D>(correspondingPointInPath);
 						vector<Point>  symmetricPoints;
 						bool symmetry = checkSymmetry<Domain>(surfaceVoxelSet, surfacePointSet, path1, path2, center);
 						if (symmetry && (int)node.second == stepForShortestPath) {

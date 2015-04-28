@@ -11,6 +11,7 @@
 #include "DGtal/kernel/BasicPointFunctors.h"
 #include "DGtal/io/viewers/Viewer3D.h"
 #include "../CreateCurve/Distance.h"
+#include <Eigen/Dense>
 
 using namespace DGtal;
 
@@ -21,6 +22,12 @@ namespace SliceUtils {
 
 	template <typename Vector>
 	std::vector<Vector> computePlaneFromNormalVector(Vector normal);
+
+	template <typename Vector, typename Point>
+	Vector computeNormalFromLinearRegression(const std::vector<Point>& points);
+
+	template <typename Vector, typename Point>
+	Vector computeNormalFromCovarianceMatrix(const std::vector<Point>& points);
 	
 	template <typename Pencil, typename Image>
 	void slicesFromPlanes(Viewer3D<>&, const std::vector<Pencil> &, const Image&, std::string);
@@ -81,6 +88,49 @@ std::vector<Vector> SliceUtils::computePlaneFromNormalVector(Vector normal) {
 	fourPointsForPlane = {p1, p2, p3, p4};
     
 	return fourPointsForPlane;
+}
+
+template <typename Vector, typename Point>
+Vector SliceUtils::computeNormalFromLinearRegression(const std::vector<Point> & points) {
+	typedef Eigen::Matrix<double, Eigen::Dynamic, 3> MatrixXi;
+	typedef Eigen::Matrix<double, Eigen::Dynamic, 1> VectorXi;
+	unsigned int size = points.size();
+	MatrixXi A(size, 3);
+	VectorXi b = VectorXi::Zero(size, 1);
+	
+	for (int i = 0; i < size; i++) {
+		A(i, 0) = (double)points[i][0]*1.0;
+		A(i, 1) = (double)points[i][1]*1.0;
+		A(i, 2) = 1.0;
+		b(i, 0) = (double)points[i][2]*1.0;
+	}
+	Eigen::Vector3d x = A.colPivHouseholderQr().solve(b);
+	Vector normal;
+	normal[0] = x(0, 0);
+	normal[1] = x(1, 0);
+	normal[2] = -1;
+	trace.info()<<normal<<endl;
+	return normal.getNormalized();
+}
+
+template <typename Vector, typename Point>
+Vector SliceUtils::computeNormalFromCovarianceMatrix(const std::vector<Point> & points) {
+	typedef Eigen::MatrixXd MatrixXd;
+	
+	unsigned int size = points.size();
+	if (size < 2) return Vector::zero;
+	
+	MatrixXd A(size, 3);
+	for (int i = 0; i < size; i++) {
+		A(i, 0) = (double)points[i][0] * 1.0;
+		A(i, 1) = (double)points[i][1] * 1.0;
+		A(i, 2) = (double)points[i][2] * 1.0;
+	}
+	MatrixXd centered = A.rowwise() - A.colwise().mean();
+	MatrixXd cov = (centered.adjoint() * centered) / double(A.rows() - 1);
+	Eigen::SelfAdjointEigenSolver<MatrixXd> eig(cov);
+	
+	trace.info() << eig.eigenvectors().col(2) << endl;
 }
 
 template <typename Pencil, typename Image>

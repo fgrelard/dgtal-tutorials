@@ -35,17 +35,23 @@
 #include "DGtal/topology/DigitalSurface.h"
 #include "DGtal/topology/LightImplicitDigitalSurface.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
+
+
 #include "SurfaceUtils.h"
 #include "SurfacePoint.h"
 #include "../CreateCurve/Distance.h"
 #include "../CreateCurve/Ball.h"
 #include "PointUtil.h"
+#include "../Tangent3D/SliceUtils.h"
 
 using namespace std;
 using namespace DGtal;
 using namespace Z3i;
 namespace po = boost::program_options;
 
+/**
+ * Returns the point contained in surfacePointSet closest to pSkeleton
+ */
 template <typename Point>
 Point pointCorrespondingToMinDistance(const Point& pSkeleton, const set<Point>& surfacePointSet) {
 	Point minimumDistPoint = *(std::min_element(surfacePointSet.begin(), surfacePointSet.end(), [&](const Point& one, const Point& two) {
@@ -61,13 +67,14 @@ template <typename Point>
 bool closedCurve(const set<Point>& points) {
 	int cpt = 0;
 	for (auto it = points.begin(), ite = points.end(); it != ite; ++it) {
+		int previouscpt = cpt;
 		for (auto secondIt = points.begin(), secondIte = points.end(); secondIt != secondIte; ++secondIt) {
 			if (PointUtil::areAlmostSimilar(*it, *secondIt) && *secondIt != *it) {
 				cpt++;
 			}
 		}
+		if (cpt - previouscpt < 2 || cpt - previouscpt > 3) cpt = 0;
 	}
-	trace.info() << cpt << " " << points.size() << endl;
 	return cpt >= points.size() * 2;
 }
 
@@ -97,12 +104,14 @@ set<Point> createPathClosestToBall(const Ball<Point>& ball, const set<Point>& su
 	return curve;
 }
 
-template <typename Point, typename Visitor, typename Vertex>
-set<Point> createShortestPath(const Visitor& visitor, const Vertex& bel, const Point& center, const map<Vertex, Point>& surfelToPoint) {
+template <typename Vector, typename Point, typename Visitor, typename Vertex>
+vector<Point> createShortestPath(Visitor& visitor, const Vertex& bel, const Point& center, const map<Vertex, Point>& surfelToPoint) {
 	typedef typename Visitor::Node MyNode;
 	
 	MyNode node;
 	map<Vertex, Vertex> aMapPrevious;
+	vector<Point> thePath;
+	
 	while (!visitor.finished()) {
 		node = visitor.current();
 		vector<Vertex> neighbors;
@@ -117,21 +126,60 @@ set<Point> createShortestPath(const Visitor& visitor, const Vertex& bel, const P
 			    Vertex tmp = node.first;
 			    Vertex tmp2 = aMapPrevious[*it];
 				vector<Point> correspondingPoints;
+				set<Vertex> path1, path2;
+				correspondingPoints.push_back(surfelToPoint.at(*it));
 				while (tmp != bel) {
-					correspondingPoints.push_back(tmp);
+					path1.insert(tmp);
+					correspondingPoints.push_back(surfelToPoint.at(tmp));
 					tmp = aMapPrevious[tmp];
 				}
 				while (tmp2 != bel) {
-					correspondingPoints.push_back(tmp2);
+					path2.insert(tmp2);
+					correspondingPoints.push_back(surfelToPoint.at(tmp2));
 					tmp2 = aMapPrevious[tmp2];
+				}
+				set<Vertex> intersect;
+				set_intersection(path1.begin(), path1.end(), path2.begin(), path2.end(), inserter(intersect, intersect.begin()));
+				if (intersect.size() != 0) continue;
+				
+			    Vector normal = SliceUtils::computeNormalFromLinearRegression<Vector>(correspondingPoints);
+				Vector normal2 = SliceUtils::computeNormalFromCovarianceMatrix<Vector>(correspondingPoints);
+				set<Point> correspondingSet(correspondingPoints.begin(), correspondingPoints.end());
+				bool isClosed = closedCurve(correspondingSet);
+				//checks if the center point belongs to the plane
+				double eq = normal[0] * center[0] +
+					normal[1] * center[1] +
+					normal[2] * center[2];
+				if (isClosed && normal != Vector::zero && eq >= -0.05 && eq <= 0.05) {
+					trace.info() << normal << endl;
+					visitor.terminate();		  
+					thePath = correspondingPoints;
 				}
 			}
 		}
+		if (!visitor.finished())
+			visitor.expand();
 	}
+	return thePath;
+}
+
+/**
+ * Returns a surfel associated with a Z3 point, using a container mapping surfels to points
+ */
+template <typename Surfel, typename Point>
+Surfel convertToSurfel(const Point& point, const map<Surfel, Point> & surfelToPoint) {
+	Surfel surfel;
+	for (auto it = surfelToPoint.begin(), ite = surfelToPoint.end(); it != ite; ++it) {
+		if (it->second == point) {
+			return it->first;
+		}
+	}
+	return surfel;
 }
 
 int main( int argc, char** argv )
 {
+	typedef PointVector<3, double> Vector;
 	typedef ImageSelector<Z3i::Domain, unsigned char>::Type Image;
 	typedef ImageSelector<Z3i::Domain, float>::Type FloatImage;
 	typedef functors::IntervalForegroundPredicate<Image> Binarizer;
@@ -211,21 +259,26 @@ int main( int argc, char** argv )
 	}
 	
 	SurfaceUtils::computeSurfelWeight<SurfacePoint>(ks, set3d, surfelSet, surfacePointSet, surfaceVoxelSet);
-	
-	Binarizer binarizer(img, 0, 255);
-	NotPredicate nBinarizer(binarizer);
+
 	Color color(100,100,140,128);
-	int i = 0;
-	
+	int  i = 0;
 	trace.beginBlock("Computing distance map");
 	for (auto it = skeleton.domain().begin(), ite = skeleton.domain().end(); it != ite; ++it) {
 		if (skeleton(*it) > thresholdMin) {
 			Point point = pointCorrespondingToMinDistance<Point>(*it, surfacePointSet);
-			double distance = euclideanDistance(point, *it);
+			SCell surfel = convertToSurfel(point, surfaceVoxelSet);
+			if (surfel != SCell()) {
+				MyBreadthFirstVisitor visitor( digSurf, surfel );
+				vector<Point> path = createShortestPath<Vector>(visitor, surfel, *it, surfaceVoxelSet);
+				trace.info() << "found one " << endl;
+				for (auto it = path.begin(), ite = path.end(); it != ite; ++it) {
+					viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+				}
+				break;
+			}
 			
-			viewer << CustomColors3D(color, color) << *it;
 		}
-
+		
 	
 	}
 	trace.endBlock();
