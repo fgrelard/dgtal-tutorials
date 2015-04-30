@@ -109,7 +109,6 @@ Vector SliceUtils::computeNormalFromLinearRegression(const std::vector<Point> & 
 	normal[0] = x(0, 0);
 	normal[1] = x(1, 0);
 	normal[2] = -1;
-	trace.info()<<normal<<endl;
 	return normal.getNormalized();
 }
 
@@ -129,8 +128,12 @@ Vector SliceUtils::computeNormalFromCovarianceMatrix(const std::vector<Point> & 
 	MatrixXd centered = A.rowwise() - A.colwise().mean();
 	MatrixXd cov = (centered.adjoint() * centered) / double(A.rows() - 1);
 	Eigen::SelfAdjointEigenSolver<MatrixXd> eig(cov);
-	
-	trace.info() << eig.eigenvectors().col(2) << endl;
+	Vector normal;
+	auto veigen = eig.eigenvectors().col(0);
+	normal[0] = veigen[0];
+	normal[1] = veigen[1];
+	normal[2] = veigen[2];
+	return normal;
 }
 
 template <typename Pencil, typename Image>
