@@ -98,11 +98,11 @@ int main( int argc, char** argv )
 	int radius = 10;
 	
 	vector<PointVector<3, double>> curve;
-	createContinuousLogarithmicCurve(curve, 50, increment);
-//	createStraightLine(curve, 50, increment);
+//	createContinuousLogarithmicCurve(curve, 50, increment);
+	createStraightLine(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
 	set<PointVector<3,double>> vectorPoints;
-	createVolumeFromCurve(curve, vectorPoints, 10);
+//	createVolumeFromCurve(curve, vectorPoints, 10);
 //	thinVolume<Pencil>(curve, vectorPoints, 20.0);
 //	drawDeformedCylinder(vectorPoints, 50, 5, increment);
 //  createStraightLine(curve, 50);
@@ -121,9 +121,9 @@ int main( int argc, char** argv )
 		set.insert(*it);
 	}
 	DigitalSet set2 = addNoise(set, noise);*/
-	imageFromRangeAndValue(vectorPoints.begin(), vectorPoints.end(), anImage3D, 150);
+	imageFromRangeAndValue(curve.begin(), curve.end(), anImage3D, 150);
     VolWriter<Image3D>::exportVol(examplesPath + filename, anImage3D);
-	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
+	const Color CURVE3D_COLOR( 100, 100, 140, 128 );
 
 
 	trace.info() << "saved" << endl;

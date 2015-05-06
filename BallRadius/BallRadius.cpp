@@ -129,30 +129,13 @@ bool checkIfEllipseFits(const Ellipse& fittedEllipse, const Ellipse& intersected
 	return isMajor && isMinor;
 }
 
-template < typename Domain, typename Point>
-Domain computeBoundingBox(const std::vector<Point> & points) {
-	int maximum = numeric_limits<int>::max();
-	int min_x = maximum, min_y = maximum, min_z = maximum;
-	int max_x = -maximum, max_y = -maximum, max_z = -maximum;
-	for (const Point & point : points) {
-		min_x = point[0] < min_x ? point[0] : min_x;
-		min_y = point[1] < min_y ? point[1] : min_y;
-		min_z = point[2] < min_z ? point[2] : min_z;
-		max_x = point[0] > max_x ? point[0] : max_x;
-		max_y = point[1] > max_y ? point[1] : max_y;
-		max_z = point[2] > max_z ? point[2] : max_z;
-	}
-	Domain domain({min_x, min_y, min_z}, {max_x, max_y, max_z});
-	return domain;
-}
-
 template <typename Domain, typename Point, typename Surfel>
 vector<Point> surfacePointsOnPaths(const map<Surfel, Point>& surfelToPoint, const set<Point>& surfacePointSet, const set<Surfel>& path) {
 	vector<Point> pathPoints;
 	for (auto it = path.begin(), ite = path.end(); it != ite; ++it) {
 		pathPoints.push_back(surfelToPoint.at(*it));
 	}
-	Domain domain = computeBoundingBox<Domain>(pathPoints);
+	Domain domain = PointUtil::computeBoundingBox<Domain>(pathPoints);
 	vector<Point> surfacePoints;
 	for (auto it = domain.begin(), ite = domain.end(); it != ite; ++it) {
 	    if (surfacePointSet.find(*it) != surfacePointSet.end()) {

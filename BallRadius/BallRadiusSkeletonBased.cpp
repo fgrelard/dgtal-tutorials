@@ -26,6 +26,9 @@
 #include "DGtal/topology/LightImplicitDigitalSurface.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 
+#include "DGtal/math/linalg/EigenSupport.h"
+#include "DGtal/dec/DiscreteExteriorCalculus.h"
+#include "DGtal/dec/DiscreteExteriorCalculusSolver.h"
 
 #include "SurfaceUtils.h"
 #include "SurfacePoint.h"
@@ -39,6 +42,108 @@ using namespace std;
 using namespace DGtal;
 using namespace Z3i;
 namespace po = boost::program_options;
+
+template <typename Vector>
+bool allSigns(const Vector& v1, const Vector& v2) {
+	double x = v1[0] * v2[0];
+	double y = v1[1] * v2[1];
+	double z = v1[2] * v2[2];
+	return (x < 0 && y < 0 && z < 0);
+}
+
+template <typename Path, typename Vertex>
+bool
+computeFlowOnPath(const Path& path, const Point & center, const Vertex& bel, Viewer3D<>& viewer) {
+	typedef DiscreteExteriorCalculus<3, EigenLinearAlgebraBackend> Calculus;
+	Calculus calculus;
+	
+	double mean = 0;
+	const Calculus::DualHodge1 h2 = calculus.dualHodge<1>();
+	vector<Vertex> points = path.myPath;
+		
+	for (auto it = points.begin(), ite = points.end(); it != ite; ++it) {
+		auto edge = calculus.myKSpace.sLowerIncident(*it);
+	   	calculus.insertSCell(*it);
+	    for (auto eit = edge.begin(), ee = edge.end(); eit != ee; ++eit) {
+			auto point = calculus.myKSpace.sLowerIncident(*eit);
+		   	calculus.insertSCell(*eit);
+			for (auto pit = point.begin(), pite = point.end(); pit != pite; ++pit) 
+				calculus.insertSCell(*pit);
+		}
+	}
+
+	vector<Vertex> vertices;
+	auto edge = calculus.myKSpace.sLowerIncident(bel);
+	for (auto eit = edge.begin(), ee = edge.end(); eit != ee; ++eit) {
+		auto point = calculus.myKSpace.sLowerIncident(*eit);
+		for (auto pit = point.begin(), pe = point.end(); pit != pe; ++pit) {
+			vertices.push_back(*pit);
+		}
+	}
+
+	Calculus::DualForm1 dirac(calculus);
+	Calculus::DualDerivative1 dp1 = calculus.derivative<1,DUAL>();
+	Calculus::DualHodge2 hodg2 = calculus.dualHodge<2>();
+	Calculus::PrimalDerivative1 d1 = calculus.derivative<1, PRIMAL>();
+	Calculus::PrimalHodge2 phodg2 = calculus.primalHodge<2>();
+ 
+	//For gradient
+	const Calculus::PrimalDerivative0 d0 = calculus.derivative<0, PRIMAL>();
+	//Diffusion-like operator
+    Calculus::DualIdentity1 laplace = calculus.identity<1, DUAL>() - phodg2*d1*hodg2*dp1 ; //calculus.primalLaplace() ;
+
+	PointVector<3, double> p;
+	if (dirac.myContainer.size() > 1) {
+		Calculus::Index ind =  dirac.myCalculus->getSCellIndex(bel);
+		dirac.myContainer(ind) = 1;
+
+		typedef EigenLinearAlgebraBackend::SolverSimplicialLLT LinearAlgebraSolver;
+		typedef DiscreteExteriorCalculusSolver<Calculus, LinearAlgebraSolver, 1, DUAL, 1, DUAL> Solver;
+		Solver solver;
+		solver.compute(laplace);
+		Calculus::DualForm1 solved_solution = solver.solve(dirac);
+	    int size = solved_solution.myContainer.innerSize();
+		for (int i  = 0; i < size; i++) {
+			mean += solved_solution.myContainer[i];
+		}
+		mean /= size;
+	    VectorField<Calculus, PRIMAL> vf = calculus.sharp(hodg2 * dp1 * solved_solution);
+		VectorField<Calculus, PRIMAL> normvf = vf.normalized();
+//		Display3DFactory<Space, KSpace>::draw(viewer, normvf);
+
+		vector<PointVector<3, double>> cross;
+		for (auto it = vertices.begin(), ite = vertices.end(); it != ite; ++it) {
+			Calculus::Index ind = normvf.myCalculus->getSCellIndex(*it);
+			DGtal::Z3i::RealPoint origin = normvf.myCalculus->myKSpace.sKCoords(*it)/2.;
+			origin -= {.5, .5, .5};
+			PointVector<3, double> toNext = normvf.getArrow(ind);
+			PointVector<3, double> toCenter = PointVector<3, double>((center - origin)).getNormalized();
+			PointVector<3, double> crossProduct = toNext.crossProduct(toCenter);
+			cross.push_back(crossProduct);
+		}
+		for (auto it = cross.begin(), ite = cross.end(); it != ite; ++it) {
+			for (auto otherIt = cross.begin(), otherite = cross.end(); otherIt != otherite; ++otherIt) {
+				if (allSigns(*it, *otherIt))
+					return true;
+			}
+		}
+		/*for (typename Calculus::Index index=0; index<normvf.myCalculus->kFormLength(0, PRIMAL); index++)
+		{
+			p+= normvf.getArrow(index);
+			const typename Calculus::SCell& cell = normvf.myCalculus->getSCell(0, PRIMAL, index);
+			DGtal::Z3i::RealPoint origin = normvf.myCalculus->myKSpace.sKCoords(cell)/2.;
+			origin -= {.5, .5, .5};
+			PointVector<3, double> toNext = normvf.getArrow(index);
+			PointVector<3, double> toCenter = PointVector<3, double>((center - origin)).getNormalized();
+			PointVector<3, double> crossProduct = toNext.crossProduct(toCenter);
+			if (crossProduct != PointVector<3, double>::zero) {
+				viewer.addCone(origin, origin+crossProduct);
+			}
+			}*/
+	}
+	return false;
+}
+
 
 /**
  * Returns the point contained in surfacePointSet closest to pSkeleton
@@ -69,31 +174,7 @@ bool closedCurve(const set<Point>& points) {
 	return cpt >= points.size() * 2;
 }
 
-template <typename Point>
-set<Point> createPathClosestToBall(const Ball<Point>& ball, const set<Point>& surfacePointSet, const Point & point) {
-	double distance = 0;
-	set<Point> curve;
-	curve.insert(point);
-	bool closed = false;
-	while (!closed) {
-		for (auto itSB = surfacePointSet.begin(), itSE = surfacePointSet.end(); itSB != itSE; ++itSB) {
-			auto ballPoints = ball.pointsSurfaceBall();
-			for (auto itB = ballPoints.begin(), itE = ballPoints.end(); itB != itE; ++itB) {
-				if (euclideanDistance(*itB, *itSB) < distance) {
-					for (const Point& pCurve : curve) {
-						if (*itSB != pCurve && PointUtil::areAlmostSimilar(pCurve, *itSB))	{
-							curve.insert(*itSB);
-							break;
-						}
-					}
-				}
-			}
-		}
-		distance++;
-		closed = closedCurve(curve);
-	}
-	return curve;
-}
+
 
 template <typename Path, typename Visitor, typename Vertex>
 vector<Path> computeSystemOfLoops(Visitor& visitor, const Vertex& bel) {
@@ -116,22 +197,33 @@ vector<Path> computeSystemOfLoops(Visitor& visitor, const Vertex& bel) {
 			else {
 				Vertex tmp = node.first;
 			    Vertex tmp2 = aMapPrevious[*it];
-				set<Vertex> path1, path2;			   
+				set<Vertex> path1, path2;
+				vector<Vertex> vpath1, vpath2;
+				Vertex nearBel, otherNearBel;
 				while (tmp != bel) {
 					path1.insert(tmp);
+					vpath1.push_back(tmp);
 					tmp = aMapPrevious[tmp];
+					if (aMapPrevious[tmp] == bel) nearBel = tmp;
 				}
 				while (tmp2 != bel) {
 					path2.insert(tmp2);
+					vpath2.push_back(tmp2);
 					tmp2 = aMapPrevious[tmp2];
+					if (aMapPrevious[tmp2] == bel) otherNearBel = tmp2;
 				}
 				set<Vertex> intersect;
 				set_intersection(path1.begin(), path1.end(), path2.begin(), path2.end(), inserter(intersect, intersect.begin()));
 				if (intersect.size() != 0) continue;
 				vector<Vertex> correspondingPath;
-				std::copy (path1.begin(), path1.end(), std::back_inserter(correspondingPath));
-				std::copy (path2.begin(), path2.end(), std::back_inserter(correspondingPath));
-				Path path(correspondingPath, *it);
+				
+				
+				std::copy (vpath1.rbegin(), vpath1.rend(), std::back_inserter(correspondingPath));
+				correspondingPath.push_back(bel);
+				std::copy (vpath2.begin(), vpath2.end(), std::back_inserter(correspondingPath));
+				correspondingPath.push_back(*it);
+				
+				Path path(correspondingPath, bel, *it, make_pair(nearBel, otherNearBel));
 				systemOfLoops.push_back(path);
 			}
 		}
@@ -139,6 +231,33 @@ vector<Path> computeSystemOfLoops(Visitor& visitor, const Vertex& bel) {
 			visitor.expand();
 	}
 	return systemOfLoops;
+}
+
+template <typename Path>
+Path computeMinimumGradientPath(const vector<Path>& paths, const Point& center, Viewer3D<>& viewer) {
+	double minimum = std::numeric_limits<double>::max();
+	Path path;
+	for (auto it = paths.begin(), ite = paths.end(); it != ite; ++it) {	
+		bool isOk = computeFlowOnPath(*it, center, it->myBel, viewer);
+		if (isOk)
+			return *it;
+	}
+	return path;
+}
+
+template <typename Path>
+vector<Path> selectGeodesicLoops(const vector<Path>& systemOfLoops, const Path& path) {
+	vector<Path> geodesicLoops;
+	for (auto it = systemOfLoops.begin(), ite = systemOfLoops.end();
+		 it != ite; ++it) {
+		for (auto itPath = path.myPath.begin(), itPathE = path.myPath.end(); itPath != itPathE; ++itPath) {
+			if (find(it->myPath.begin(), it->myPath.end(), *itPath) == it->myPath.end())
+				continue;
+		}
+		geodesicLoops.push_back(*it);
+	}
+	return geodesicLoops;
+	
 }
 
 template <typename Point>
@@ -183,6 +302,8 @@ bool sameSign(const vector<Point>& points) {
 	return ( (x && y) || (x && z) || (y && z));
 }
 
+
+
 template <typename Point>
 bool consistentCrossProductsAlong(const vector<Point>& path, const Point& center) {
 	map<Point, Point> pointToDirection = computeDSSOnPath(path);
@@ -200,7 +321,6 @@ template <typename Surfel, typename Point>
 vector<Point> selectGeodesicLoops(const vector<Path<Surfel>>& systemOfLoops, const map<Surfel, Point>& surfelToPoint, const Point& center) {
 	vector<Point> geodesicLoops;
 	for (auto it = systemOfLoops.begin(), ite = systemOfLoops.end(); it != ite; ++it) {
-		trace.beginBlock("New path");
 		vector<Point> pathPoints;
 		for (auto itPath = it->begin(), itPathE = it->end(); itPath != itPathE; ++itPath) {
 			pathPoints.push_back(surfelToPoint.at(*itPath));
@@ -208,19 +328,30 @@ vector<Point> selectGeodesicLoops(const vector<Path<Surfel>>& systemOfLoops, con
 		bool consistentCrossP = consistentCrossProductsAlong(pathPoints, center);
 		if (consistentCrossP)
 			std::copy (pathPoints.begin(), pathPoints.end(), std::back_inserter(geodesicLoops));
-		trace.endBlock();
 	}
 	return geodesicLoops;
 }
 
+template <typename Domain>
+bool isSameProjectedDomain(const Domain& domain, const typename Domain::Point& center) {
+	typedef typename Domain::Point Point;
+	Point mini = domain.upperBound(), maxi = domain.lowerBound();
+	for (typename Domain::Iterator it = domain.begin(), ite = domain.end(); it!= ite; ++it) {
+		Point toCenter = center - *it;
+		Point fromCenter = center + toCenter;
+		if (fromCenter < mini) mini = fromCenter;
+		if (fromCenter > maxi) maxi = fromCenter;
+	}
+	return mini == domain.lowerBound() && maxi == domain.upperBound();
+}
 
-template <typename Vector, typename Point, typename Visitor, typename Vertex>
-vector<Point> createShortestPath(Visitor& visitor, const Vertex& bel, const Point& center, const map<Vertex, Point>& surfelToPoint) {
+template <typename Domain, typename Vector, typename Point, typename Visitor, typename Vertex>
+vector<Vertex> createShortestPath(Visitor& visitor, const Vertex& bel, const Point& center, const map<Vertex, Point>& surfelToPoint) {
 	typedef typename Visitor::Node MyNode;
 	
 	MyNode node;
 	map<Vertex, Vertex> aMapPrevious;
-	vector<Point> thePath;
+	vector<Vertex> thePath;
 	
 	while (!visitor.finished()) {
 		if (node.second == 100) break;
@@ -236,35 +367,42 @@ vector<Point> createShortestPath(Visitor& visitor, const Vertex& bel, const Poin
 			else {
 			    Vertex tmp = node.first;
 			    Vertex tmp2 = aMapPrevious[*it];
-				vector<Point> correspondingPoints;
+				vector<Vertex> correspondingPoints;
 				set<Vertex> path1, path2;
-				correspondingPoints.push_back(surfelToPoint.at(*it));
+
 				while (tmp != bel) {
 					path1.insert(tmp);
-					correspondingPoints.push_back(surfelToPoint.at(tmp));
 					tmp = aMapPrevious[tmp];
 				}
 				while (tmp2 != bel) {
 					path2.insert(tmp2);
-					correspondingPoints.push_back(surfelToPoint.at(tmp2));
 					tmp2 = aMapPrevious[tmp2];
 				}
+
+				//creating corresponding path with voxels
+				correspondingPoints.push_back(bel);
+				for (auto it = path1.rbegin(), ite = path1.rend(); it != ite; ++it) {
+					correspondingPoints.push_back(*it);
+				}
+				correspondingPoints.push_back(*it);
+				for (auto it = path2.begin(), ite = path2.end(); it != ite; ++it) {
+					correspondingPoints.push_back(*it);
+				}
+
+				//checking if the intersect is null
 				set<Vertex> intersect;
 				set_intersection(path1.begin(), path1.end(), path2.begin(), path2.end(), inserter(intersect, intersect.begin()));
 				if (intersect.size() != 0) continue;
-			    
-				//set<Point> correspondingSet(correspondingPoints.begin(), correspondingPoints.end());
-				//bool isClosed = closedCurve(correspondingSet);
+				double mean = computeFlowOnPath(correspondingPoints);
+			    Vector normal = SliceUtils::computeNormalFromCovarianceMatrix<Vector>(correspondingPoints);
+				Domain domain = PointUtil::computeBoundingBox<Domain>(correspondingPoints);
+				bool isProjected = isSameProjectedDomain(domain, center);
+				
 				//checks if the center point belongs to the plane
 				//double eq = normal[0] * center[0] +
 				//	normal[1] * center[1] +
 				//	normal[2] * center[2];
-				Point correspondingBel = surfelToPoint.at(bel);
-				Point correspondingIntersection = surfelToPoint.at(*it);
-				Point vectorToCenter = center - correspondingBel;
-				Point vectorToIntersection = center + vectorToCenter;
-				Point middlePoint = (correspondingIntersection + correspondingBel) / 2;
-				if (/*isClosed  && normal != Vector::zero &&*/PointUtil::areAlmostSimilar(correspondingIntersection, vectorToIntersection)) {
+				if (isProjected && normal != Vector::zero) {
 					visitor.terminate();		  
 					thePath = correspondingPoints;
 				}
@@ -405,16 +543,25 @@ int main( int argc, char** argv )
 		auto it = select_randomly(setskel.begin(), setskel.end());	 
 		Point point = pointCorrespondingToMinDistance<Point>(*it, surfacePointSet);
 		SCell surfel = convertToSurfel(point, surfaceVoxelSet);
+		trace.info() << surfel << endl;
 		viewer << CustomColors3D(Color::Green, Color::Green) << surfel;
 		if (surfel != SCell()) {
 			MyBreadthFirstVisitor visitor( digSurf, surfel );
 			vector<Path> systemOfLoops = computeSystemOfLoops<Path>(visitor, surfel);
-			vector<Point> geodesicLoops = selectGeodesicLoops(systemOfLoops, surfaceVoxelSet, *it);
-			for (auto it = geodesicLoops.begin(), ite = geodesicLoops.end(); it != ite; ++it) {
+			Path thePath = computeMinimumGradientPath(systemOfLoops, *it, viewer);
+			vector<Path> geodesicLoops = selectGeodesicLoops(systemOfLoops, thePath);
+			vector<SCell> scellsInPath = thePath.myPath;
+			for (auto it = scellsInPath.begin(), ite = scellsInPath.end(); it != ite; ++it) {
 				viewer << CustomColors3D(Color::Red, Color::Red) << *it;
 			}
-//			vector<Point> path = createShortestPath<Vector>(visitor, surfel, *it, surfaceVoxelSet);
-			/*for (auto it = systemOfLoops.begin(), ite = systemOfLoops.end(); it != ite; ++it) {
+			for (auto it = geodesicLoops.begin(), ite = geodesicLoops.end(); it != ite; ++it) {
+				trace.info() << it->myPath.size() << endl;
+				for (auto itpath = it->begin(), itpathe = it->end(); itpath != itpathe; ++itpath) {
+					viewer << CustomColors3D(Color::Red, Color::Red) << *itpath;
+				}
+			}
+			/*vector<Point> path = createShortestPath<Vector>(visitor, surfel, *it, surfaceVoxelSet);
+			for (auto it = systemOfLoops.begin(), ite = systemOfLoops.end(); it != ite; ++it) {
 				for (auto itpath = it->begin(), itpathe = it->end(); itpath != itpathe; ++itpath) {
 					viewer << CustomColors3D(Color::Red, Color::Red) << *itpath;
 				}
@@ -426,7 +573,7 @@ int main( int argc, char** argv )
 
 	trace.beginBlock("Displaying");
 	for (auto it = set3d.begin(), ite = set3d.end(); it != ite; ++it) {
-		viewer << CustomColors3D(color, color) << *it;
+			viewer << CustomColors3D(color, color) << *it;
 	}
 	viewer << Viewer3D<>::updateDisplay;
 	app.exec();
