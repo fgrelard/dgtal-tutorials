@@ -345,6 +345,170 @@ bool isSameProjectedDomain(const Domain& domain, const typename Domain::Point& c
 	return mini == domain.lowerBound() && maxi == domain.upperBound();
 }
 
+
+template <typename Point>
+Point computeProjection(const Point& initialPoint, const Point& pivot, const DigitalSet& points) {
+	Point toPivot = pivot - initialPoint;
+	Point projected = pivot + toPivot;
+	double mini = std::numeric_limits<double>::max();
+	Point p;
+	for (auto it = points.begin(), ite = points.end(); it != ite; ++it) {
+		double distanceToProjected = euclideanDistance(*it, projected);
+		if (distanceToProjected < mini) {
+			mini = distanceToProjected;
+			p = *it;
+		}
+	}
+	return p;
+}
+
+template <typename Space, typename KSpace, typename TCalculus, DGtal::Order order, DGtal::Duality duality>
+void
+draw(Display3D<Space, KSpace>& display, const DGtal::KForm<TCalculus, order, duality>& kform, double cmap_min, double cmap_max)
+{
+    BOOST_STATIC_ASSERT(( TCalculus::dimension == 3 ));
+    ASSERT( kform.myCalculus );
+
+    typedef typename TCalculus::Scalar Scalar;
+    typedef typename TCalculus::SCell SCell;
+    typedef typename TCalculus::Index Index;
+
+    if (cmap_min == 0 && cmap_max == 0)
+    {
+        bool first = true;
+        for (Index index=0; index<kform.myContainer.rows(); index++)
+        {
+            const Scalar value = kform.myContainer(index);
+            if (!std::isfinite(abs(log10(value)))) continue;
+            if (first || cmap_min > abs(log10(value))) cmap_min = abs(log10(value));
+            if (first || cmap_max < abs(log10(value))) cmap_max = abs(log10(value));
+            first = false;
+        }
+    }
+	double denominator = cmap_max;
+	cmap_min = 0.0;
+	cmap_max = 1.0;
+	
+    typedef typename DGtal::HueShadeColorMap<Scalar, 2 > ColorMap;
+    const ColorMap colormap(cmap_min, cmap_max);
+                            
+    for (typename TCalculus::Index index=0; index<kform.myCalculus->kFormLength(order, duality); index++)
+    {
+        const SCell& cell = kform.myCalculus->getSCell(order, duality, index);
+        ASSERT(kform.myCalculus->myKSpace.sSign(cell) == TCalculus::KSpace::POS);
+
+        const bool& flipped = kform.myCalculus->isSCellFlipped(cell);
+        SCell displayed_cell = cell;
+        if (flipped) displayed_cell = kform.myCalculus->myKSpace.sOpp(cell);
+
+        Scalar displayed_value = kform.myContainer(index);
+        if (flipped) displayed_value = -displayed_value;
+
+        display << SetMode3D(cell.className(), "Basic");
+        if (std::isfinite(displayed_value))
+			display << DGtal::CustomColors3D(DGtal::Color::Black, colormap(abs(log10(displayed_value))/denominator) );
+        else
+            display << DGtal::CustomColors3D(DGtal::Color::Black, DGtal::Color::White);
+
+        display << displayed_cell;
+    }
+}
+
+
+template <typename MyDigitalSurface, typename Vertex>
+vector<Vertex> computeGeodesicLoop(MyDigitalSurface& boundary, const Vertex& start, const Vertex& end,  Viewer3D<>& viewer) {
+	 typedef DiscreteExteriorCalculus<3, EigenLinearAlgebraBackend> DEC;
+	 DEC calculus;
+  
+	 //Creating the structure
+	 for ( typename MyDigitalSurface::ConstIterator it = boundary.begin(), it_end = boundary.end();
+		   it != it_end; ++it )
+	 {
+		 KSpace::SCells oneNeig = calculus.myKSpace.sLowerIncident(*it);
+		 calculus.insertSCell(*it);
+		 for(KSpace::SCells::ConstIterator itt = oneNeig.begin(), ittend = oneNeig.end(); itt != ittend; ++itt)
+		 {
+			 calculus.insertSCell(*itt);
+			 KSpace::SCells oneNeig2 = calculus.myKSpace.sLowerIncident(*itt);
+			 for(KSpace::SCells::ConstIterator ittt = oneNeig2.begin(), itttend = oneNeig2.end(); ittt != itttend; ++ittt)
+				 calculus.insertSCell(*ittt);
+		 }
+	 }
+	 trace.info() << calculus<<std::endl;
+  
+	 //Setting a dirac on a 0-cell ==> 0-form
+	 DEC::DualForm1 dirac(calculus);
+	 DEC::Index ind = calculus.getSCellIndex(start);
+	 dirac.myContainer( ind )   = 1;
+  
+	 //Laplace operator
+	 DEC::DualDerivative1 dp1 = calculus.derivative<1,DUAL>();
+	 DEC::DualHodge2 hodg2 = calculus.dualHodge<2>();
+	 DEC::PrimalDerivative1 d1 = calculus.derivative<1, PRIMAL>();
+	 DEC::PrimalHodge2 phodg2 = calculus.primalHodge<2>();
+  
+	 //Diffusion-like operator
+	 DEC::DualIdentity1 laplace=   calculus.identity<1, DUAL>() - phodg2*d1*hodg2*dp1 ; //calculus.primalLaplace() ;
+	 DEC::DualIdentity1 lap2 = laplace*laplace;
+	 DEC::DualIdentity1 lap4 = lap2*lap2;
+	 DEC::DualIdentity1 lap8 = lap4*lap4;
+	 DEC::DualIdentity1 lap16 = lap8*lap8;
+  
+	 trace.info() << "laplace = " << laplace << endl;
+  
+	 //Solver
+	 typedef EigenLinearAlgebraBackend::SolverSimplicialLLT LinearAlgebra;
+	 typedef DiscreteExteriorCalculusSolver<DEC, LinearAlgebra, 1, DUAL, 1, DUAL> Solver;
+	 Solver solver;
+	 solver.compute(laplace);
+	 DEC::DualForm1 result = solver.solve(dirac);
+	 VectorField<DEC, DUAL> vf = calculus.sharp(result);
+	 VectorField<DEC, DUAL> normvf = vf.normalized();
+	 Display3DFactory<>::draw(viewer, normvf);
+  
+	 Vertex v = end;
+	 vector<Vertex> path;
+	 
+	 
+	 for (typename DEC::Index index=0; index<result.myCalculus->kFormLength(1, DUAL); index++)
+	 {
+		 Vertex vertex = result.getSCell(index);
+		 DEC::DualForm1::Scalar currentScalar = abs(log10(result.myContainer[index]));
+		 vector<Vertex> neighbors;
+		 back_insert_iterator<vector<Vertex>> iter(neighbors);
+		 if (!boundary.container().isInside(vertex)) vertex = calculus.myKSpace.sOpp(vertex);
+		 boundary.writeNeighbors(iter, vertex);
+		 int cpt = 0;
+		 for (auto it = neighbors.begin(), ite = neighbors.end(); it != ite; ++it) {
+			 DEC::Index index = result.myCalculus->getSCellIndex(*it);
+			 DEC::DualForm1::Scalar otherScalar = abs(log10(result.myContainer[index]));
+			 if (currentScalar <= otherScalar) cpt++;
+		 }
+		 if (cpt >= 3)
+			 path.push_back(vertex);
+	 }
+	 
+	 /*while (v != start) {
+		 vector<Vertex> neighbors;
+		 back_insert_iterator<vector<Vertex>> iter(neighbors);
+		 boundary.writeNeighbors(iter, v);
+		 double maxScalar = numeric_limits<double>::lowest();
+		 for (auto it = neighbors.begin(), ite = neighbors.end(); it != ite; ++it) {
+			 if (find(path.begin(), path.end(), *it) != path.end()) continue;
+
+			 DEC::Index index = result.myCalculus->getSCellIndex(*it);
+			 DEC::DualForm1::Scalar scalar = result.myContainer[index];
+			 if (scalar > maxScalar) {
+				 v = *it;
+				 maxScalar = scalar;
+			 }
+		 }
+		 path.push_back(v);
+		 }*/
+	 return path;
+}
+
+
 template <typename Domain, typename Vector, typename Point, typename Visitor, typename Vertex>
 vector<Point> createShortestPath(Visitor& visitor, const Vertex& bel, const Point& center, const map<Vertex, Point>& surfelToPoint) {
 	typedef typename Visitor::Node MyNode;
@@ -369,39 +533,47 @@ vector<Point> createShortestPath(Visitor& visitor, const Vertex& bel, const Poin
 			    Vertex tmp2 = aMapPrevious[*it];
 				vector<Point> correspondingPoints;
 				set<Vertex> path1, path2;
-
+				correspondingPoints.push_back(surfelToPoint.at(*it));
 				while (tmp != bel) {
 					path1.insert(tmp);
+					correspondingPoints.push_back(surfelToPoint.at(tmp));
 					tmp = aMapPrevious[tmp];
 				}
 				while (tmp2 != bel) {
 					path2.insert(tmp2);
+					correspondingPoints.push_back(surfelToPoint.at(tmp2));
 					tmp2 = aMapPrevious[tmp2];
 				}
 
 				//creating corresponding path with voxels
-				correspondingPoints.push_back(surfelToPoint.at(bel));
+				/*correspondingPoints.push_back(surfelToPoint.at(bel));
 				for (auto it = path1.rbegin(), ite = path1.rend(); it != ite; ++it) {
 					correspondingPoints.push_back(surfelToPoint.at(*it));
 				}
 				correspondingPoints.push_back(surfelToPoint.at(*it));
 				for (auto it = path2.begin(), ite = path2.end(); it != ite; ++it) {
 					correspondingPoints.push_back(surfelToPoint.at(*it));
-				}
+					}*/
 
 				//checking if the intersect is null
 				set<Vertex> intersect;
 				set_intersection(path1.begin(), path1.end(), path2.begin(), path2.end(), inserter(intersect, intersect.begin()));
 				if (intersect.size() != 0) continue;
-			    Vector normal = SliceUtils::computeNormalFromCovarianceMatrix<Vector>(correspondingPoints);
+			    Vector normal = SliceUtils::computeNormalFromLinearRegression<Vector>(correspondingPoints);
 				Domain domain = PointUtil::computeBoundingBox<Domain>(correspondingPoints);
 				bool isProjected = isSameProjectedDomain(domain, center);
-				
+
+				Point pointBel = surfelToPoint.at(bel);
+				double d = normal[0] *  pointBel[0] +
+					normal[1] * pointBel[1] +
+					normal[2] * pointBel[2];
 				//checks if the center point belongs to the plane
-				//double eq = normal[0] * center[0] +
-				//	normal[1] * center[1] +
-				//	normal[2] * center[2];
-				if (isProjected && normal != Vector::zero) {
+				double eq = normal[0] * center[0]
+					+ normal[1] * center[1]
+					+ normal[2] * center[2]
+					- d;
+				if (eq >= -1 && eq <= 1 && normal != Vector::zero) {
+					trace.info() << eq << endl;
 					visitor.terminate();		  
 					thePath = correspondingPoints;
 				}
@@ -534,16 +706,32 @@ int main( int argc, char** argv )
 	SetFromImage<Z3i::DigitalSet>::append<Image> (setskel, skeleton, 
 												  thresholdMin, thresholdMax);
 	Color color(100,100,140,128);
-    int number = 10;
+    int number = 1;
 	int i = 0;
 	trace.beginBlock("Computing distance map");
 	while (i < number) {
 		Domain domainskel = skeleton.domain();
-		auto it = select_randomly(setskel.begin(), setskel.end());	 
-		Point point = pointCorrespondingToMinDistance<Point>(*it, surfacePointSet);
-		SCell surfel = convertToSurfel(point, surfaceVoxelSet);
-		trace.info() << surfel << endl;
+		SCell surfel, endSurfel;
+		do {
+			auto it = select_randomly(setskel.begin(), setskel.end());
+			Point center = *it;
+			Point point = pointCorrespondingToMinDistance<Point>(center, surfacePointSet);
+			Point projected = computeProjection(point, center, set3d);
+	
+		    surfel = convertToSurfel(point, surfaceVoxelSet);
+			endSurfel = convertToSurfel(projected, surfaceVoxelSet);
+		} while (surfel == SCell() || endSurfel == SCell());
+
 		viewer << CustomColors3D(Color::Green, Color::Green) << surfel;
+		viewer << CustomColors3D(Color::Yellow, Color::Yellow) << endSurfel;
+		trace.info() << surfel << " " << endSurfel << endl;
+		vector<SCell> path = computeGeodesicLoop(digSurf, surfel, endSurfel, viewer);
+		
+
+		for (auto it = path.begin(), ite = path.end(); it != ite; ++it) {
+			viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+		}
+		
 		if (surfel != SCell()) {
 			MyBreadthFirstVisitor visitor( digSurf, surfel );
 			/*vector<Path> systemOfLoops = computeSystemOfLoops<Path>(visitor, surfel);
@@ -558,12 +746,12 @@ int main( int argc, char** argv )
 			  for (auto itpath = it->begin(), itpathe = it->end(); itpath != itpathe; ++itpath) {
 			  viewer << CustomColors3D(Color::Red, Color::Red) << *itpath;
 			  }
-			  }*/
-			vector<Point> path = createShortestPath<Domain, Vector>(visitor, surfel, *it, surfaceVoxelSet);
+			  }
+			vector<Point> path = createShortestPath<Domain, Vector>(visitor, surfel, center, surfaceVoxelSet);
 			if (path.size() == 0) continue;
 			for (auto it = path.begin(), ite = path.end(); it != ite; ++it) {
 				viewer << CustomColors3D(Color::Red, Color::Red) << *it;
-			}
+				}*/
 			i++;
 		}
 	}
@@ -571,7 +759,7 @@ int main( int argc, char** argv )
 
 	trace.beginBlock("Displaying");
 	for (auto it = set3d.begin(), ite = set3d.end(); it != ite; ++it) {
-		viewer << CustomColors3D(color, color) << *it;
+//		viewer << CustomColors3D(color, color) << *it;
 	}
 	viewer << Viewer3D<>::updateDisplay;
 	app.exec();
