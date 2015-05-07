@@ -91,7 +91,7 @@ computeFlowOnPath(const Path& path, const Point & center, const Vertex& bel, Vie
 	const Calculus::PrimalDerivative0 d0 = calculus.derivative<0, PRIMAL>();
 	//Diffusion-like operator
     Calculus::DualIdentity1 laplace = calculus.identity<1, DUAL>() - phodg2*d1*hodg2*dp1 ; //calculus.primalLaplace() ;
-
+	
 	PointVector<3, double> p;
 	if (dirac.myContainer.size() > 1) {
 		Calculus::Index ind =  dirac.myCalculus->getSCellIndex(bel);
@@ -346,12 +346,12 @@ bool isSameProjectedDomain(const Domain& domain, const typename Domain::Point& c
 }
 
 template <typename Domain, typename Vector, typename Point, typename Visitor, typename Vertex>
-vector<Vertex> createShortestPath(Visitor& visitor, const Vertex& bel, const Point& center, const map<Vertex, Point>& surfelToPoint) {
+vector<Point> createShortestPath(Visitor& visitor, const Vertex& bel, const Point& center, const map<Vertex, Point>& surfelToPoint) {
 	typedef typename Visitor::Node MyNode;
 	
 	MyNode node;
 	map<Vertex, Vertex> aMapPrevious;
-	vector<Vertex> thePath;
+	vector<Point> thePath;
 	
 	while (!visitor.finished()) {
 		if (node.second == 100) break;
@@ -367,7 +367,7 @@ vector<Vertex> createShortestPath(Visitor& visitor, const Vertex& bel, const Poi
 			else {
 			    Vertex tmp = node.first;
 			    Vertex tmp2 = aMapPrevious[*it];
-				vector<Vertex> correspondingPoints;
+				vector<Point> correspondingPoints;
 				set<Vertex> path1, path2;
 
 				while (tmp != bel) {
@@ -380,20 +380,19 @@ vector<Vertex> createShortestPath(Visitor& visitor, const Vertex& bel, const Poi
 				}
 
 				//creating corresponding path with voxels
-				correspondingPoints.push_back(bel);
+				correspondingPoints.push_back(surfelToPoint.at(bel));
 				for (auto it = path1.rbegin(), ite = path1.rend(); it != ite; ++it) {
-					correspondingPoints.push_back(*it);
+					correspondingPoints.push_back(surfelToPoint.at(*it));
 				}
-				correspondingPoints.push_back(*it);
+				correspondingPoints.push_back(surfelToPoint.at(*it));
 				for (auto it = path2.begin(), ite = path2.end(); it != ite; ++it) {
-					correspondingPoints.push_back(*it);
+					correspondingPoints.push_back(surfelToPoint.at(*it));
 				}
 
 				//checking if the intersect is null
 				set<Vertex> intersect;
 				set_intersection(path1.begin(), path1.end(), path2.begin(), path2.end(), inserter(intersect, intersect.begin()));
 				if (intersect.size() != 0) continue;
-				double mean = computeFlowOnPath(correspondingPoints);
 			    Vector normal = SliceUtils::computeNormalFromCovarianceMatrix<Vector>(correspondingPoints);
 				Domain domain = PointUtil::computeBoundingBox<Domain>(correspondingPoints);
 				bool isProjected = isSameProjectedDomain(domain, center);
@@ -535,7 +534,7 @@ int main( int argc, char** argv )
 	SetFromImage<Z3i::DigitalSet>::append<Image> (setskel, skeleton, 
 												  thresholdMin, thresholdMax);
 	Color color(100,100,140,128);
-    int number = 1;
+    int number = 10;
 	int i = 0;
 	trace.beginBlock("Computing distance map");
 	while (i < number) {
@@ -547,33 +546,32 @@ int main( int argc, char** argv )
 		viewer << CustomColors3D(Color::Green, Color::Green) << surfel;
 		if (surfel != SCell()) {
 			MyBreadthFirstVisitor visitor( digSurf, surfel );
-			vector<Path> systemOfLoops = computeSystemOfLoops<Path>(visitor, surfel);
-			Path thePath = computeMinimumGradientPath(systemOfLoops, *it, viewer);
-			vector<Path> geodesicLoops = selectGeodesicLoops(systemOfLoops, thePath);
-			vector<SCell> scellsInPath = thePath.myPath;
-			for (auto it = scellsInPath.begin(), ite = scellsInPath.end(); it != ite; ++it) {
+			/*vector<Path> systemOfLoops = computeSystemOfLoops<Path>(visitor, surfel);
+			  Path thePath = computeMinimumGradientPath(systemOfLoops, *it, viewer);
+			  vector<Path> geodesicLoops = selectGeodesicLoops(systemOfLoops, thePath);
+			  vector<SCell> scellsInPath = thePath.myPath;
+			  for (auto it = scellsInPath.begin(), ite = scellsInPath.end(); it != ite; ++it) {
+			  viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+			  }
+			  for (auto it = geodesicLoops.begin(), ite = geodesicLoops.end(); it != ite; ++it) {
+			  trace.info() << it->myPath.size() << endl;
+			  for (auto itpath = it->begin(), itpathe = it->end(); itpath != itpathe; ++itpath) {
+			  viewer << CustomColors3D(Color::Red, Color::Red) << *itpath;
+			  }
+			  }*/
+			vector<Point> path = createShortestPath<Domain, Vector>(visitor, surfel, *it, surfaceVoxelSet);
+			if (path.size() == 0) continue;
+			for (auto it = path.begin(), ite = path.end(); it != ite; ++it) {
 				viewer << CustomColors3D(Color::Red, Color::Red) << *it;
 			}
-			for (auto it = geodesicLoops.begin(), ite = geodesicLoops.end(); it != ite; ++it) {
-				trace.info() << it->myPath.size() << endl;
-				for (auto itpath = it->begin(), itpathe = it->end(); itpath != itpathe; ++itpath) {
-					viewer << CustomColors3D(Color::Red, Color::Red) << *itpath;
-				}
-			}
-			/*vector<Point> path = createShortestPath<Vector>(visitor, surfel, *it, surfaceVoxelSet);
-			for (auto it = systemOfLoops.begin(), ite = systemOfLoops.end(); it != ite; ++it) {
-				for (auto itpath = it->begin(), itpathe = it->end(); itpath != itpathe; ++itpath) {
-					viewer << CustomColors3D(Color::Red, Color::Red) << *itpath;
-				}
-				}*/
+			i++;
 		}
-		i++;
 	}
 	trace.endBlock();
 
 	trace.beginBlock("Displaying");
 	for (auto it = set3d.begin(), ite = set3d.end(); it != ite; ++it) {
-			viewer << CustomColors3D(color, color) << *it;
+		viewer << CustomColors3D(color, color) << *it;
 	}
 	viewer << Viewer3D<>::updateDisplay;
 	app.exec();
