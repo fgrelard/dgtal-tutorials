@@ -44,6 +44,14 @@ using namespace Z3i;
 namespace po = boost::program_options;
 
 
+template <typename Vector>
+bool allSigns(const Vector& v1, const Vector& v2) {
+	double x = v1[0] * v2[0];
+	double y = v1[1] * v2[1];
+	double z = v1[2] * v2[2];
+	return (x <= 0 && y <= 0 && z <= 0);
+}
+
 
 /**
  * Returns the point contained in surfacePointSet closest to pSkeleton
@@ -168,12 +176,55 @@ draw(Display3D<Space, KSpace>& display, const DGtal::KForm<TCalculus, order, dua
     }
 }
 
+template <typename Vertex, typename Result, typename Tracker, typename DirIterator>
+map<Vertex, double> computeMapInOneDirection(Vertex& s,  const Result& result, Tracker& tracker, DirIterator& itDirs,double currentScalar ) {
+	map<Vertex, double> aMapVertexToScalar;
+	if ( tracker->adjacent( s, *itDirs, true ) ) {
+		typename Result::Calculus::Index index = result.myCalculus->getSCellIndex(s);
+		const bool& flipped = result.myCalculus->isSCellFlipped(s);
+		typename Result::Calculus::DualForm1::Scalar otherScalar = result.myContainer(index);
+		if (flipped) otherScalar = -otherScalar;
+		if (currentScalar < otherScalar) aMapVertexToScalar[s] = otherScalar;
+	}
+	if ( tracker->adjacent( s, *itDirs, false ) ) {
+		typename Result::Calculus::Index index = result.myCalculus->getSCellIndex(s);
+		const bool& flipped = result.myCalculus->isSCellFlipped(s);
+		typename Result::Calculus::DualForm1::Scalar otherScalar = result.myContainer(index);
+		if (flipped) otherScalar = -otherScalar;
+		if (currentScalar < otherScalar) aMapVertexToScalar[s] = otherScalar;
+	}
+	return aMapVertexToScalar;
+}
+
+template <typename Vertex, typename Boundary, typename Result>
+bool belongsToBisector(const Vertex& vertex, const Result& result, const Boundary& boundary, double currentScalar) {
+	auto itDirs =  result.myCalculus->myKSpace.sDirs(vertex);
+	auto tracker = boundary.container().newTracker( vertex );
+	Vertex s;
+	for (; itDirs != 0; ++itDirs) {
+	    map<Vertex, double> aMapVertexToScalar = computeMapInOneDirection(s, result, tracker, itDirs, currentScalar);
+		if (aMapVertexToScalar.size() == 2) {
+			// for (auto it = aMapVertexToScalar.begin(), ite = aMapVertexToScalar.end(); it != ite; ++it) {
+			// 	auto trackerNeighbors = boundary.container().newTracker( it->first );
+			// 	auto itOrthDirs =  result.myCalculus->myKSpace.sDirs( it->first );
+			// 	Vertex s;
+			// 	if (*itDirs != *itOrthDirs && *itDirs != *(++itOrthDirs)) continue;
+			// 	if (computeMapInOneDirection(s, result, trackerNeighbors, itDirs, it->second).size() == 0) {
+			// 		trace.info() << "returnin false" << endl;
+			// 		return false;
+			// 	}
+			// }
+			return true;
+		}
+	}
+	return false;
+}
 
 template <typename MyDigitalSurface, typename Vertex>
 vector<Vertex> extractPseudoBisector(MyDigitalSurface& boundary, const Vertex& start, const Vertex& end,  Viewer3D<>& viewer) {
 	 typedef DiscreteExteriorCalculus<3, EigenLinearAlgebraBackend> DEC;
 	 DEC calculus;
-  
+	 map<Vertex, vector<Vertex>> vertices;
 	 //Creating the structure
 	 for ( typename MyDigitalSurface::ConstIterator it = boundary.begin(), it_end = boundary.end();
 		   it != it_end; ++it )
@@ -184,8 +235,10 @@ vector<Vertex> extractPseudoBisector(MyDigitalSurface& boundary, const Vertex& s
 		 {
 			 calculus.insertSCell(*itt);
 			 KSpace::SCells oneNeig2 = calculus.myKSpace.sLowerIncident(*itt);
-			 for(KSpace::SCells::ConstIterator ittt = oneNeig2.begin(), itttend = oneNeig2.end(); ittt != itttend; ++ittt)
+			 for(KSpace::SCells::ConstIterator ittt = oneNeig2.begin(), itttend = oneNeig2.end(); ittt != itttend; ++ittt) {
+				 vertices[*it].push_back(*ittt);
 				 calculus.insertSCell(*ittt);
+			 }
 		 }
 	 }
   
@@ -200,21 +253,54 @@ vector<Vertex> extractPseudoBisector(MyDigitalSurface& boundary, const Vertex& s
 	 DEC::PrimalDerivative1 d1 = calculus.derivative<1, PRIMAL>();
 	 DEC::PrimalHodge2 phodg2 = calculus.primalHodge<2>();
 
-	 
 	 //Diffusion-like operator
 	 DEC::DualIdentity1 laplace=   calculus.identity<1, DUAL>() - phodg2*d1*hodg2*dp1 ; //calculus.primalLaplace() ;
+	 DEC::DualIdentity1 lap2 = laplace*laplace;
+	 DEC::DualIdentity1 lap4 = lap2*lap2;
+	 DEC::DualIdentity1 lap8 = lap4*lap4;
+	 DEC::DualIdentity1 lap16 = lap8*lap8;
   
 	 //Solver
 	 typedef EigenLinearAlgebraBackend::SolverSimplicialLLT LinearAlgebra;
 	 typedef DiscreteExteriorCalculusSolver<DEC, LinearAlgebra, 1, DUAL, 1, DUAL> Solver;
 	 Solver solver;
-	 solver.compute(laplace);
+	 solver.compute(lap2);
 	 DEC::DualForm1 result = solver.solve(dirac);
-
+	 trace.info() << result << endl;
+	 
+	 DEC::PrimalVectorField vf = calculus.sharp(hodg2 * dp1 * result);
+	 DEC::PrimalVectorField normvf = vf.normalized();
+	
+//	 Display3DFactory<>::draw(viewer, normvf);
 	 vector<Vertex> path;
 	 
+   
+	 /*for (typename DEC::Index index=0; index<result.myCalculus->kFormLength(1, DUAL); index++)
+	   {
+		 Vertex vertex = result.getSCell(index);		 
+		 const bool& flipped = result.myCalculus->isSCellFlipped(vertex);
+		 if (flipped) vertex = result.myCalculus->myKSpace.sOpp(vertex);
+		 vector<Vertex> correspondingVertices = vertices.at(vertex);
+		 if (vertex == start) continue;
+		 
+		 vector<RealPoint> values;
+		 for (int i =0; i < 4; i++) {
+			 RealPoint arrow = normvf.getArrow(normvf.myCalculus->getSCellIndex(correspondingVertices[i]));
+			 values.push_back(arrow);
+			 if (vertex == end) trace.info() << arrow << endl;
+		 }
+		 for (int i = 0; i < values.size() - 1; i++) {
+			 for (int j = i+1; j < values.size(); j++) {
+				 if (allSigns(values[i], values[j])) {
+					 path.push_back(vertex);
+				 }
+			 }
+		 }
+		 }*/
+	
 	 for (typename DEC::Index index=0; index<result.myCalculus->kFormLength(1, DUAL); index++)
 	 {
+		 int cpt = 0;
 		 Vertex vertex = result.getSCell(index);
 		 const bool& flipped = result.myCalculus->isSCellFlipped(vertex);
 		 if (flipped) vertex = result.myCalculus->myKSpace.sOpp(vertex);
@@ -223,17 +309,40 @@ vector<Vertex> extractPseudoBisector(MyDigitalSurface& boundary, const Vertex& s
 		 vector<Vertex> neighbors;
 		 back_insert_iterator<vector<Vertex>> iter(neighbors);
 		 boundary.writeNeighbors(iter, vertex);
-		 int cpt = 0;
 		 for (auto it = neighbors.begin(), ite = neighbors.end(); it != ite; ++it) {
 			 DEC::Index index = result.myCalculus->getSCellIndex(*it);
 			 const bool& flipped = result.myCalculus->isSCellFlipped(*it);
 			 DEC::DualForm1::Scalar otherScalar = result.myContainer(index);
 			 if (flipped) otherScalar = -otherScalar;
-			 if (currentScalar <= otherScalar) cpt++;
-		 }
-		 if (cpt == 3)
+			 if (currentScalar < otherScalar) cpt++;
+		  }
+		  if (cpt == 4) {
+			  viewer << CustomColors3D(Color::Cyan, Color::Cyan) << vertex;
 			 path.push_back(vertex);
+		  }
+		 
 	 }
+
+	 draw(viewer, result, 0, 0);
+	 /*for (auto it = path.begin(), ite = path.end(); it != ite; ++it) {
+		 int cpt = 0;
+		 vector<Vertex> neighbors;
+		 back_insert_iterator<vector<Vertex>> iter(neighbors);
+		 boundary.writeNeighbors(iter, *it);
+		 for (auto itn = neighbors.begin(), itne = neighbors.end(); itn != itne; ++itn) {
+			 if (find(path.begin(), path.end(), *itn) != path.end()) {
+				 cpt++;
+			 }
+		 }
+		 if (cpt == 2) { //needs to be a curve, two neighbors
+			 viewer << CustomColors3D(Color::Cyan, Color::Cyan) << *it;
+			 path2.push_back(*it);
+		 }
+		 }*/
+
+		
+	 
+		   
 	 
 	 return path;
 }
@@ -433,11 +542,12 @@ int main( int argc, char** argv )
 		    surfel = convertToSurfel(point, surfaceVoxelSet);
 			endSurfel = convertToSurfel(projected, surfaceVoxelSet);
 		} while (surfel == SCell() || endSurfel == SCell());
-
+		
 		
 		trace.info() << surfel << " " << endSurfel << endl;
-		surfel = {{-36, 1, 5}, true};
-		endSurfel = {{42, 5, 5}, false};
+		
+		//	surfel = {{-36, 1, 5}, true};
+		//endSurfel = {{42, 5, 5}, false};
 		viewer << CustomColors3D(Color::Green, Color::Green) << surfel;
 		viewer << CustomColors3D(Color::Yellow, Color::Yellow) << endSurfel;
 		vector<SCell> pseudoBisector = extractPseudoBisector(digSurf, surfel, endSurfel, viewer);
@@ -449,7 +559,7 @@ int main( int argc, char** argv )
 		vector<SCell> path = extractGeodesicLoop(visitor, pseudoBisector, surfel);
 
 		for (auto it = path.begin(), ite = path.end(); it != ite; ++it) {
-			//	viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+			viewer << CustomColors3D(Color::Red, Color::Red) << *it;
 		}
 	    i++;
 	}
@@ -457,7 +567,7 @@ int main( int argc, char** argv )
 
 	trace.beginBlock("Displaying");
 	for (auto it = set3d.begin(), ite = set3d.end(); it != ite; ++it) {
-		//	viewer << CustomColors3D(color, color) << *it;
+		//		viewer << CustomColors3D(color, color) << *it;
 	}
 	viewer << Viewer3D<>::updateDisplay;
 	app.exec();
