@@ -1,3 +1,0 @@
-[0m[31m[ERR]VolReader : can't open /home/florent/test_img/deformedcylinder.vol
-terminate called after throwing an instance of 'DGtal::IOException'
-  what():  DGtal IO error
