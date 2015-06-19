@@ -1,0 +1,68 @@
+/* The purpose of this new function is to change the radius of the ball according to the distance of the surfel to the nearest point in the medial axis */
+template <typename TKSpace, typename TPointPredicate, typename TCovarianceMatrixFunctor>
+template <typename Vertex, typename WeightedSurfel, typename OutputIterator, typename SurfelConstIterator>
+inline
+void
+IntegralInvariantVolumeEstimatorAdapted<TKSpace, TPointPredicate, TCovarianceMatrixFunctor>::eval(OutputIterator& result, const std::vector<WeightedSurfel> & surfels, float leeway, float scaling_factor) {
+	typedef IntegralInvariantVolumeEstimator<TKSpace, TPointPredicate, TCovarianceMatrixFunctor> super;
+	// Finding different values from a set of surfels
+	// Values are distances to the medial axis
+	// The leeway helps defining ranges of non overlapping values
+	// vector<float> values = differentValues(surfels, leeway);
+	//int size = values.size();
+	int size = surfels.size();
+	int i = 0;
+	for (typename std::vector<WeightedSurfel>::const_iterator it = surfels.begin(); it != surfels.end(); ++it, ++i) {
+		// For a given value, we extract all the associated points
+	    vector<Vertex> vertices;
+		vertices.push_back((*it).p);
+		// Reset parameter (radius)
+		this->setParams(scaling_factor * (*it).d);
+		this->init(1.0, surfels.begin(), surfels.end());
+		// Compute curvature
+		typename vector<Vertex>::const_iterator itSurfel = vertices.cbegin();
+		result.push_back(super::eval(itSurfel));
+		trace.progressBar(i, size);
+	}
+}
+
+/* Finds the location of the surfels corresponding to the same distance to the MA */
+template <typename TKSpace, typename TPointPredicate, typename TCovarianceMatrixFunctor>
+template <typename Vertex, typename WeightedSurfel>
+inline
+std::vector<Vertex>
+IntegralInvariantVolumeEstimatorAdapted<TKSpace, TPointPredicate, TCovarianceMatrixFunctor>::findLocation(const vector<WeightedSurfel> & surfels, float value, float leeway) {
+	vector<Vertex> locations;
+	for (int i = 0; i < surfels.size(); i++) {
+		float upperBound = value + value * leeway;
+		float lowerBound = value - value * leeway;
+		if (surfels[i].d <= upperBound && surfels[i].d >= lowerBound) {
+			locations.push_back(surfels[i].p);
+		}
+	}
+	return locations;
+}
+
+/* Finds all the values for which we dont have overlap (when the leeway is taken into account */
+template <typename TKSpace, typename TPointPredicate, typename TCovarianceMatrixFunctor>
+template <typename WeightedSurfel>
+inline
+std::vector<float>
+IntegralInvariantVolumeEstimatorAdapted<TKSpace, TPointPredicate, TCovarianceMatrixFunctor>::differentValues(const vector<WeightedSurfel> & vIterators, float leeway) {
+	vector<float> values;
+	values.push_back(vIterators[0].d);
+	for (unsigned int i = 0; i < vIterators.size(); i++) {
+		float value = vIterators.at(i).d;
+		bool add = true;
+	    for (vector<float>::iterator it = values.begin(); it != values.end(); ++it) {
+			float upperBound = value + value * leeway;
+			float lowerBound = value - value * leeway;
+			if (upperBound > *it && lowerBound < *it) {
+			    add = false;
+			}
+		}
+		if (add)
+			values.push_back(value);
+	}
+	return values;
+}

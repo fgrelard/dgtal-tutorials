@@ -1,0 +1,57 @@
+#ifndef SURFACE_TRAVERSAL_H
+#define SURFACE_TRAVERSAL_H
+
+#include <vector>
+#include <map>
+
+namespace SurfaceTraversal {
+	
+	template <typename Point, typename Visitor>
+	std::vector<Point> shortestPath(Visitor& visitor, const Point& source, const Point& goal);
+
+	template <typename Point>
+	std::vector<Point> reconstructPath(const std::map<Point, Point>& aMapPrevious, const Point& source, const Point& goal);
+}
+
+template <typename Point, typename Visitor>
+std::vector<Point> SurfaceTraversal::shortestPath(Visitor& visitor, const Point& source, const Point& goal) {
+	typedef typename Visitor::Node MyNode;
+	MyNode node;
+	std::vector<Point> thePath;
+	std::map<Point, Point> aMapPrevious;
+	while (!visitor.finished()) {
+		node = visitor.current();
+		if (node.first == goal) {
+			return reconstructPath(aMapPrevious, source, goal);
+		}
+		std::vector<Point> neighbors;
+		std::back_insert_iterator<std::vector<Point>> iter(neighbors);
+		visitor.graph().writeNeighbors(iter, node.first);
+		for (auto it = neighbors.begin(), ite = neighbors.end(); it != ite; ++it) {
+			auto itMapExisting = aMapPrevious.find(*it);
+			if (itMapExisting == aMapPrevious.end()) {
+				aMapPrevious[*it] = node.first;
+			}
+		}
+		visitor.expand();
+	}
+	return thePath; //path not found = empty vector
+}
+
+
+template <typename Point>
+std::vector<Point> SurfaceTraversal::reconstructPath(const std::map<Point, Point>& aMapPrevious, const Point& source, const Point& goal) {
+	std::vector<Point> path;
+	Point aPoint = goal;
+	
+	while (aPoint != source) {
+		path.push_back(aPoint);
+		aPoint = aMapPrevious.at(aPoint);
+	}
+	
+	
+	path.push_back(source);
+	return path;
+}
+
+#endif
