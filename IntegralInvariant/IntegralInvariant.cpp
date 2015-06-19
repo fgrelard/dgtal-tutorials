@@ -57,7 +57,7 @@
 #include "DGtal/helpers/StdDefs.h"
 #include "DGtal/base/ConstAlias.h"
 #include "DGtal/base/CountedConstPtrOrConstPtr.h"
-#include "IntegralInvariantVolumeEstimatorAdapted.h"
+#include "geometry/IntegralInvariantVolumeEstimatorAdapted.h"
 
 using namespace DGtal;
 template <typename Distance>

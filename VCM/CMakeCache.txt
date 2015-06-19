@@ -29,8 +29,20 @@ Boost_PROGRAM_OPTIONS_LIBRARY_DEBUG:FILEPATH=/usr/lib/x86_64-linux-gnu/libboost_
 //Boost program_options library (release)
 Boost_PROGRAM_OPTIONS_LIBRARY_RELEASE:FILEPATH=/usr/lib/x86_64-linux-gnu/libboost_program_options.a
 
-//Choose the type of build, options are: None(CMAKE_CXX_FLAGS or
-// CMAKE_C_FLAGS used) Debug Release RelWithDebInfo MinSizeRel.
+//Link with static Boost libraries
+CGAL_Boost_USE_STATIC_LIBS:BOOL=OFF
+
+//The directory containing a CMake configuration file for CGAL.
+CGAL_DIR:PATH=/usr/local/lib/CGAL
+
+//Set this to TRUE if you want to define or modify any of CMAKE_*_FLAGS.
+// When this is FALSE, all the CMAKE_*_FLAGS flags are overriden
+// with the values used when building the CGAL libs. For CGAL_*_flags
+// (used for ADDITIONAL flags) , there is no need to set this to
+// TRUE.
+CGAL_DONT_OVERRIDE_CMAKE_FLAGS:BOOL=TRUE
+
+//Build type: Release or Debug
 CMAKE_BUILD_TYPE:STRING=Release
 
 //Enable/Disable color output during build.
@@ -39,8 +51,8 @@ CMAKE_COLOR_MAKEFILE:BOOL=ON
 //CXX compiler.
 CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/c++
 
-//Flags used by the compiler during all build types.
-CMAKE_CXX_FLAGS:STRING=
+//C++ compiler flags for both Release and Debug
+CMAKE_CXX_FLAGS:STRING= -frounding-math -std=c++11
 
 //Flags used by the compiler during debug builds.
 CMAKE_CXX_FLAGS_DEBUG:STRING=-g
@@ -48,9 +60,7 @@ CMAKE_CXX_FLAGS_DEBUG:STRING=-g
 //Flags used by the compiler during release minsize builds.
 CMAKE_CXX_FLAGS_MINSIZEREL:STRING=-Os -DNDEBUG
 
-//Flags used by the compiler during release builds (/MD /Ob1 /Oi
-// /Ot /Oy /Gs will produce slightly less optimized but smaller
-// files).
+//C++ compiler flags for RELEASE
 CMAKE_CXX_FLAGS_RELEASE:STRING=-O3 -DNDEBUG
 
 //Flags used by the compiler during Release with Debug Info builds.
@@ -76,7 +86,7 @@ CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG
 //Flags used by the compiler during Release with Debug Info builds.
 CMAKE_C_FLAGS_RELWITHDEBINFO:STRING=-O2 -g -DNDEBUG
 
-//Flags used by the linker.
+//Linker flags for both Release and Debug
 CMAKE_EXE_LINKER_FLAGS:STRING=' '
 
 //Flags used by the linker during debug builds.
@@ -85,7 +95,7 @@ CMAKE_EXE_LINKER_FLAGS_DEBUG:STRING=
 //Flags used by the linker during release minsize builds.
 CMAKE_EXE_LINKER_FLAGS_MINSIZEREL:STRING=
 
-//Flags used by the linker during release builds.
+//Linker flags for RELEASE
 CMAKE_EXE_LINKER_FLAGS_RELEASE:STRING=
 
 //Flags used by the linker during Release with Debug Info builds.
@@ -788,6 +798,8 @@ Boost_LIBRARY_DIR-ADVANCED:INTERNAL=1
 Boost_PROGRAM_OPTIONS_LIBRARY_DEBUG-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: Boost_PROGRAM_OPTIONS_LIBRARY_RELEASE
 Boost_PROGRAM_OPTIONS_LIBRARY_RELEASE-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: CGAL_Boost_USE_STATIC_LIBS
+CGAL_Boost_USE_STATIC_LIBS-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_BUILD_TOOL
 CMAKE_BUILD_TOOL-ADVANCED:INTERNAL=1
 //What is the target build tool cmake is generating for.
@@ -1309,6 +1321,8 @@ Q_WS_QWS:INTERNAL=
 Q_WS_WIN:INTERNAL=
 //Have symbol Q_WS_X11
 Q_WS_X11:INTERNAL=1
+//Last used Boost_ADDITIONAL_VERSIONS value.
+_Boost_ADDITIONAL_VERSIONS_LAST:INTERNAL=1.56.1;1.56.0;1.56;1.55.1;1.55.0;1.55;1.54.1;1.54.0;1.54;1.53.1;1.53.0;1.53;1.52.1;1.52.0;1.52;1.51.1;1.51.0;1.51;1.50.1;1.50.0;1.50;1.49.1;1.49.0;1.49;1.48.1;1.48.0;1.48;1.47.1;1.47.0;1.47;1.46.1;1.46.0;1.46;1.45.1;1.45.0;1.45;1.44.1;1.44.0;1.44;1.43.1;1.43.0;1.43;1.42.1;1.42.0;1.42;1.41.1;1.41.0;1.41;1.40.1;1.40.0;1.40;1.39.1;1.39.0;1.39;1.38.1;1.38.0;1.38;1.37.1;1.37.0;1.37
 //Components requested for this build tree.
 _Boost_COMPONENTS_SEARCHED:INTERNAL=program_options
 //Last used Boost_INCLUDE_DIR value.

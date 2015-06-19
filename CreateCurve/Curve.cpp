@@ -16,14 +16,15 @@
 #include "DGtal/io/boards/Board3D.h"
 #include "DGtal/images/imagesSetsUtils/ImageFromSet.h"
 #include "DGtal/io/writers/VolWriter.h"
-#include "Distance.h"
-#include "Ball.h"
+
+#include "geometry/Distance.h"
+#include "shapes/Ball.h"
 #include "ModelisationUtils.h"
 ///////////////////////////////////////////////////////////////////////////////
 #include "DGtal/kernel/BasicPointPredicates.h"
 #include "DGtal/io/boards/Board2D.h"
-#include "../Tangent3D/Pencil.h"
-#include "../Tangent3D/MSTTangent.h"
+#include "geometry/Pencil.h"
+#include "geometry/MSTTangent.h"
 
 using namespace std;
 using namespace DGtal;
@@ -102,6 +103,7 @@ int main( int argc, char** argv )
 	createStraightLine(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
 	set<PointVector<3,double>> vectorPoints;
+	createVolumeFromCurve(curve, vectorPoints, 10);
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	thinVolume<Pencil>(curve, vectorPoints, 20.0);
 //	drawDeformedCylinder(vectorPoints, 50, 5, increment);
@@ -121,7 +123,7 @@ int main( int argc, char** argv )
 		set.insert(*it);
 	}
 	DigitalSet set2 = addNoise(set, noise);*/
-	imageFromRangeAndValue(curve.begin(), curve.end(), anImage3D, 150);
+	imageFromRangeAndValue(vectorPoints.begin(), vectorPoints.end(), anImage3D, 150);
     VolWriter<Image3D>::exportVol(examplesPath + filename, anImage3D);
 	const Color CURVE3D_COLOR( 100, 100, 140, 128 );
 

@@ -56,34 +56,19 @@
 #include "DGtal/kernel/BasicPointPredicates.h"
 #include "DGtal/shapes/parametric/Ball3D.h"
 #include "DGtal/io/viewers/Viewer3D.h"
+#include "DGtal/io/writers/VolWriter.h"
 #include <miniball/Seb.h>
 #include <miniball/Seb_debug.h>
 #include "DGtal/kernel/sets/DigitalSetInserter.h"
 #include "DGtal/geometry/volumes/distance/ExactPredicateLpSeparableMetric.h"
 #include "DGtal/geometry/surfaces/estimation/VoronoiCovarianceMeasureOnDigitalSurface.h"
 
+#include "geometry/DistanceToPointFunctor.h"
+
 using namespace std;
 using namespace DGtal;
 namespace po = boost::program_options;
 
-
-template <typename Distance>
-struct DistanceToPointFunctor {
-	typedef typename Distance::Space Space;
-	typedef typename Distance::Value Value;
-	typedef typename Space::Point    Point;
-
-	Point p;
-	DistanceToPointFunctor( Clone<Distance> distance,
-							const Point& aP )
-		: myDistance( distance ), p( aP ) {}
-
-	Value operator()( const Point& q ) const
-		{
-			return myDistance( p, q );
-		}
-	Distance myDistance;
-};
 
 template <typename Point>
 class WeightedPoint {
@@ -344,7 +329,7 @@ int main( int argc, char** argv )
 	int nb = pSet.size();
 	int i = 0;
 	for (set<WeightedPoint>::iterator itE = pSet.end(); it != itE; ++it, ++i) {
-	    checkPointForLambdaMedialAxis(dtL2, vPoints, (*it).p, (*it).d, lambda);
+	    checkPointForMedialAxis(dtL2, vPoints, (*it).p, (*it).d);
 		trace.progressBar(i, nb);
 	}
 	trace.endBlock();
@@ -363,7 +348,10 @@ int main( int argc, char** argv )
 		points.push_back( (*it).p );
 	}
 //	computeVCM(viewer, points, 5, 3, 0.3);
-	
+
+	Image outImage(img.domain());
+	DGtal::imageFromRangeAndValue(points.begin(), points.end(), outImage, 10);
+	VolWriter<Image>::exportVol("/home/florent/test_img/medialaxis.vol", outImage);
 	viewer << Viewer3D<>::updateDisplay;
 	app.exec();
 	std::cout << endl;

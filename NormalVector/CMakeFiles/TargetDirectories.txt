@@ -1,1 +1,0 @@
-/home/florent/Documents/DGtal/tutorials-copy/NormalVector/CMakeFiles/NormalVector.dir

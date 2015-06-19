@@ -1,5 +1,5 @@
 #include <math.h>
-#include "TangentUtils.h"
+#include "geometry/TangentUtils.h"
 
 double TangentUtils::triangle(double x) {
 	if (x >= 0 && x <= 0.5) {

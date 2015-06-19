@@ -18,6 +18,6 @@ if ( Boost_FOUND )
      ${Boost_PROGRAM_OPTIONS_LIBRARY})
    SET(DGtalLibInc ${Boost_INCLUDE_DIRS})
 endif( Boost_FOUND )
-
+include_directories(../include)
 ADD_EXECUTABLE(surface2points surface2points.cpp)
 TARGET_LINK_LIBRARIES(surface2points ${DGTAL_LIBRARIES} ${Boost_LIBRAIRIES} ${Boost_PROGRAM_OPTIONS_LIBRARY} )

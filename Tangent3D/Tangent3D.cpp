@@ -75,10 +75,10 @@
 
 
 // Local includes
-#include "Pencil.h"
-#include "MSTTangent.h"
-#include "TangentUtils.h"
-#include "SliceUtils.h"
+#include "geometry/Pencil.h"
+#include "geometry/MSTTangent.h"
+#include "geometry/TangentUtils.h"
+#include "geometry/SliceUtils.h"
 
 using namespace DGtal;
 using namespace std;
@@ -104,15 +104,15 @@ void visualize(const vector<Pencil> & tangents, Viewer3D<> & viewer) {
 			Vector3D tangent = it->getTangent();
 
 			//viewer.addLine(point - (tangent * size_factor), point + (tangent * size_factor), 0.1);
-			vector<Vector3D> plane = SliceUtils::computePlaneFromNormalVector(it->getTangent());
+			vector<Vector3D> plane = SliceUtils::computePlaneFromNormalVector(it->getTangent(), it->getPoint());
 			Color planeColor(0, 0, 255, 128);
 			//viewer << CustomColors3D(planeColor, planeColor);
 
 			if (((i >865 && i <870) || (i >870 && i <878)) || (i > 2296 && i < 2316)) {
-				Vector3D p1 = (Vector3D) point + plane[0] * plane_factor;
-				Vector3D p2 = (Vector3D) point + plane[1] * plane_factor;
-				Vector3D p3 = (Vector3D) point + plane[2] * plane_factor;
-				Vector3D p4 = (Vector3D) point + plane[3] * plane_factor;
+				Vector3D p1 = plane[0] * plane_factor;
+				Vector3D p2 = plane[1] * plane_factor;
+				Vector3D p3 = plane[2] * plane_factor;
+				Vector3D p4 = plane[3] * plane_factor;
 				viewer.setFillTransparency(150);
 				viewer.addQuad(p1, p2, p3, p4);
 			}
@@ -121,47 +121,6 @@ void visualize(const vector<Pencil> & tangents, Viewer3D<> & viewer) {
 	}
 }
 
-
-/**
- * saturated segmentation of a (sub)range
- */
-template <typename Pencil, typename Iterator>
-vector<Pencil> orthogonalPlanesWithTangents(Iterator itb, Iterator ite, Viewer3D<>& viewer)
-{
-	typedef StandardDSS6Computer<Iterator,int,8> SegmentComputer;  
-	typedef SaturatedSegmentation<SegmentComputer> Segmentation;
-
-	SegmentComputer algo;
-	Segmentation s(itb, ite, algo);
-	s.setMode("MostCentered++");
-	typename Segmentation::SegmentComputerIterator i = s.begin();
-	typename Segmentation::SegmentComputerIterator end = s.end();
-
-
-	for (; i != end; ++i) {
-		 SegmentComputer currentSegmentComputer(*i); 
-		 viewer << SetMode3D(currentSegmentComputer.className(), "BoundingBox");
-		 viewer << CustomColors3D(Color(0,255,0,255), Color(0,255,0,255))<<currentSegmentComputer;
-	}
-	
-	vector<Pencil> tangents = TangentUtils::computeTangentialCover<Pencil>(itb, ite, s);
-	//visualize(tangents, viewer);
-    return tangents;
-}
-
-
-template <typename Pencil, typename Iterator>
-vector<Pencil> orthogonalPlanesWithNaiveTangents(Iterator itb, Iterator ite) {
-	vector<Pencil> tangents;
-	for (; itb != ite; ++itb) {
-		auto nextIt = itb;
-		++nextIt;
-		Z3i::Point point = *itb;
-		Z3i::Point tangent =  *nextIt - *itb;
-		tangents.push_back({point, tangent});
-	}
-	return tangents;
-}
 
 
 
@@ -177,8 +136,8 @@ int main(int argc, char **argv)
 		("input,i", po::value<std::string>(), "vol file (skeleton)")
 		("input2,v", po::value<std::string>(), "vol file (corresponding volume)")
 		("output,o", po::value<std::string>(), "sliced vol file with orthogonal planes")
-		("thresholdMin,m", po::value<int>()->default_value(0), "minimum threshold for binarization")
-		("thresholdMax,M", po::value<int>()->default_value(255), "maximum threshold for binarization")
+		("thresholdMin,m", po::value<unsigned int>()->default_value(0), "minimum threshold for binarization")
+		("thresholdMax,M", po::value<unsigned int>()->default_value(255), "maximum threshold for binarization")
 		; 
 
 	bool parseOK=true;
@@ -203,8 +162,8 @@ int main(int argc, char **argv)
 		return 0;
 	}
 	string inputFilename = vm["input"].as<std::string>();
-	int thresholdMin = vm["thresholdMin"].as<int>();
-	int thresholdMax = vm["thresholdMax"].as<int>();
+	unsigned int thresholdMin = vm["thresholdMin"].as<unsigned int>();
+	unsigned int thresholdMax = vm["thresholdMax"].as<unsigned int>();
 	
 	typedef PointVector<3,int> Point;
 	QApplication application(argc,argv);
@@ -259,13 +218,21 @@ int main(int argc, char **argv)
 		else
 			visitor.ignore();
 	}
-	vector<Pencil> tangents = TangentUtils::theoreticalTangentsOnBoudin<Pencil>(vPoints.begin(), vPoints.end(), 20.0);
-	visualize(tangents, viewer);
+	vector<Pencil> tangents = TangentUtils::orthogonalPlanesWithTangents<Pencil>(vPoints.begin(), vPoints.end());
+	trace.info() << tangents.rbegin()->getPoint() << endl;
+		//visualize(tangents, viewer);
 	if (vm.count("output") && vm.count("input2")) {
 		string inputFileName2 = vm["input2"].as<std::string>();
-		Image volume = GenericReader<Image>::import(inputFileName2);
+		Image volume = VolReader<Image>::importVol(inputFileName2);
+		Image volumeBinary(volume.domain());
+	    for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
+			if (volume(*it) >= thresholdMin && volume(*it) <= thresholdMax) 
+				volumeBinary.setValue(*it, 255);
+			else
+				volumeBinary.setValue(*it, 0);
+		}
 		string outName = vm["output"].as<std::string>();
-		SliceUtils::slicesFromPlanes(viewer, tangents, volume, outName);
+		SliceUtils::slicesFromPlanes(viewer, tangents, volumeBinary, outName);
 
 		for (auto it = volume.domain().begin(),itE = volume.domain().end(); it!=itE; ++it) {
 			if (volume(*it) > thresholdMin) {

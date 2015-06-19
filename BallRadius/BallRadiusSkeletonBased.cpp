@@ -29,14 +29,15 @@
 #include "DGtal/math/linalg/EigenSupport.h"
 #include "DGtal/dec/DiscreteExteriorCalculus.h"
 #include "DGtal/dec/DiscreteExteriorCalculusSolver.h"
+#include "DGtal/dec/DiscreteExteriorCalculusFactory.h"
 
-#include "SurfaceUtils.h"
-#include "SurfacePoint.h"
-#include "../CreateCurve/Distance.h"
-#include "../CreateCurve/Ball.h"
-#include "PointUtil.h"
-#include "../Tangent3D/SliceUtils.h"
-#include "Path.h"
+#include "surface/SurfaceUtils.h"
+#include "surface/SurfacePoint.h"
+#include "geometry/Distance.h"
+#include "shapes/Ball.h"
+#include "geometry/PointUtil.h"
+#include "geometry/SliceUtils.h"
+#include "shapes/Path.h"
 
 using namespace std;
 using namespace DGtal;
@@ -45,11 +46,26 @@ namespace po = boost::program_options;
 
 
 template <typename Vector>
-bool allSigns(const Vector& v1, const Vector& v2) {
-	double x = v1[0] * v2[0];
+bool allSigns(const Vector& v1, const Vector& v2, unsigned int dir) {
+	double max = -1, max2 = -1;
+	int index = -1, index2 = -2;
+	for (int i = 0; i < 3; i++) {
+		if (abs(v1[i]) > max) {
+			index = i;
+			max = abs(v1[i]);
+		}
+	}
+	for (int i = 0; i < 3; i++) {
+		if (abs(v2[i]) > max2) {
+			index2 = i;
+			max2 = abs(v2[i]);
+		}
+	}
+    return (index == index2 &&  v1[index] * v2[index] < 0);
+/*	double x = v1[0] * v2[0];
 	double y = v1[1] * v2[1];
 	double z = v1[2] * v2[2];
-	return (x <= 0 && y <= 0 && z <= 0);
+	return (x <= 0 && y <= 0 && z <= 0);*/
 }
 
 
@@ -128,7 +144,6 @@ template <typename Space, typename KSpace, typename TCalculus, DGtal::Order orde
 void
 draw(Display3D<Space, KSpace>& display, const DGtal::KForm<TCalculus, order, duality>& kform, double cmap_min, double cmap_max)
 {
-    BOOST_STATIC_ASSERT(( TCalculus::dimension == 3 ));
     ASSERT( kform.myCalculus );
 
     typedef typename TCalculus::Scalar Scalar;
@@ -154,27 +169,61 @@ draw(Display3D<Space, KSpace>& display, const DGtal::KForm<TCalculus, order, dua
     typedef typename DGtal::HueShadeColorMap<Scalar, 2 > ColorMap;
     const ColorMap colormap(cmap_min, cmap_max);
                             
-    for (typename TCalculus::Index index=0; index<kform.myCalculus->kFormLength(order, duality); index++)
+    for (typename TCalculus::Index index=0; index<kform.length(); index++)
     {
-        const SCell& cell = kform.myCalculus->getSCell(order, duality, index);
-        ASSERT(kform.myCalculus->myKSpace.sSign(cell) == TCalculus::KSpace::POS);
-
-        const bool& flipped = kform.myCalculus->isSCellFlipped(cell);
-        SCell displayed_cell = cell;
-        if (flipped) displayed_cell = kform.myCalculus->myKSpace.sOpp(cell);
-
+        SCell displayed_cell =  kform.getSCell(index);
         Scalar displayed_value = kform.myContainer(index);
+		
         if (!std::isfinite(log10(displayed_value))) displayed_value = -displayed_value;
 
-        display << SetMode3D(cell.className(), "Basic");
         if (std::isfinite(displayed_value)) {
-			display << DGtal::CustomColors3D(DGtal::Color::Black, colormap(roundf(abs(log10(displayed_value))/denominator * 10)/10 ));
+			display << DGtal::CustomColors3D(DGtal::Color::Black, colormap(abs(log10(displayed_value))/denominator));
 		}
         else
             display << DGtal::CustomColors3D(DGtal::Color::Black, DGtal::Color::White);
 
         display << displayed_cell;
     }
+}
+
+template <typename Vertex, typename DEC, DGtal::Order order, DGtal::Duality duality>
+map<Vertex, double> constructLevelSetMap(const DGtal::KForm<DEC, order, duality>& kform, double minValue, double maxValue) {
+	typedef typename DEC::Scalar Scalar;
+    typedef typename DEC::SCell SCell;
+    typedef typename DEC::Index Index;
+
+	map<Vertex, double> mapLevelSet;
+	
+	double denominator = 0.0;
+	bool first = true;
+	for (Index index=0; index<kform.myContainer.rows(); index++)
+	{
+		const Scalar value = kform.myContainer(index);
+		if (!std::isfinite(abs(log10(value)))) continue;
+		if (first || denominator < abs(log10(value))) denominator = abs(log10(value));
+		first = false;
+	}
+
+	for (Index index=0; index<kform.myCalculus->kFormLength(order, duality); index++)
+    {
+        const SCell& cell = kform.myCalculus->getSCell(order, duality, index);
+        ASSERT(kform.myCalculus->myKSpace.sSign(cell) == DEC::KSpace::POS);
+
+        const bool& flipped = kform.myCalculus->isSCellFlipped(cell);
+        SCell displayed_cell = cell;
+        if (flipped) displayed_cell = kform.myCalculus->myKSpace.sOpp(cell);
+		
+		Scalar displayed_value = kform.myContainer(index);
+        if (!std::isfinite(log10(displayed_value))) displayed_value = -displayed_value;
+
+		//level set
+		displayed_value = roundf(abs(log10(displayed_value))/denominator * 10)/10;
+		
+		mapLevelSet[displayed_cell] = displayed_value;
+		
+	}
+	return mapLevelSet;
+	
 }
 
 template <typename Vertex, typename Result, typename Tracker, typename DirIterator>
@@ -260,116 +309,108 @@ bool belongsToBisector(const Vertex& vertex, const Result& result, const Boundar
 
 template <typename MyDigitalSurface, typename Vertex>
 vector<Vertex> extractPseudoBisector(MyDigitalSurface& boundary, const Vertex& start, const Vertex& end,  Viewer3D<>& viewer) {
-	 typedef DiscreteExteriorCalculus<3, EigenLinearAlgebraBackend> DEC;
-	 DEC calculus;
-	 //Creating the structure
-	 for ( typename MyDigitalSurface::ConstIterator it = boundary.begin(), it_end = boundary.end();
-		   it != it_end; ++it )
-	 {
-		 KSpace::SCells oneNeig = calculus.myKSpace.sLowerIncident(*it);
-		 calculus.insertSCell(*it);
-		 for(KSpace::SCells::ConstIterator itt = oneNeig.begin(), ittend = oneNeig.end(); itt != ittend; ++itt)
-		 {
-			 calculus.insertSCell(*itt);
-			 KSpace::SCells oneNeig2 = calculus.myKSpace.sLowerIncident(*itt);
-			 for(KSpace::SCells::ConstIterator ittt = oneNeig2.begin(), itttend = oneNeig2.end(); ittt != itttend; ++ittt) {
-				 calculus.insertSCell(*ittt);
-			 }
-		 }
-	 }
-  
+	typedef DGtal::DiscreteExteriorCalculusFactory<DGtal::EigenLinearAlgebraBackend> CalculusFactory;
+	typedef DiscreteExteriorCalculus<2, 3, EigenLinearAlgebraBackend> DEC;
+	const DEC calculus = CalculusFactory::createFromNSCells<2>(boundary.begin(), boundary.end());
+	// for ( typename MyDigitalSurface::ConstIterator it = boundary.begin(), it_end = boundary.end();
+	// 	   it != it_end; ++it )
+	//  {
+	// 	 KSpace::SCells oneNeig = calculus.myKSpace.sLowerIncident(*it);
+	// 	 calculus.insertSCell(*it);
+	// 	 for(KSpace::SCells::ConstIterator itt = oneNeig.begin(), ittend = oneNeig.end(); itt != ittend; ++itt)
+	// 	 {
+	// 		 calculus.insertSCell(*itt);
+	// 		 KSpace::SCells oneNeig2 = calculus.myKSpace.sLowerIncident(*itt);
+	// 		 for(KSpace::SCells::ConstIterator ittt = oneNeig2.begin(), itttend = oneNeig2.end(); ittt != itttend; ++ittt) {
+	// 			 calculus.insertSCell(*ittt);
+	// 		 }
+	// 	 }
+	//  }
+	 trace.info() << calculus << endl;
 	 //Setting a dirac on a 0-cell ==> 0-form
-	 DEC::DualForm1 dirac(calculus);
-	 DEC::Index ind = calculus.getSCellIndex(start);
+	 DEC::DualForm0 dirac(calculus);
+	 DEC::Index ind = calculus.getCellIndex(calculus.myKSpace.unsigns(start));
 	 dirac.myContainer( ind ) = 1;
   
 	 //Laplace operator
-	 DEC::DualDerivative1 dp1 = calculus.derivative<1,DUAL>();
-	 DEC::DualHodge2 hodg2 = calculus.dualHodge<2>();
-	 DEC::PrimalDerivative1 d1 = calculus.derivative<1, PRIMAL>();
-	 DEC::PrimalHodge2 phodg2 = calculus.primalHodge<2>();
+	 const DEC::DualIdentity0 laplace = calculus.laplace<DUAL>();
+	 const DEC::DualDerivative0 d0p = calculus.derivative<0, DUAL>();
+	 const DEC::DualDerivative1 d1p = calculus.derivative<1, DUAL>();
+	 const DEC::DualHodge1 hodg1p = calculus.hodge<1, DUAL>();
+	 typedef DGtal::EigenLinearAlgebraBackend::SolverSparseLU LinearAlgebraSolver;
+	 typedef DGtal::DiscreteExteriorCalculusSolver<DEC, LinearAlgebraSolver, 0, DUAL, 0, DUAL> PoissonSolver;
 
-	 //Diffusion-like operator
-	 DEC::DualIdentity1 laplace=   calculus.identity<1, DUAL>() - phodg2*d1*hodg2*dp1 ; //calculus.primalLaplace() ;
-  
-	 //Solver
-	 typedef EigenLinearAlgebraBackend::SolverSimplicialLLT LinearAlgebra;
-	 typedef DiscreteExteriorCalculusSolver<DEC, LinearAlgebra, 1, DUAL, 1, DUAL> Solver;
-	 Solver solver;
+	 PoissonSolver solver;
 	 solver.compute(laplace);
-	 DEC::DualForm1 result = solver.solve(dirac);
+	 DEC::DualForm0 result = solver.solve(dirac);
 	 trace.info() << result << endl;
-	 
-	 DEC::PrimalVectorField vf = calculus.sharp(hodg2 * dp1 * result);
+	 DEC::PrimalForm1 oneFormResult = hodg1p * d0p * result;
+	 DEC::PrimalVectorField vf = calculus.sharp(oneFormResult);
 	 DEC::PrimalVectorField normvf = vf.normalized();
-//	 Display3DFactory<>::draw(viewer, normvf);
+//	 Display3DFactory<Space, KSpace>::draw(viewer, oneFormResult);
+	 Display3DFactory<Space, KSpace>::draw(viewer, normvf);
 	 vector<Vertex> path;
 	 
    
-	 /*for (typename DEC::Index index=0; index<result.myCalculus->kFormLength(1, DUAL); index++)
-	   {
-		 Vertex vertex = result.getSCell(index);		 
-		 const bool& flipped = result.myCalculus->isSCellFlipped(vertex);
-		 if (flipped) vertex = result.myCalculus->myKSpace.sOpp(vertex);
-		 vector<Vertex> correspondingVertices = vertices.at(vertex);
-		 if (vertex == start) continue;
+	 // for (typename DEC::Index index=0; index<result.myCalculus->kFormLength(1, DUAL); index++)
+	 // {
+	 // 	 Vertex vertex = result.getSCell(index);		 
+	 // 	 const bool& flipped = result.myCalculus->isSCellFlipped(vertex);
+	 // 	 if (flipped) vertex = result.myCalculus->myKSpace.sOpp(vertex);
+	 // 	 vector<Vertex> correspondingVertices = vertices.at(vertex);
+	 // 	 if (vertex == start) continue;
+
+	 // 	 unsigned int dir = result.myCalculus->myKSpace.sOrthDir(vertex);
 		 
-		 vector<RealPoint> values;
-		 for (int i =0; i < 4; i++) {
-			 RealPoint arrow = normvf.getArrow(normvf.myCalculus->getSCellIndex(correspondingVertices[i]));
-			 values.push_back(arrow);
-			 if (vertex == end) trace.info() << arrow << endl;
-		 }
-		 for (int i = 0; i < values.size() - 1; i++) {
-			 for (int j = i+1; j < values.size(); j++) {
-				 if (allSigns(values[i], values[j])) {
-					 path.push_back(vertex);
-				 }
-			 }
-		 }
-		 }*/
-	 int size = result.myCalculus->kFormLength(1, DUAL);
+	 // 	 vector<RealPoint> values;
+	 // 	 for (int i =0; i < 4; i++) {
+	 // 		 RealPoint arrow = normvf.getArrow(normvf.myCalculus->getSCellIndex(correspondingVertices[i]));
+	 // 		 values.push_back(arrow);
+	 // 		 if (vertex == end) trace.info() << arrow << endl;
+	 // 	 }
+	 // 	 if (allSigns(values[0], values[3], dir) && allSigns(values[1], values[2], dir)) {
+	 // 		 path.push_back(vertex);
+	 // 	 }			 
+	 // }
+	 
+	 int size = result.myCalculus->kFormLength(0, DUAL);
 	 for (typename DEC::Index index=0; index<size; index++)
 	 {
-		 Vertex vertex = result.getSCell(index);
-		 const bool& flipped = result.myCalculus->isSCellFlipped(vertex);
-		 if (flipped) vertex = result.myCalculus->myKSpace.sOpp(vertex);
-		 DEC::DualForm1::Scalar currentScalar = result.myContainer(index);
-		 if (flipped) currentScalar = -currentScalar;
-		 /* vector<Vertex> neighbors;
-		 back_insert_iterator<vector<Vertex>> iter(neighbors);
-		 boundary.writeNeighbors(iter, vertex);
-		  for (auto it = neighbors.begin(), ite = neighbors.end(); it != ite; ++it) {
-			 DEC::Index index = result.myCalculus->getSCellIndex(*it);
-			 const bool& flipped = result.myCalculus->isSCellFlipped(*it);
-			 DEC::DualForm1::Scalar otherScalar = result.myContainer(index);
-			 if (flipped) otherScalar = -otherScalar;
-			 if (currentScalar < otherScalar) cpt++;
-		 }
-		 if (cpt == 4)
-		 path.push_back(vertex);*/
-		 if ( belongsToBisector(vertex, result, boundary, currentScalar)) {
-			 path.push_back(vertex);
-			 }
-		 
-		 }
-	 /*vector<Vertex> path2;
-	 for (auto it = path.begin(); it != path.end(); ++it) {
 		 int cpt = 0;
+	 	 Vertex vertex = result.getSCell(index);
+	 	 DEC::DualForm0::Scalar currentScalar = result.myContainer(index);
 		 vector<Vertex> neighbors;
-		 back_insert_iterator<vector<Vertex>> iter(neighbors);
-		 boundary.writeNeighbors(iter, *it);
-		 for (auto itn = neighbors.begin(), itne = neighbors.end(); itn != itne; ++itn) {
-			 if (find(path.begin(), path.end(), *itn) != path.end()) {
-				 cpt++;
-			 }
-		 }
-		 if (cpt == 1) { //needs to be a curve, at least one neighbor for it to be a pseudo bisector
-			 path2.push_back(*it);
-		 }
-	 }*/
+	 	 back_insert_iterator<vector<Vertex>> iter(neighbors);
+	 	 boundary.writeNeighbors(iter, vertex);
+		 for (auto it = neighbors.begin(), ite = neighbors.end(); it != ite; ++it) {
+			 DEC::Index index = result.myCalculus->getCellIndex(calculus.myKSpace.unsigns(*it));
+	 		 DEC::DualForm0::Scalar otherScalar = result.myContainer(index);
+	 		 if (currentScalar < otherScalar) cpt++;
+	 	 }
+	 	 if (cpt == 4)
+			 path.push_back(vertex);
+		 /* if ( belongsToBisector(vertex, result, boundary, currentScalar)) {
+	 		 path.push_back(vertex);
+	 		 }*/
 		 
-	 draw(viewer, result, 0, 0);
+	 }
+	 // /*vector<Vertex> path2;
+	 // for (auto it = path.begin(); it != path.end(); ++it) {
+	 // 	 int cpt = 0;
+	 // 	 vector<Vertex> neighbors;
+	 // 	 back_insert_iterator<vector<Vertex>> iter(neighbors);
+	 // 	 boundary.writeNeighbors(iter, *it);
+	 // 	 for (auto itn = neighbors.begin(), itne = neighbors.end(); itn != itne; ++itn) {
+	 // 		 if (find(path.begin(), path.end(), *itn) != path.end()) {
+	 // 			 cpt++;
+	 // 		 }
+	 // 	 }
+	 // 	 if (cpt == 1) { //needs to be a curve, at least one neighbor for it to be a pseudo bisector
+	 // 		 path2.push_back(*it);
+	 // 	 }
+	 // }*/
+		 
+	 // draw(viewer, result, 0, 0);
 		
  
 	 return path;
@@ -550,7 +591,8 @@ int main( int argc, char** argv )
 	
 	SurfaceUtils::computeSurfelWeight<SurfacePoint>(ks, set3d, surfelSet, surfacePointSet, surfaceVoxelSet);
 
-
+	DigitalSet surfacePointDigitalSet(domain);
+	surfacePointDigitalSet.insert(surfacePointSet.begin(), surfacePointSet.end());
 	Z3i::DigitalSet setskel (skeleton.domain());
 	SetFromImage<Z3i::DigitalSet>::append<Image> (setskel, skeleton, 
 												  thresholdMin, thresholdMax);
@@ -565,22 +607,22 @@ int main( int argc, char** argv )
 			auto it = select_randomly(setskel.begin(), setskel.end());
 			Point center = *it;
 			Point point = pointCorrespondingToMinDistance<Point>(center, surfacePointSet);
-			Point projected = computeProjection(point, center, set3d);
+			Point projected = computeProjection(point, center, surfacePointDigitalSet);
 	
 		    surfel = convertToSurfel(point, surfaceVoxelSet);
 			endSurfel = convertToSurfel(projected, surfaceVoxelSet);
-		} while (surfel == SCell());
+		} while (surfel == SCell() || endSurfel == SCell());
 		
-		surfel = bel;
 		trace.info() << surfel << " " << endSurfel << endl;
 		
 		//surfel = {{-36, 1, 5}, true};
 		//endSurfel = {{42, 5, 5}, false};
 		viewer << CustomColors3D(Color::Green, Color::Green) << surfel;
+		viewer << CustomColors3D(Color::Yellow, Color::Yellow) << endSurfel;
 		vector<SCell> pseudoBisector = extractPseudoBisector(digSurf, surfel, endSurfel, viewer);
 
 		for (auto it = pseudoBisector.begin(), ite = pseudoBisector.end(); it != ite; ++it) {
-			if (*it == endSurfel) viewer << CustomColors3D(Color::Yellow, Color::Yellow) << *it;
+		     
 			viewer << CustomColors3D(Color::Cyan, Color::Cyan) << *it;
 		}
 		MyBreadthFirstVisitor visitor( digSurf, surfel );

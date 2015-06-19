@@ -52,7 +52,7 @@
 #include "DGtal/geometry/curves/GreedySegmentation.h"
 #include "DGtal/geometry/curves/FP.h"
 #include "DGtal/io/viewers/Viewer3D.h"
-#include "StandardDSS26Computer.h"
+#include "geometry/StandardDSS26Computer.h"
 #include "DGtal/geometry/curves/SaturatedSegmentation.h"
 ///////////////////////////////////////////////////////////////////////////////
 
