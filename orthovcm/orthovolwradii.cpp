@@ -229,7 +229,7 @@ int main( int  argc, char**  argv )
 //		viewer << CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< closestPointToCurrent.getPoint();
 		vcm_r = vcm.measure( chi, *it );
 		LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
-		//double feature = eval[1] /  (eval[0] + eval[ 1 ]+  eval[3]);
+		//double feature = eval[1] /  (eval[0] + eval[ 1 ]+  eval[2]);
 		// // Display normal
 		RealVector normal = evec.column(0);
 		RealVector n = evec.column( 2 );
@@ -238,10 +238,10 @@ int main( int  argc, char**  argv )
 		RealVector n2 = evec.column( 1 );
 		n2*=size;
 
-		// viewer.setLineColor(Color::Red);
-		// viewer.addLine(p+n, p-n, 0.1);
-		// viewer.setLineColor(Color::Green);
-		// viewer.addLine(p+n2, p-n2, 0.1);
+	    viewer.setLineColor(Color::Red);
+	    viewer.addLine(p+n, p-n, 0.1);
+		viewer.setLineColor(Color::Green);
+		viewer.addLine(p+n2, p-n2, 0.1);
 		viewer.setLineColor(Color::Red);
 		viewer.setFillColor(Color::Red);
 		viewer.setFillTransparency(150);

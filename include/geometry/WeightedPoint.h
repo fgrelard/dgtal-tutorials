@@ -6,7 +6,7 @@ class WeightedPoint {
 public:
 	WeightedPoint( const Point& aPoint, double aWeight ) : myPoint(aPoint), myWeight(aWeight) {}
 	friend bool operator<(const WeightedPoint& it, const WeightedPoint& other) {
-		if (it.d >= other.d) {
+		if (it.myWeight >= other.myWeight) {
 			return true;
 		}
 		return false;

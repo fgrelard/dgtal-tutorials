@@ -239,14 +239,6 @@ void SliceUtils::slicesFromPlanes(Viewer3D<>& viewer, const std::vector<Pencil> 
 		DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(domain3Dyup, origin, planeNormal, IMAGE_PATCH_WIDTH, domain3Dyup.lowerBound());
 		ImageAdapterExtractor extractedImage(volume, domainImage2D, embedder, idV);
 		extractedImage.setDefaultValue(0);
-		// Image2D image(domainImage2D);
-		// Z2i::Point center = {50, 50};
-		// for (auto it = extractedImage.domain().begin(), itE = extractedImage.domain().end(); it != itE; ++it) {
-		// 	if (euclideanDistance(*it, center) < 20.0 && extractedImage(*it) > 0)
-		// 	{
-		// 		image.setValue(*it, 1);
-		// 	}
-		// }
 		std::string outName;
 		outName += outFileName + "_" + std::to_string(sliceNumber) + ".pgm";
 		PGMWriter<ImageAdapterExtractor>::exportPGM(outName, extractedImage);

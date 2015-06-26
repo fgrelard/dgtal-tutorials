@@ -136,7 +136,7 @@ int main( int  argc, char**  argv )
       RealPoint p( (*it)[ 0 ], (*it)[ 1 ], (*it)[2] );
       RealVector n2 = evec.column( 1 );
       n2*=size;
-      std::cout << evec.column(0) << std::endl;      
+      //std::cout << evec.column(0) << std::endl;      
       DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(domain3Dyup, p, evec.column(0), IMAGE_PATCH_WIDTH);
       ImageAdapterExtractor extractedImage(sliceImageVol, domainImage2D, embedder, idV);
       std::string outName;
@@ -144,15 +144,15 @@ int main( int  argc, char**  argv )
       sliceNumber++;
       GenericWriter<ImageAdapterExtractor>::exportFile(outName, extractedImage);
 
-      // viewer.setLineColor(Color::Red);
-      // viewer.addLine(p+n, p-n, 0.1);
-      // viewer.setLineColor(Color::Green);
-      // viewer.addLine(p+n2, p-n2, 0.1);
+      viewer.setLineColor(Color::Red);
+	  viewer.addLine(p+n, p-n, 0.1);
+	  viewer.setLineColor(Color::Green);
+	  viewer.addLine(p+n2, p-n2, 0.1);
       viewer.setLineColor(Color::Red);
       viewer.setFillColor(Color::Red);
       viewer.setFillTransparency(150);
 	  if (i%20 == 0) {
-		  viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
+		  //viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
 	  }
 	  i++;
     }
