@@ -134,6 +134,7 @@ int main( int  argc, char**  argv )
 	typedef Pencil<Point, Tangent, RealPoint> Pencil;
 	typedef DGtal::ConstImageAdapter<Image,Z2i::Domain,DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain>, Image::Value, DGtal::functors::Identity> ImageAdapterExtractor;
 	typedef WeightedPoint<Z3i::Point> WeightedPoint;
+	typedef MetricAdjacency<Space, 3> MetricAdjacency;
 	
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
@@ -231,8 +232,6 @@ int main( int  argc, char**  argv )
 		})->myPoint;
 		const double size = 20.0; // size of displayed normals
 
-
-
   
 	Metric l2;
 	VCM vcm( R, ceil( r ), l2, true );
@@ -251,21 +250,20 @@ int main( int  argc, char**  argv )
 	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
 									  DGtal::Z2i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH));
 	DGtal::functors::Identity idV;
-	int i = 0;
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
-	
-   
-	
+
+	int i = 0, cpt = 0;
 	trace.beginBlock("Computing skeleton");
 	while (processedPoints.size() < setVolume.size())
 	{
 		// if (processedPoints.find(*it) != processedPoints.end())
 		// 	continue;
-
+		
+		i++;
 		processedPoints.insert(currentPoint);
 	
 		trace.progressBar(processedPoints.size(), setVolume.size());
-
+		double radius = R;
 		if (vm.count("skeleton")) {
 			Pencil closestPointToCurrent = *min_element(tangents.begin(), tangents.end(), [&](const Pencil& one, const Pencil& two) {
 					return Z3i::l2Metric(one.getPoint(), currentPoint) < Z3i::l2Metric(two.getPoint(), currentPoint);
@@ -274,7 +272,7 @@ int main( int  argc, char**  argv )
 			DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain> embedder(domain3Dyup, closestPointToCurrent.getPoint(), closestPointToCurrent.getTangent(), IMAGE_PATCH_WIDTH);
 			ImageAdapterExtractor extractedImage(volume, domainImage2D, embedder, idV);
 			extractedImage.setDefaultValue(0);
-			double radius  = SliceUtils::computeRadiusFromImage(extractedImage, thresholdMin, thresholdMax);
+			radius  = SliceUtils::computeRadiusFromImage(extractedImage, thresholdMin, thresholdMax);
 			radius += 2;
 			if (radius > 0) {
 				vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
@@ -310,39 +308,40 @@ int main( int  argc, char**  argv )
 		Z3i::DigitalSet connectedComponent3D = project2DSetIn3D(connectedComponent, domainVolume, embedderVCM);
 		Z2i::Point centerOfMass = extractCenterOfMass(connectedComponent);
 		Z3i::Point centerOfMassEmbedded = embedderVCM(centerOfMass);
-		
+		Z3i::Point discreteNormal(round(normal[0]), round(normal[1]), round(normal[2]));
 
-		int cpt=0;
+		Z3i::Point orthogonalToDiscrete1(-discreteNormal[1], discreteNormal[0], 0);
+		Z3i::Point orthogonalToDiscrete2(-discreteNormal[2], 0, discreteNormal[0]);
+		Z3i::Point orthogonalToDiscrete3(0, -discreteNormal[2], discreteNormal[1]);
+		
 		for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
-			if (processedPoints.find(*it) != processedPoints.end())
-				cpt++;
 			processedPoints.insert(*it);
-			//viewer << CustomColors3D(Color(0,200,0,10), Color(0,200,0,10)) << *it;
 		}
-		if (centerOfMass != Z2i::Point()) {
+		if (centerOfMass != Z2i::Point() && cpt < 2) {
 			skeletonPoints.insert(centerOfMassEmbedded);
 			viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMassEmbedded;
+			viewer << Viewer3D<>::updateDisplay;
+			qApp->processEvents();
 		}
 
-		if (processedPoints.size() / setVolume.size() == 0.6) {
-			set<Point> pointsLeft;
-			set_difference(setVolume.begin(), setVolume.end(),
-						   processedPoints.begin(), processedPoints.end(),
-						   inserter(pointsLeft, pointsLeft.end()));
-			for (auto it = pointsLeft.begin(), ite = pointsLeft.end(); it != ite; ++it) {
-				viewer << CustomColors3D(Color::Green, Color::Green) << *it;
+		if ((processedPoints.size() * 1.0) / setVolume.size() >= 0.7) {
+			for (auto it = processedPoints.begin(), ite = processedPoints.end(); it != ite; ++it) {
+				viewer << CustomColors3D(Color::Red, Color::Red) << *it;
 			}
-						   
+			break;
 		}
-		
-		viewer << Viewer3D<>::updateDisplay;
-		qApp->processEvents();
 
-	   
-		currentPoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
-				Point p = wp.myPoint;
-				return (processedPoints.find(p) == processedPoints.end());
-			})->myPoint;
+		Z3i::Point putativePoint = currentPoint + discreteNormal;
+		if (putativePoint == currentPoint || setVolume.find(putativePoint) == setVolume.end() || processedPoints.find(putativePoint) != processedPoints.end()) {
+			putativePoint = currentPoint - discreteNormal;
+			if (putativePoint == currentPoint || setVolume.find(putativePoint) == setVolume.end() || processedPoints.find(putativePoint) != processedPoints.end()) {
+				putativePoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
+						Point p = wp.myPoint;
+						return (processedPoints.find(p) == processedPoints.end());
+					})->myPoint;
+			}
+		}
+		currentPoint = putativePoint;
 		
 		// if (processedPoints.size() == setSurface.size())
 		// 	break;
