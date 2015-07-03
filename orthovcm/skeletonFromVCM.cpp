@@ -29,7 +29,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 #include <iostream>
-#include <thread>
+#include <queue>
 #include <QtGui/qapplication.h>
 #include "DGtal/base/Common.h"
 #include "DGtal/helpers/StdDefs.h"
@@ -210,8 +210,8 @@ int main( int  argc, char**  argv )
 		tangents = TangentUtils::orthogonalPlanesWithTangents<Pencil>(vPoints.begin(), vPoints.end());
 	}
 	
-	set<Point> processedPoints;
-	set<Point> skeletonPoints;
+	Z3i::DigitalSet processedPoints(domainVolume);
+	Z3i::DigitalSet skeletonPoints(domainVolume);
    
 	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer; 
 	Binarizer binarizer(volume, thresholdMin-1, thresholdMax);
@@ -252,14 +252,14 @@ int main( int  argc, char**  argv )
 	DGtal::functors::Identity idV;
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 
-	int i = 0, cpt = 0;
+	int i = 0;
 	trace.beginBlock("Computing skeleton");
-	while (processedPoints.size() < setVolume.size())
+	
+	while (setVolume.size() != processedPoints.size())
 	{
 		// if (processedPoints.find(*it) != processedPoints.end())
 		// 	continue;
 		
-		i++;
 		processedPoints.insert(currentPoint);
 	
 		trace.progressBar(processedPoints.size(), setVolume.size());
@@ -309,49 +309,62 @@ int main( int  argc, char**  argv )
 		Z2i::Point centerOfMass = extractCenterOfMass(connectedComponent);
 		Z3i::Point centerOfMassEmbedded = embedderVCM(centerOfMass);
 		Z3i::Point discreteNormal(round(normal[0]), round(normal[1]), round(normal[2]));
+		
 
-		Z3i::Point orthogonalToDiscrete1(-discreteNormal[1], discreteNormal[0], 0);
-		Z3i::Point orthogonalToDiscrete2(-discreteNormal[2], 0, discreteNormal[0]);
-		Z3i::Point orthogonalToDiscrete3(0, -discreteNormal[2], discreteNormal[1]);
 		
 		for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
 			processedPoints.insert(*it);
 		}
-		if (centerOfMass != Z2i::Point() && cpt < 2) {
+		if (centerOfMass != Z2i::Point()) {
 			skeletonPoints.insert(centerOfMassEmbedded);
 			viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMassEmbedded;
 			viewer << Viewer3D<>::updateDisplay;
 			qApp->processEvents();
 		}
 
-		if ((processedPoints.size() * 1.0) / setVolume.size() >= 0.7) {
-			for (auto it = processedPoints.begin(), ite = processedPoints.end(); it != ite; ++it) {
-				viewer << CustomColors3D(Color::Red, Color::Red) << *it;
-			}
-			break;
+		//viewer << CustomColors3D(Color::Green, Color::Green) << currentPoint;
+		
+		vector<Point> neighbors26;
+		back_insert_iterator<vector<Point>> iterator(neighbors26);
+
+		vector<Point> complementProcessedPoints;
+		back_insert_iterator<vector<Point>> itComplement(complementProcessedPoints);
+		processedPoints.computeComplement(itComplement);
+		Z3i::DigitalSet complement(domainVolume);
+		for (auto it = complementProcessedPoints.begin(), ite = complementProcessedPoints.end();
+			 it != ite; ++it) {
+			complement.insert(*it);
 		}
 
-		Z3i::Point putativePoint = currentPoint + discreteNormal;
-		if (putativePoint == currentPoint || setVolume.find(putativePoint) == setVolume.end() || processedPoints.find(putativePoint) != processedPoints.end()) {
-			putativePoint = currentPoint - discreteNormal;
-			if (putativePoint == currentPoint || setVolume.find(putativePoint) == setVolume.end() || processedPoints.find(putativePoint) != processedPoints.end()) {
-				putativePoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
-						Point p = wp.myPoint;
-						return (processedPoints.find(p) == processedPoints.end());
-					})->myPoint;
-			}
-		}
-		currentPoint = putativePoint;
+		functors::BinaryPointPredicate<Z3i::DigitalSet, Z3i::DigitalSet, functors::AndBoolFct2> predBinary(setVolume, complement, functors::AndBoolFct2());
 		
+		for (auto it = processedPoints.begin(), ite = processedPoints.end();
+			 it != ite; ++it) {
+			MetricAdjacency::writeNeighbors(iterator, *it, predBinary);
+		}
+		trace.info() << neighbors26.size() << endl;
+
+		if (i ==2) {
+		for (auto it = neighbors26.begin(), ite = neighbors26.end(); it != ite; ++it) {
+			viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
+		}
+		break;
+		}
+		currentPoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
+				Point p = wp.myPoint;
+				return (find(neighbors26.begin(), neighbors26.end(), p) != neighbors26.end());
+			})->myPoint;
+		
+		i++;
 		// if (processedPoints.size() == setSurface.size())
 		// 	break;
 	}
 	trace.endBlock();
-	for (auto it = processedPoints.begin(), ite = processedPoints.end(); it != ite; ++it) {
-		//	viewer << CustomColors3D(Color::Red, Color::Red) << *it;
-	}
 	
-		
+	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
+		viewer << CustomColors3D(Color(0,0,120,10), Color(0,0,120,10)) << *it;
+	}
+
 	
 	Image outImage(volume.domain());
 	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
