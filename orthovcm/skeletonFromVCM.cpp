@@ -326,17 +326,10 @@ int main( int  argc, char**  argv )
 		
 		vector<Point> neighbors26;
 		back_insert_iterator<vector<Point>> iterator(neighbors26);
-
-		vector<Point> complementProcessedPoints;
-		back_insert_iterator<vector<Point>> itComplement(complementProcessedPoints);
-		processedPoints.computeComplement(itComplement);
-		Z3i::DigitalSet complement(domainVolume);
-		for (auto it = complementProcessedPoints.begin(), ite = complementProcessedPoints.end();
-			 it != ite; ++it) {
-			complement.insert(*it);
-		}
-
-		functors::BinaryPointPredicate<Z3i::DigitalSet, Z3i::DigitalSet, functors::AndBoolFct2> predBinary(setVolume, complement, functors::AndBoolFct2());
+		
+		typedef functors::NotPointPredicate<Z3i::DigitalSet> NotPointPredicate;
+		NotPointPredicate pred2(processedPoints);
+		functors::BinaryPointPredicate<Z3i::DigitalSet, NotPointPredicate, functors::AndBoolFct2> predBinary(setVolume, pred2, functors::AndBoolFct2());
 		
 		for (auto it = processedPoints.begin(), ite = processedPoints.end();
 			 it != ite; ++it) {
