@@ -30,6 +30,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include <iostream>
 #include <queue>
+#include <iterator>
 #include <QtGui/qapplication.h>
 #include "DGtal/base/Common.h"
 #include "DGtal/helpers/StdDefs.h"
@@ -48,6 +49,7 @@
 #include "DGtal/io/writers/GenericWriter.h"
 #include "DGtal/graph/DepthFirstVisitor.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
+#include "DGtal/kernel/sets/DigitalSetInserter.h"
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
@@ -60,6 +62,7 @@
 #include "geometry/PointUtil.h"
 #include "geometry/WeightedPoint.h"
 #include "surface/SurfaceUtils.h"
+#include "WeightedPointCount.h"
 ///////////////////////////////////////////////////////////////////////////////
 
 using namespace std;
@@ -102,15 +105,98 @@ Z3i::DigitalSet project2DSetIn3D(const Z2i::DigitalSet& set, const Z3i::Domain& 
 	return set3D;
 }
 
-Z2i::Point extractCenterOfMass(const Z2i::DigitalSet& set) {
+Z2i::RealPoint extractCenterOfMass(const Z2i::DigitalSet& set) {
 	if (set.size() != 0) {
 		typedef ImageSelector<Z2i::Domain, unsigned char>::Type Image2D;
 		Image2D image2D = ImageFromSet<Image2D>::create(set, 150);
-		Z2i::Point centerOfMass = SliceUtils::centerOfMass(image2D);
+		Z2i::RealPoint centerOfMass = SliceUtils::centerOfMass(image2D);
 		return centerOfMass;
 	}
 	else
-		return Z2i::Point();
+		return Z2i::RealPoint();
+}
+
+Z3i::DigitalSet computePointsBelowPlane(const Z3i::DigitalSet& volume, const Z3i::RealPoint& normal, const Z3i::Point& center) {
+	Z3i::DigitalSet inferiorPoints(volume.domain());
+	double d = -(-normal[0] * center[0] - normal[1] * center[1] - normal[2] * center[2]);
+	for (auto it = volume.begin(), ite = volume.end(); it!=ite; ++it) {
+		double valueToCheckForPlane = (*it)[0] * normal[0] + (*it)[1] * normal[1] + (*it)[2] * normal[2];
+		if (valueToCheckForPlane < d)
+			inferiorPoints.insert(*it);
+	}
+	return inferiorPoints;
+}
+
+set<Z3i::Point> differenceBetweenPlanes(const Z3i::DigitalSet& volume, const Z3i::RealPoint& normalPrevious, const Z3i::Point& centerPrevious,
+										const Z3i::RealPoint& normalNext, const Z3i::Point& centerNext) {
+	Z3i::RealPoint next = normalNext;
+	if (normalPrevious.dot(normalNext) < 0) {
+		next  = -normalNext;
+ 	}
+	Z3i::DigitalSet inferiorPointsPrevious = computePointsBelowPlane(volume, normalPrevious, centerPrevious);
+	Z3i::DigitalSet inferiorPointsNext = computePointsBelowPlane(volume, next, centerNext);
+		
+	set<Z3i::Point> difference;
+	if (inferiorPointsNext.size() > inferiorPointsPrevious.size()) {
+		set_difference(inferiorPointsNext.begin(), inferiorPointsNext.end(),
+					   inferiorPointsPrevious.begin(), inferiorPointsPrevious.end(),
+					   inserter(difference, difference.end()));
+	}
+	else {
+		set_difference(inferiorPointsPrevious.begin(), inferiorPointsPrevious.end(),
+					   inferiorPointsNext.begin(), inferiorPointsNext.end(),
+					   inserter(difference, difference.end()));
+	}
+	return difference;
+}
+
+template <typename WeightedPoint>
+void computeDistanceFromCenterOfMass(set<WeightedPoint*>& weightedSet, const Z3i::RealPoint& centerOfGravity) {
+	
+	Z3i::Point discreteCoG(round(centerOfGravity[0]), round(centerOfGravity[1]), round(centerOfGravity[2]));
+	
+	vector<Z3i::Point> neighbors;
+	back_insert_iterator<vector<Z3i::Point>> iterator(neighbors);
+	MetricAdjacency<Z3i::Space, 3>::writeNeighbors(iterator, discreteCoG);
+
+	double distance_max = 0;
+	double distance_min = numeric_limits<double>::max();
+	vector<WeightedPoint*> neighborWeighted;
+	for (auto& it : weightedSet) {
+		if (find(neighbors.begin(), neighbors.end(), it->myPoint) != neighbors.end()) {
+			double d = sqrt(pow(centerOfGravity[0] - it->myPoint[0], 2) +
+							pow(centerOfGravity[1] - it->myPoint[1], 2) +
+							pow(centerOfGravity[2] - it->myPoint[2], 2));
+			if (d > distance_max) distance_max = d;
+			if (d < distance_min) distance_min = d;
+			neighborWeighted.push_back(it);
+		}
+	}
+	
+
+	for (auto& it : neighborWeighted) {
+		it->myCount++;
+		double d = sqrt(pow(centerOfGravity[0] - it->myPoint[0], 2) +
+						pow(centerOfGravity[1] - it->myPoint[1], 2) +
+						pow(centerOfGravity[2] - it->myPoint[2], 2));
+		it->myWeight += 1- ((d - distance_min) / (distance_max - distance_min));
+	}
+			
+}
+
+Z3i::DigitalSet computeSetOfSimplePoints(const Z3i::DigitalSet& points) {
+	typedef Z3i::Object26_6 ObjectType;
+
+	Z3i::DigitalSet simplePoints(points.domain());
+	ObjectType object(Z3i::dt26_6, points);
+
+	for (auto it = points.begin(), ite = points.end(); it != ite; ++it) {
+		if (object.isSimple(*it)) {
+			simplePoints.insert(*it);
+		}
+	}
+
+	return simplePoints;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -133,8 +219,10 @@ int main( int  argc, char**  argv )
 	typedef MSTTangent<Point> Tangent;
 	typedef Pencil<Point, Tangent, RealPoint> Pencil;
 	typedef DGtal::ConstImageAdapter<Image,Z2i::Domain,DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain>, Image::Value, DGtal::functors::Identity> ImageAdapterExtractor;
+	typedef WeightedPoint<Z3i::RealPoint> WeightedRealPoint;
 	typedef WeightedPoint<Z3i::Point> WeightedPoint;
 	typedef MetricAdjacency<Space, 3> MetricAdjacency;
+	typedef WeightedPointCount<Point> WeightedPointCount;
 	
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
@@ -183,6 +271,11 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet setVolume(domainVolume);
 	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume, 
 												  thresholdMin-1, thresholdMax);
+	set<WeightedPointCount*> setVolumeWeighted;
+	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
+		setVolumeWeighted.insert(new WeightedPointCount(*it));
+	}
+	
 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
 
 	vector<Point> vPoints;
@@ -210,9 +303,9 @@ int main( int  argc, char**  argv )
 		tangents = TangentUtils::orthogonalPlanesWithTangents<Pencil>(vPoints.begin(), vPoints.end());
 	}
 	
-	Z3i::DigitalSet processedPoints(domainVolume);
+	set<WeightedPoint> processedPoints;
 	Z3i::DigitalSet skeletonPoints(domainVolume);
-   
+	
 	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer; 
 	Binarizer binarizer(volume, thresholdMin-1, thresholdMax);
 	typedef DGtal::DistanceTransformation<Space, Binarizer, Z3i::L2Metric> DTL2;
@@ -226,9 +319,11 @@ int main( int  argc, char**  argv )
 			distanceMap.insert(WeightedPoint(*it, value));
 	}
 	
-	Point currentPoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
-			Point p = wp.myPoint;
-			return (processedPoints.find(p) == processedPoints.end());
+	RealPoint currentPoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
+			Point p = wp.myPoint; 
+			return (find_if(processedPoints.begin(), processedPoints.end(), [&](const WeightedPoint& wrp) {
+						return (p == wrp.myPoint);
+					}) == processedPoints.end());
 		})->myPoint;
 		const double size = 20.0; // size of displayed normals
 
@@ -253,14 +348,16 @@ int main( int  argc, char**  argv )
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 
 	int i = 0;
+	
+	Z3i::RealPoint previousNormal;
+	Z3i::Point previousCenter;
+	Z3i::DigitalSet previousConnectedComponent3D(domainVolume);
 	trace.beginBlock("Computing skeleton");
 	
-	while (setVolume.size() != processedPoints.size())
+	while (setVolume.size() > processedPoints.size())
 	{
-		// if (processedPoints.find(*it) != processedPoints.end())
-		// 	continue;
-		
-		processedPoints.insert(currentPoint);
+
+		processedPoints.insert(WeightedPoint(currentPoint, i));
 	
 		trace.progressBar(processedPoints.size(), setVolume.size());
 		double radius = R;
@@ -281,10 +378,9 @@ int main( int  argc, char**  argv )
 		}
 		
 		// Compute VCM and diagonalize it.
-//		viewer << CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< closestPointToCurrent.getPoint();
 		vcm_r = vcm.measure( chi, currentPoint );
 		LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
-		//double feature = eval[1] /  (eval[0] + eval[ 1 ]+  eval[3]);
+
 		// // Display normal
 		RealVector normal = evec.column(0);
 		RealVector n = evec.column( 2 );
@@ -296,7 +392,7 @@ int main( int  argc, char**  argv )
 		viewer.setLineColor(Color::Red);
 		viewer.setFillColor(Color::Red);
 		viewer.setFillTransparency(150);
-		//viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
+		
 	
 		double imageSize = IMAGE_PATCH_WIDTH;
 		DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain> embedderVCM(domain3Dyup, currentPoint, normal, imageSize);
@@ -306,61 +402,158 @@ int main( int  argc, char**  argv )
 		Z2i::Point center(imageSize/2, imageSize/2);
 		Z2i::DigitalSet connectedComponent = extractConnectedComponent(extractedImageVCM, center, thresholdMin, thresholdMax);
 		Z3i::DigitalSet connectedComponent3D = project2DSetIn3D(connectedComponent, domainVolume, embedderVCM);
-		Z2i::Point centerOfMass = extractCenterOfMass(connectedComponent);
-		Z3i::Point centerOfMassEmbedded = embedderVCM(centerOfMass);
+		Z2i::RealPoint centerOfMass = extractCenterOfMass(connectedComponent);
+		Z3i::RealPoint centerOfMassEmbedded = embedderVCM(centerOfMass);
 		Z3i::Point discreteNormal(round(normal[0]), round(normal[1]), round(normal[2]));
 		
+		computeDistanceFromCenterOfMass(setVolumeWeighted, centerOfMassEmbedded);
 
+		bool add = true;
+		set<double> weights;
 		
-		for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
-			processedPoints.insert(*it);
-		}
-		if (centerOfMass != Z2i::Point()) {
+		// for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
+		// 	for (const auto& wp : processedPoints) {
+		// 		if (wp.myPoint == *it) {
+		// 			double weight = wp.myWeight;
+		// 			weights.insert(weight);
+		// 		}
+		// 	}
+		// 	//processedPoints.insert(WeightedPoint(*it, i));
+		// }
+		// if (weights.size() > 4)
+		// 	add = false;
+		// else {
+	    	for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
+		 		processedPoints.insert(WeightedPoint(*it, i));
+		 	}
+		// }
+		
+		if (centerOfMass != Z2i::Point() && add) {
 			skeletonPoints.insert(centerOfMassEmbedded);
+			
+			if (previousNormal != Z3i::RealPoint()) {
+				
+				set<Point> difference = differenceBetweenPlanes(setVolume, previousNormal, previousCenter,
+																normal, currentPoint);
+				set<Point> unionPlanes;
+				set_union(connectedComponent3D.begin(), connectedComponent3D.end(),
+						  previousConnectedComponent3D.begin(), previousConnectedComponent3D.end(),
+						  inserter(unionPlanes, unionPlanes.end()));
+				Domain boundingBox = PointUtil::computeBoundingBox<Domain>(unionPlanes);
+				set<Point> differenceLocal;
+				for (auto it = difference.begin(), ite = difference.end(); it != ite; ++it) {
+					if (boundingBox.isInside(*it)) {
+						differenceLocal.insert(*it);
+					}
+				}
+
+				for (auto it = differenceLocal.begin(), ite = differenceLocal.end(); it != ite; ++it) {
+				   	processedPoints.insert(WeightedPoint(*it, i));
+				}
+			}
 			viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMassEmbedded;
 			viewer << Viewer3D<>::updateDisplay;
 			qApp->processEvents();
 		}
 
-		//viewer << CustomColors3D(Color::Green, Color::Green) << currentPoint;
-		
-		vector<Point> neighbors26;
-		back_insert_iterator<vector<Point>> iterator(neighbors26);
-		
-		typedef functors::NotPointPredicate<Z3i::DigitalSet> NotPointPredicate;
-		NotPointPredicate pred2(processedPoints);
-		functors::BinaryPointPredicate<Z3i::DigitalSet, NotPointPredicate, functors::AndBoolFct2> predBinary(setVolume, pred2, functors::AndBoolFct2());
-		
-		for (auto it = processedPoints.begin(), ite = processedPoints.end();
-			 it != ite; ++it) {
-			MetricAdjacency::writeNeighbors(iterator, *it, predBinary);
-		}
-		trace.info() << neighbors26.size() << endl;
+		if (normal.dot(previousNormal) < 0)
+			normal = -normal;
 
-		if (i ==2) {
-		for (auto it = neighbors26.begin(), ite = neighbors26.end(); it != ite; ++it) {
-			viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
-		}
-		break;
-		}
-		currentPoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
-				Point p = wp.myPoint;
-				return (find(neighbors26.begin(), neighbors26.end(), p) != neighbors26.end());
-			})->myPoint;
-		
-		i++;
-		// if (processedPoints.size() == setSurface.size())
-		// 	break;
+		previousNormal = normal;
+		previousCenter = currentPoint;
+
+  		
+		currentPoint = centerOfMassEmbedded + normal;
+		if (find_if(processedPoints.begin(), processedPoints.end(), [&](const WeightedPoint& wrp) {
+					return (p == wrp.myPoint);
+				}) != processedPoints.end()) {
+			currentPoint = centerOfMassEmbedded - normal;
+			if (find_if(processedPoints.begin(), processedPoints.end(), [&](const WeightedPoint& wrp) {
+						return (p == wrp.myPoint);
+					}) != processedPoints.end()) {
+				previousNormal = Z3i::RealPoint();
+				currentPoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
+						Point p = wp.myPoint; 
+						return (find_if(processedPoints.begin(), processedPoints.end(), [&](const WeightedPoint& wrp) {
+									return (p == wrp.myPoint);
+								}) == processedPoints.end());
+					})->myPoint;
+			}
+		}	   	 
+  		i++;
 	}
 	trace.endBlock();
+	
+	for (auto it = processedPoints.begin(), ite = processedPoints.end(); it != ite; ++it) {
+		viewer << CustomColors3D(Color(150,1,1,20), Color(150,1,1,20)) << it->myPoint;
+	}
+	
+	Z3i::DigitalSet simplePoints = computeSetOfSimplePoints(skeletonPoints);
+	Z3i::DigitalSet notSimplePoints(simplePoints.domain());
+	set_difference(skeletonPoints.begin(), skeletonPoints.end(),
+				   simplePoints.begin(), simplePoints.end(),
+				   DigitalSetInserter<Z3i::DigitalSet>(notSimplePoints));
+	for (auto it = simplePoints.begin(), ite = simplePoints.end(); it != ite; ++it) {
+		if (notSimplePoints.find(*it) != notSimplePoints.end()) continue;
+		Point current = *it;
+		Point pointToKeep = current;
+		vector<Point> neighbors;
+		back_insert_iterator<vector<Point>> iterator(neighbors);
+		MetricAdjacency::writeNeighbors(iterator, *it, skeletonPoints);
+
+		Point outOfDomain = notSimplePoints.domain().upperBound() + Point::diagonal();
+		Point notSimplePoint(outOfDomain);
+		for (auto itNeighbors = neighbors.begin(), itNeighborsEnd = neighbors.end();
+			 itNeighbors != itNeighborsEnd; ++itNeighbors) {
+			Point neighbor = *itNeighbors;
+			if (notSimplePoints.find(neighbor) != notSimplePoints.end()) {
+				notSimplePoint = neighbor;
+				break;
+			}				
+		}
+
+		if (notSimplePoint == outOfDomain) continue;
+		
+		for (auto itNeighbors = neighbors.begin(), itNeighborsEnd = neighbors.end();
+			 itNeighbors != itNeighborsEnd; ++itNeighbors) {
+			if (*itNeighbors == notSimplePoint) continue;
+			if (PointUtil::areNeighbors(notSimplePoint, *itNeighbors)) {
+				Point neighbor = *itNeighbors;
+				double weightCurrent = (*find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wp) {
+							return wp->myPoint == current;
+						}))->getWeightedValue();
+
+				double weightNeighbor = (*find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wp) {
+							return wp->myPoint == neighbor;
+						}))->getWeightedValue();
+				if (weightCurrent < weightNeighbor)
+					pointToKeep = neighbor;	
+			}
+		}
+		if (notSimplePoint != outOfDomain)
+			notSimplePoints.insert(pointToKeep);
+	}
+
+	for (auto it = notSimplePoints.begin(), ite = notSimplePoints.end(); it!=ite; ++it) {
+	   	//viewer << CustomColors3D(Color::White, Color::White) << *it;
+	}
+	
+	// typedef HueShadeColorMap<double, 2 > ColorMap;
+    // const ColorMap colormap(0., 1.);
+	// for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
+	// 	if (skeletonPoints.find((*it)->myPoint) != skeletonPoints.end()) {
+	// 		double value = (*it)->myWeight / (*it)->myCount;
+	// 		viewer << CustomColors3D(colormap(value), colormap(value)) << (*it)->myPoint;
+	// 	}
+	// }
 	
 	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
 		viewer << CustomColors3D(Color(0,0,120,10), Color(0,0,120,10)) << *it;
 	}
-
+	
 	
 	Image outImage(volume.domain());
-	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
+	DGtal::imageFromRangeAndValue(notSimplePoints.begin(), notSimplePoints.end(), outImage, 10);
 	VolWriter<Image>::exportVol(outFilename, outImage);
 	
 	viewer << Viewer3D<>::updateDisplay;

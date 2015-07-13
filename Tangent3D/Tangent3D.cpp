@@ -241,13 +241,28 @@ int main(int argc, char **argv)
 		}
 
 	}
+
+	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;  
+	typedef GreedySegmentation<SegmentComputer> Segmentation;
+
+	SegmentComputer algo;
+	Segmentation s(vPoints.begin(), vPoints.end(), algo);
+	s.setMode("MostCentered++");
+	typename Segmentation::SegmentComputerIterator i = s.begin();
+	typename Segmentation::SegmentComputerIterator end = s.end();
+	for (; i != end; ++i) {
+		SegmentComputer currentSegmentComputer(*i); 
+		viewer << CustomColors3D(Color::Green, Color::Green);
+	   	viewer << currentSegmentComputer;
+	}
 	
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	for (auto it = vPoints.begin(); it != vPoints.end(); ++it) {
 		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);
 	}
 
-
+	
+	
 	int pos = 63;
 	viewer << CustomColors3D(Color::Red, Color::Red);
 	viewer << tangents[pos].getPoint();

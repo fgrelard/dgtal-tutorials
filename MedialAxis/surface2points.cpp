@@ -126,7 +126,7 @@ void checkPointForMedialAxis(ImageFct& imageFct, vector<WeightedPoint>& vPoints 
 
 
 template <typename Point, typename WeightedPoint>
-void checkPointForMedialAxisNaive( vector<WeightedPoint>& vPoints, const Point& p, float d )
+void checkPointForMedialAxisNaive(vector<WeightedPoint>& vPoints, const Point& p, float d )
 {
 	typedef Z3i::Space Space;
 	typedef Ball3D<Space> Ball3d;
@@ -146,6 +146,41 @@ void checkPointForMedialAxisNaive( vector<WeightedPoint>& vPoints, const Point& 
 	}
 	if (add) {
 		vPoints.push_back(WeightedPoint( p, d ));
+	}
+}
+
+template <typename ImageFct, typename Point, typename WeightedPoint>
+void checkPointForMedialAxisBallIncluded(const ImageFct& imageFct, vector<WeightedPoint>& vPoints, set<Point>& deletedPoints, const Point& p, float d, Viewer3D<>& viewer )
+{
+	if (deletedPoints.find(p) != deletedPoints.end()) return;
+	typedef Z3i::Space Space;
+	
+	Point center = p;
+	double radius = d;
+	bool add = true;
+	for (auto it = imageFct.domain().begin(), ite = imageFct.domain().end(); it != ite; ++it) {
+		double otherRadius = imageFct(*it);
+		if (otherRadius <= 0) continue;
+		if (deletedPoints.find(*it) != deletedPoints.end()) continue;
+		if (center == *it) continue;
+		
+		Point otherCenter = *it;
+		double deltaRadius = max(radius, otherRadius) - min(radius, otherRadius);
+		double deltaCenters = Z3i::l2Metric(center, otherCenter);
+		if (round(deltaCenters) <= round(deltaRadius) && radius < otherRadius) {
+			deletedPoints.insert(center);
+			add = false;
+			break;
+		} else if (round(deltaCenters) <= round(deltaRadius) && radius >= otherRadius) {
+			deletedPoints.insert(otherCenter);
+		}
+	}
+	trace.info() << deletedPoints.size() << endl;
+	if (add) {
+		vPoints.push_back(WeightedPoint( p, d ));
+		viewer << p;
+		viewer << Viewer3D<>::updateDisplay;
+		qApp->processEvents();
 	}
 }
 
@@ -328,8 +363,9 @@ int main( int argc, char** argv )
 
 	int nb = pSet.size();
 	int i = 0;
+	set<Point> deletedPoints;
 	for (set<WeightedPoint>::iterator itE = pSet.end(); it != itE; ++it, ++i) {
-	    checkPointForMedialAxis(dtL2, vPoints, (*it).p, (*it).d);
+		checkPointForMedialAxis(dtL2, vPoints,(*it).p, (*it).d);
 		trace.progressBar(i, nb);
 	}
 	trace.endBlock();

@@ -33,7 +33,7 @@ namespace SliceUtils {
 	Vector computeNormalFromCovarianceMatrix(const std::vector<Point>& points);
 
 	template <typename Image2D>
-	Z2i::Point centerOfMass(const Image2D& image);
+	Z2i::RealPoint centerOfMass(const Image2D& image);
 	
 	template <typename Pencil, typename Image>
 	void slicesFromPlanes(Viewer3D<>&, const std::vector<Pencil> &, const Image&, std::string);
@@ -195,7 +195,7 @@ double SliceUtils::computeRadiusFromImage(const ImageAdapter& image, int thresho
 }
 
 template <typename Image2D>
-Z2i::Point SliceUtils::centerOfMass(const Image2D& image) {
+Z2i::RealPoint SliceUtils::centerOfMass(const Image2D& image) {
 	double m00 = 0;
 	double m10 = 0;
 	double m01 = 0;
@@ -207,9 +207,9 @@ Z2i::Point SliceUtils::centerOfMass(const Image2D& image) {
 		m01 += current[1] * image(current);
 	}
 	if (m00 != 0) 
-		return Z2i::Point(m10/m00, m01/m00);
+		return Z2i::RealPoint(m10/m00, m01/m00);
 	else
-		return Z2i::Point();
+		return Z2i::RealPoint();
 }
 
 /**

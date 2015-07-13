@@ -10,11 +10,11 @@
 
 namespace PointUtil {
 	template <typename Point>
-	bool areAlmostSimilar(const Point& point, const Point& other);
+	bool areNeighbors(const Point& point, const Point& other);
 
 
-	template <typename Domain, typename Point>
-	Domain computeBoundingBox(const std::vector<Point>& points);
+	template <typename Domain, typename Container>
+	Domain computeBoundingBox(const Container& points);
 
 
 	/*
@@ -32,7 +32,7 @@ namespace PointUtil {
 }
 
 template <typename Point>
-bool PointUtil::areAlmostSimilar(const Point& point, const Point& other) {
+bool PointUtil::areNeighbors(const Point& point, const Point& other) {
 	typename Point::Scalar otherx = other[0];
 	typename Point::Scalar othery = other[1];
 	typename Point::Scalar otherz = other[2];
@@ -47,12 +47,12 @@ bool PointUtil::areAlmostSimilar(const Point& point, const Point& other) {
 	return sameX && sameY && sameZ;
 }
 
-template < typename Domain, typename Point>
-Domain PointUtil::computeBoundingBox(const std::vector<Point> & points) {
+template <typename Domain, typename Container>
+Domain PointUtil::computeBoundingBox(const Container & points) {
 	int maximum = std::numeric_limits<int>::max();
 	int min_x = maximum, min_y = maximum, min_z = maximum;
 	int max_x = -maximum, max_y = -maximum, max_z = -maximum;
-	for (const Point & point : points) {
+	for (const auto & point : points) {
 		min_x = point[0] < min_x ? point[0] : min_x;
 		min_y = point[1] < min_y ? point[1] : min_y;
 		min_z = point[2] < min_z ? point[2] : min_z;
