@@ -69,9 +69,17 @@ using namespace std;
 using namespace DGtal;
 namespace po = boost::program_options;
 
+class LabelledPoint : public WeightedPoint<Z3i::Point> {
+	typedef WeightedPoint<Z3i::Point> Base;
+	using Base::Base;
+	friend bool operator<(const LabelledPoint& it, const LabelledPoint& other) {
+		return (it.myPoint < other.myPoint);
+	}
+};
+
 template <typename Image>
 Z2i::DigitalSet extractConnectedComponent(const Image& image, const Z2i::Point& referencePoint, int thresholdMin,
-	int thresholdMax) {
+										  int thresholdMax) {
 	typedef ImageSelector<Z2i::Domain, unsigned char>::Type Image2D;
 	typedef Z2i::Object8_4 ObjectType;
 	
@@ -303,7 +311,7 @@ int main( int  argc, char**  argv )
 		tangents = TangentUtils::orthogonalPlanesWithTangents<Pencil>(vPoints.begin(), vPoints.end());
 	}
 	
-	set<WeightedPoint> processedPoints;
+	set<LabelledPoint> processedPoints;
 	Z3i::DigitalSet skeletonPoints(domainVolume);
 	
 	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer; 
@@ -319,13 +327,8 @@ int main( int  argc, char**  argv )
 			distanceMap.insert(WeightedPoint(*it, value));
 	}
 	
-	RealPoint currentPoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
-			Point p = wp.myPoint; 
-			return (find_if(processedPoints.begin(), processedPoints.end(), [&](const WeightedPoint& wrp) {
-						return (p == wrp.myPoint);
-					}) == processedPoints.end());
-		})->myPoint;
-		const double size = 20.0; // size of displayed normals
+	RealPoint currentPoint = distanceMap.begin()->myPoint;
+	const double size = 20.0; // size of displayed normals
 
   
 	Metric l2;
@@ -356,8 +359,7 @@ int main( int  argc, char**  argv )
 	
 	while (setVolume.size() > processedPoints.size())
 	{
-
-		processedPoints.insert(WeightedPoint(currentPoint, i));
+		processedPoints.insert(LabelledPoint(currentPoint, i));
 	
 		trace.progressBar(processedPoints.size(), setVolume.size());
 		double radius = R;
@@ -411,22 +413,17 @@ int main( int  argc, char**  argv )
 		bool add = true;
 		set<double> weights;
 		
-		// for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
-		// 	for (const auto& wp : processedPoints) {
-		// 		if (wp.myPoint == *it) {
-		// 			double weight = wp.myWeight;
-		// 			weights.insert(weight);
-		// 		}
-		// 	}
-		// 	//processedPoints.insert(WeightedPoint(*it, i));
-		// }
-		// if (weights.size() > 4)
-		// 	add = false;
-		// else {
-	    	for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
-		 		processedPoints.insert(WeightedPoint(*it, i));
-		 	}
-		// }
+		for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
+			for (const auto& wp : processedPoints) {
+				if (wp.myPoint == *it) {
+					double weight = wp.myWeight;
+					weights.insert(weight);
+				}
+			}
+			processedPoints.insert(LabelledPoint(*it, i));
+		}
+		if (weights.size() > 2)
+			add = false;
 		
 		if (centerOfMass != Z2i::Point() && add) {
 			skeletonPoints.insert(centerOfMassEmbedded);
@@ -448,7 +445,7 @@ int main( int  argc, char**  argv )
 				}
 
 				for (auto it = differenceLocal.begin(), ite = differenceLocal.end(); it != ite; ++it) {
-				   	processedPoints.insert(WeightedPoint(*it, i));
+				   	processedPoints.insert(LabelledPoint(*it, i));
 				}
 			}
 			viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMassEmbedded;
@@ -464,17 +461,17 @@ int main( int  argc, char**  argv )
 
   		
 		currentPoint = centerOfMassEmbedded + normal;
-		if (find_if(processedPoints.begin(), processedPoints.end(), [&](const WeightedPoint& wrp) {
+		if (find_if(processedPoints.begin(), processedPoints.end(), [&](const LabelledPoint& wrp) {
 					return (p == wrp.myPoint);
 				}) != processedPoints.end()) {
 			currentPoint = centerOfMassEmbedded - normal;
-			if (find_if(processedPoints.begin(), processedPoints.end(), [&](const WeightedPoint& wrp) {
+			if (find_if(processedPoints.begin(), processedPoints.end(), [&](const LabelledPoint& wrp) {
 						return (p == wrp.myPoint);
 					}) != processedPoints.end()) {
 				previousNormal = Z3i::RealPoint();
-				currentPoint = find_if(distanceMap.begin(), distanceMap.end(), [&](const WeightedPoint& wp) {
+				currentPoint = find_if((distanceMap.begin()), distanceMap.end(), [&](const WeightedPoint& wp) {
 						Point p = wp.myPoint; 
-						return (find_if(processedPoints.begin(), processedPoints.end(), [&](const WeightedPoint& wrp) {
+						return (find_if(processedPoints.begin(), processedPoints.end(), [&](const LabelledPoint& wrp) {
 									return (p == wrp.myPoint);
 								}) == processedPoints.end());
 					})->myPoint;
@@ -557,7 +554,7 @@ int main( int  argc, char**  argv )
 	VolWriter<Image>::exportVol(outFilename, outImage);
 	
 	viewer << Viewer3D<>::updateDisplay;
-	 application.exec();
+	application.exec();
 	return 0;
 }
 //                                                                          //
