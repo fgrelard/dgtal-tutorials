@@ -5,6 +5,7 @@ template <typename Point>
 class WeightedPoint {
 public:
 	WeightedPoint() : myPoint(), myWeight(0.) {}
+	WeightedPoint(const Point& aPoint) : myPoint(aPoint), myWeight(0) {}
 	WeightedPoint( const Point& aPoint, double aWeight ) : myPoint(aPoint), myWeight(aWeight) {}
 	friend bool operator<(const WeightedPoint& it, const WeightedPoint& other) {
 		if (it.myWeight >= other.myWeight)

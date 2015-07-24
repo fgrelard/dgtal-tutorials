@@ -5,9 +5,13 @@
 
 template <typename Point>
 class WeightedPointCount : public WeightedPoint<Point> {
+	typedef WeightedPoint<Point> Base;
 public:
-	WeightedPointCount(const Point& aPoint) : WeightedPoint<Point>(aPoint, 0) {}
+	using Base::Base;
 	double getWeightedValue() { return WeightedPoint<Point>::myWeight / myCount; }
+	friend bool operator<(const WeightedPointCount& it, const WeightedPointCount& other) {
+		return (it.myWeight >= other.myWeight);
+	}
 public:
 	int myCount = 0;
 };

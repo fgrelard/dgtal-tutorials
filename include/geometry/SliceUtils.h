@@ -34,6 +34,9 @@ namespace SliceUtils {
 
 	template <typename Image2D>
 	Z2i::RealPoint centerOfMass(const Image2D& image);
+
+	template <typename Image3D>
+	Z3i::RealPoint centerOfMass3D(const Image3D& image); 
 	
 	template <typename Pencil, typename Image>
 	void slicesFromPlanes(Viewer3D<>&, const std::vector<Pencil> &, const Image&, std::string);
@@ -212,6 +215,26 @@ Z2i::RealPoint SliceUtils::centerOfMass(const Image2D& image) {
 		return Z2i::RealPoint();
 }
 
+template <typename Image3D>
+Z3i::RealPoint SliceUtils::centerOfMass3D(const Image3D& image) {
+	double m000 = 0;
+	double m100 = 0;
+	double m010 = 0;
+	double m001 = 0;
+
+    for (auto it = image.domain().begin(), ite = image.domain().end(); it != ite; ++it) {
+		Z3i::Point current = *it;
+		m000 += image(current);
+		m100 += current[0] * image(current);
+		m010 += current[1] * image(current);
+		m001 += current[2] * image(current);
+	}
+	if (m000 != 0) 
+		return Z3i::RealPoint(m100/m000, m010/m000, m001/m000);
+	else
+		return Z3i::RealPoint();
+
+}
 /**
  * Utility function designed at viewing and saving the 2D extracted slices
  */
