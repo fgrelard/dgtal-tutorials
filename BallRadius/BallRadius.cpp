@@ -150,7 +150,7 @@ vector<Point> surfacePointsOnPaths(const map<Surfel, Point>& surfelToPoint, cons
 template <typename Point>
 bool isAlmostSurfacePoint(const Point& point, const set<Point>& surfacePointSet) {
 	for (auto it = surfacePointSet.begin(), ite = surfacePointSet.end(); it != ite; ++it) {
-		if (PointUtil::areAlmostSimilar(*it, point)) return true;
+		if (PointUtil::areNeighbors(*it, point)) return true;
 	}
 	return false;
 }
@@ -183,7 +183,7 @@ bool checkSymmetry(const map<Surfel, Point>& surfelToPoint, const set<Point>& su
 		Point symmetryCurrent = center + vectorToCenter;
 		for (auto itS = pathPoints.begin(), itSE = pathPoints.end(); itS != itSE; ++itS) {
 			Point putativeSymmetric = *itS;
-			if (PointUtil::areAlmostSimilar(putativeSymmetric, symmetryCurrent) && !PointUtil::areAlmostSimilar(center, symmetryCurrent) && !PointUtil::areAlmostSimilar(center, currentPoint) && !PointUtil::areAlmostSimilar(putativeSymmetric, currentPoint)) {
+			if (PointUtil::areNeighbors(putativeSymmetric, symmetryCurrent) && !PointUtil::areNeighbors(center, symmetryCurrent) && !PointUtil::areNeighbors(center, currentPoint) && !PointUtil::areNeighbors(putativeSymmetric, currentPoint)) {
 				foundOneSymmetry++;
 				break;
 			}
@@ -212,7 +212,7 @@ bool areNeighbours(const set<Surfel>& path1, const set<Surfel>& path2, const map
 		Point pp1 = surfelToPoint.at(surfelInPOne);
 		for (const auto & surfelInPTwo : path2) {
 			Point pp2 = surfelToPoint.at(surfelInPTwo);
-			if (areAlmostSimilar(pp1, pp2))
+			if (areNeighbors(pp1, pp2))
 				cpt++;
 		}
 	}

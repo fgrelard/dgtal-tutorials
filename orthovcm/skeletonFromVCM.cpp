@@ -113,13 +113,13 @@ Z2i::DigitalSet extractConnectedComponent(const Image& image, const Z2i::Point& 
 }
 
 template <typename Domain, typename WeightedPoint>
-Z3i::DigitalSet extractConnectedComponent3D(const Domain & domain, const set<WeightedPoint*, WeightedPointCountComparator>& volume, const Z3i::RealPoint& normal, const Z3i::Point& referencePoint, double d, double omega) {
+Z3i::DigitalSet extractConnectedComponent3D(const Domain & domain, const set<WeightedPoint*, WeightedPointCountComparator>& volume, const Z3i::RealPoint& normal, const Z3i::Point& referencePoint, double d, double omega, double distanceMax) {
 	typedef Z3i::Object26_6 ObjectType;
 
 	Z3i::DigitalSet intersection(domain);
 	for (auto it = volume.begin(), ite = volume.end(); it != ite; ++it) {
 		double valueToCheckForPlane = (*it)->myPoint[0] * normal[0] + (*it)->myPoint[1] * normal[1] + (*it)->myPoint[2] * normal[2];
-		if (valueToCheckForPlane >= d && valueToCheckForPlane < d + omega) {
+		if (valueToCheckForPlane >= d && valueToCheckForPlane < d + omega && Z3i::l2Metric((*it)->myPoint, referencePoint) <= distanceMax) {
 			intersection.insert((*it)->myPoint);
 		}
 	}
@@ -252,7 +252,6 @@ void computeDistanceFromCenterOfMass(set<WeightedPoint*>& weightedSet, const Z3i
 						pow(centerOfGravity[2] - it->myPoint[2], 2));
 		it->myWeight += 1- ((d - distance_min) / (distance_max - distance_min));
 	}
-			
 }
 
 Z3i::DigitalSet computeSetOfSimplePoints(const Z3i::DigitalSet& points) {
@@ -304,8 +303,8 @@ int main( int  argc, char**  argv )
 		("output,o", po::value<std::string>(), "output skeleton filename")
 		("thresholdMin,m", po::value<int>()->default_value(0), "minimum threshold for binarization")
 		("thresholdMax,M", po::value<int>()->default_value(255), "maximum threshold for binarization")
-		("radiusInside,r", po::value<double>()->default_value(10), "radius of the ball inside voronoi cell")
-		("radiusNeighbour,R", po::value<double>()->default_value(10), "radius of the ball for the neighbourhood")
+		("radiusInside,R", po::value<double>()->default_value(10), "radius of the ball inside voronoi cell")
+		("radiusNeighbour,r", po::value<double>()->default_value(10), "radius of the ball for the neighbourhood")
 		; 
 
 	bool parseOK=true;
@@ -421,7 +420,7 @@ int main( int  argc, char**  argv )
 	{
 		currentPoint->myProcessed = true;
 		trace.progressBar((setVolume.size() - numberLeft), setVolume.size());		
-		double radius = R;
+		double radius = r;
 		if (vm.count("skeleton")) {
 			Pencil closestPointToCurrent = *min_element(tangents.begin(), tangents.end(), [&](const Pencil& one, const Pencil& two) {
 					return Z3i::l2Metric(one.getPoint(), currentPoint->myPoint) < Z3i::l2Metric(two.getPoint(), currentPoint->myPoint);
@@ -433,8 +432,8 @@ int main( int  argc, char**  argv )
 			radius  = SliceUtils::computeRadiusFromImage(extractedImage, thresholdMin, thresholdMax);
 			radius += 2;
 			if (radius > 0) {
-				vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
-				chi = KernelFunction( 1.0, radius*3);
+				vcm.updateProximityStructure(radius*2, setVolume.begin(), setVolume.end());
+				chi = KernelFunction( 1.0, radius*2);
 			}
 		}
 		
@@ -456,22 +455,20 @@ int main( int  argc, char**  argv )
 		viewer.setFillColor(Color::Red);
 		viewer.setFillTransparency(150);
 		
-		
-		double imageSize = IMAGE_PATCH_WIDTH;
-		DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain> embedderVCM(domain3Dyup, currentPoint->myPoint, normal, imageSize);
-		ImageAdapterExtractor extractedImageVCM(volume, domainImage2D, embedderVCM, idV);
-		extractedImageVCM.setDefaultValue(0);
+		double imageSize = radius*2;
 
 		double miniCoordinatesInNormal = min(abs(normal[0]), min(abs(normal[1]), abs(normal[2])));
 		double secondMini = min(abs(normal[0]), abs(normal[1])) > miniCoordinatesInNormal ? min(abs(normal[0]), abs(normal[1])) :
 			min(abs(normal[0]), abs(normal[2])) > miniCoordinatesInNormal ? min(abs(normal[0]), abs(normal[2])) :
 			min(abs(normal[1]), abs(normal[2]));
 		double factor = 1. / min((secondMini - miniCoordinatesInNormal), miniCoordinatesInNormal);
-		Z3i::Point discreteNormal(normal[0]*factor, normal[1]*factor, normal[2]*factor);
+		if (factor > 1000)
+			factor = 1;
+		Z3i::Point discreteNormal(round(normal[0]*factor), round(normal[1]*factor), round(normal[2]*factor));
 		double d = -(-discreteNormal[0] * currentPoint->myPoint[0] - discreteNormal[1] * currentPoint->myPoint[1] - discreteNormal[2] * currentPoint->myPoint[2]);
 		double omega = abs(discreteNormal[0]) + abs(discreteNormal[1]) + abs(discreteNormal[2]);
 	
-		Z3i::DigitalSet connectedComponent3D = extractConnectedComponent3D(domainVolume, setVolumeWeighted, discreteNormal, currentPoint->myPoint, d, omega);
+		Z3i::DigitalSet connectedComponent3D = extractConnectedComponent3D(domainVolume, setVolumeWeighted, discreteNormal, currentPoint->myPoint, d, omega, imageSize);
 		Z3i::RealPoint centerOfMass = extractCenterOfMass3D(connectedComponent3D);
 
 //		 for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end();
@@ -480,40 +477,48 @@ int main( int  argc, char**  argv )
 //		 }
 		
 		//computeDistanceFromCenterOfMass(setVolumeWeighted, centerOfMassEmbedded);
-		bool add = markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
+		
+		vector<Point> neighbors26;
+		back_insert_iterator<vector<Point>> iterator(neighbors26);
+		MetricAdjacency::writeNeighbors(iterator, centerOfMass);
+		int cpt = 0;
+		for (auto it = neighbors26.begin(), ite = neighbors26.end(); it != ite; ++it) {
+			if (skeletonPoints.find(*it) != skeletonPoints.end())
+				cpt++;
+		}
+		bool add = (cpt <= 2);
 		add = true;
 		if (centerOfMass != Z3i::Point() && add) {
+			markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
 			skeletonPoints.insert(centerOfMass);		    
 			viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
 			viewer << Viewer3D<>::updateDisplay;
 			qApp->processEvents();
-		}
-
-		
+		}	   
 
 		previousNormal = normal;
 		previousCenter = centerOfMass;
 
 
-		// auto pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-		// 		return (wpc->myPoint == (centerOfMass + normal));
-		// 	});
-		// currentPoint = (*pointInWeightedSet);
-		// if (pointInWeightedSet == setVolumeWeighted.end() || currentPoint->myProcessed) {
-		// 	pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-		// 			return (wpc->myPoint == (centerOfMass - normal));
-		// 	});
-		// 	currentPoint = (*pointInWeightedSet);
-		// 	if (pointInWeightedSet == setVolumeWeighted.end() || currentPoint->myProcessed) {
 		auto pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-				return (!wpc->myProcessed);
+				return (wpc->myPoint == (centerOfMass + normal));
 			});
-		if (pointInWeightedSet != setVolumeWeighted.end()) {
+		currentPoint = (*pointInWeightedSet);
+		if (pointInWeightedSet == setVolumeWeighted.end() || currentPoint->myProcessed) {
+			pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+					return (wpc->myPoint == (centerOfMass - normal));
+				});
 			currentPoint = (*pointInWeightedSet);
+			if (pointInWeightedSet == setVolumeWeighted.end() || currentPoint->myProcessed) {
+				auto pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+						return (!wpc->myProcessed);
+					});
+				if (pointInWeightedSet != setVolumeWeighted.end()) {
+					currentPoint = (*pointInWeightedSet);
+				}
+				else break;
+			}
 		}
-		else break;
-// 	}
-// }
 		numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
 							  [&](WeightedPointCount* wpc) {
 								  return (!wpc->myProcessed);
@@ -521,13 +526,11 @@ int main( int  argc, char**  argv )
   		i++;
 	}
 	trace.endBlock();
-	
-	
+		
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
 	  	viewer << CustomColors3D(Color(0,0,120,10), Color(0,0,120,10)) << (*it)->myPoint;
 	}
-	
-	
+		
 	Image outImage(volume.domain());
 	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
 	VolWriter<Image>::exportVol(outFilename, outImage);

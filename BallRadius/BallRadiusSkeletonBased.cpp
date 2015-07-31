@@ -89,7 +89,7 @@ bool closedCurve(const set<Point>& points) {
 	for (auto it = points.begin(), ite = points.end(); it != ite; ++it) {
 		int previouscpt = cpt;
 		for (auto secondIt = points.begin(), secondIte = points.end(); secondIt != secondIte; ++secondIt) {
-			if (PointUtil::areAlmostSimilar(*it, *secondIt) && *secondIt != *it) {
+			if (PointUtil::areNeighbors(*it, *secondIt) && *secondIt != *it) {
 				cpt++;
 			}
 		}
