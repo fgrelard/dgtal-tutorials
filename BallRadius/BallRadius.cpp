@@ -114,9 +114,6 @@ void visualizePath(const Surfel& start, const Surfel& end, map<Surfel, Surfel>& 
 
 }
 
-
-
-
 template <typename Ellipse>
 bool checkIfEllipseFits(const Ellipse& fittedEllipse, const Ellipse& intersectedEllipse) {
 	int majorFitted = (int)fittedEllipse.myMajorAxis;

@@ -19,7 +19,7 @@ if ( Boost_FOUND )
    SET(DGtalLibInc ${Boost_INCLUDE_DIRS})
 endif( Boost_FOUND )
 
-file(GLOB src ../Tangent3D/TangentUtils.cpp)
+file(GLOB src "../Tangent3D/TangentUtils.cpp")
 include_directories(../include)
 #ADD_EXECUTABLE(Slice orthovcmwslice.cpp)
 #ADD_EXECUTABLE(VCM orthovcm.cpp ${src})

@@ -13,6 +13,7 @@
 #include "DGtal/graph/DistanceBreadthFirstVisitor.h"
 #include "DGtal/images/ImageContainerBySTLVector.h"
 #include "DGtal/io/readers/GenericReader.h"
+#include "DGtal/io/readers/ITKReader.h"
 #include "DGtal/io/boards/Board3D.h"
 #include "DGtal/geometry/curves/GreedySegmentation.h"
 #include "DGtal/io/colormaps/GradientColorMap.h"
@@ -347,8 +348,9 @@ vector<Vertex> extractPseudoBisector(MyDigitalSurface& boundary, const Vertex& s
 	 DEC::PrimalForm1 oneFormResult = hodg1p * d0p * result;
 	 DEC::PrimalVectorField vf = calculus.sharp(oneFormResult);
 	 DEC::PrimalVectorField normvf = vf.normalized();
-//	 Display3DFactory<Space, KSpace>::draw(viewer, oneFormResult);
-	 Display3DFactory<Space, KSpace>::draw(viewer, normvf);
+	 DEC::DualVectorField normDualVf = calculus.sharp(d0p * result);
+//	 Display3DFactory<Space, KSpace>::draw(viewer, result);
+	 Display3DFactory<Space, KSpace>::draw(viewer, normDualVf);
 	 vector<Vertex> path;
 	 
    
@@ -559,7 +561,7 @@ int main( int argc, char** argv )
 
 
 
-	Image img  = VolReader<Image>::importVol( inputFilename );
+	Image img  = ITKReader<Image>::importITK( inputFilename );
 	Image skeleton = VolReader<Image>::importVol( inputSkeletonName );
 	Z3i::Domain domain = img.domain();
 	KSpace ks;
