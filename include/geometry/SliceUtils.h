@@ -51,6 +51,9 @@ namespace SliceUtils {
 	
 	template <typename ImageAdapter>
 	double computeRadiusFromImage(const ImageAdapter& image, int thresholdMin, int thresholdMax);
+
+	template <typename Point>
+	std::vector<Point> computeIntersectionPointsBetweenTwoPlanes(const Point& normal1, const Point& normal2); 
 }
 
 
@@ -269,6 +272,11 @@ void SliceUtils::slicesFromPlanes(Viewer3D<>& viewer, const std::vector<Pencil> 
 		viewer << DGtal::UpdateImage3DEmbedding<Z3i::Space, Z3i::KSpace>(sliceNumber, embedder(Z2i::RealPoint(0,0)), embedder(Z2i::RealPoint(IMAGE_PATCH_WIDTH,0)), embedder(domainImage2D.upperBound()), embedder(Z2i::RealPoint(0, IMAGE_PATCH_WIDTH)));
 		sliceNumber++;
 	}
+}
+
+template <typename Point>
+std::vector<Point> computeIntersectionPointsBetweenTwoPlanes(const Point& normal1, const Point& normal2) {
+
 }
 
 #endif
