@@ -333,10 +333,10 @@ Z3i::DigitalSet computeSetOfSimplePoints(const Z3i::DigitalSet& points) {
 template <typename VCM, typename KernelFunction, typename Domain, typename Container>
 Z3i::DigitalSet computeDiscretePlane(const VCM& vcm, const KernelFunction& chi,
 							   const Domain& domainVolume, const Container& setVolumeWeighted,
-							   const Z3i::Point& point, Z3i::RealPoint& normal,
+									 const Z3i::Point& point, Z3i::RealPoint& normal, int coordinate,
 							   const Z3i::RealPoint previousNormal, double radius) {
 
-    normal = computeNormalFromVCM(point, vcm, chi, 0);
+    normal = computeNormalFromVCM(point, vcm, chi, coordinate);
 	if (normal.dot(previousNormal) < 0)
 		normal = -normal;
 		
@@ -351,11 +351,13 @@ Z3i::DigitalSet computeDiscretePlane(const VCM& vcm, const KernelFunction& chi,
 }
 
 template <typename VCM, typename KernelFunction, typename Container, typename DT>
-void connectDisconnectedComponents(Z3i::DigitalSet& skeletonPoints, const DT& dt,
+void connectDisconnectedComponents(Z3i::DigitalSet& skeletonPoints, const DT& dt, double delta,
 								   VCM& vcm,  KernelFunction& chi,
-								   const Z3i::DigitalSet& setVolume, const Container& setVolumeWeighted) {
+								   const Z3i::DigitalSet& setVolume, Container& setVolumeWeighted) {
 	typedef Z3i::Object26_6 ObjectType;
+	typedef WeightedPointCount<Z3i::Point> WeightedPointCount;
 
+	set<Z3i::Point> pointsToProcess;
 	Z3i::Domain domainVolume = setVolume.domain();
 	ObjectType objectImage(Z3i::dt26_6, skeletonPoints);
 	vector<ObjectType> objects;
@@ -367,6 +369,7 @@ void connectDisconnectedComponents(Z3i::DigitalSet& skeletonPoints, const DT& dt
 	trace.beginBlock("Connecting disconnected components");
 	while (objects.size() > 0) {
 		trace.progressBar(nbConnectedComponents-objects.size(), nbConnectedComponents);
+		
 		vector<ObjectType>::iterator minimizingObjectToReference;
 		double distanceMin = numeric_limits<int>::max();
 		Z3i::Point belongingToCurrentObject, belongingToReference;
@@ -390,40 +393,86 @@ void connectDisconnectedComponents(Z3i::DigitalSet& skeletonPoints, const DT& dt
 			 it != ite; ++it) {
 			reference.pointSet().insert(*it);
 		}
-
-		double radius = 0;
-		if (dt(belongingToReference) < dt(belongingToCurrentObject))
-			radius = dt(belongingToReference);
-		else
-			radius = dt(belongingToCurrentObject);
-
-		Z3i::Point previousPoint = belongingToReference;
-		Z3i::RealPoint directionVector =  belongingToCurrentObject - belongingToReference;
-		if (directionVector.norm() > 0) { 
-			Z3i::RealPoint normal = directionVector.getNormalized();
-			Z3i::RealPoint previousNormal = normal;
-			belongingToReference += normal;
-
-			vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
-			chi = KernelFunction( 1.0, radius);
-		
-			while (skeletonPoints.find(belongingToReference) == skeletonPoints.end()) {
-
-				Z3i::DigitalSet connectedComponent3D = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
-																			belongingToReference, normal, previousNormal, radius);
-				Z3i::Point centerOfMass = extractCenterOfMass3D(connectedComponent3D);
-				if (centerOfMass != Z3i::Point())
-					skeletonPoints.insert(centerOfMass);
-				
-				previousPoint = belongingToReference;
-				int i = 1;
-				while (belongingToReference == previousPoint) {
-					belongingToReference = centerOfMass + normal * i;
-					i++;
-				}
-			}
+		Z3i::RealPoint directionVector = belongingToCurrentObject - belongingToReference;
+		vector<Z3i::Point> points = PointUtil::linkTwoPoints(belongingToCurrentObject, belongingToReference);
+		for (auto it = points.begin(), ite = points.end(); it!=ite; ++it) {
+			pointsToProcess.insert(*it);
 		}
+		
+		// double radius = 0;
+		// if (dt(belongingToReference) < dt(belongingToCurrentObject))
+		// 	radius = dt(belongingToReference)+delta;
+		// else
+		// 	radius = dt(belongingToCurrentObject)+delta;
+
+		// Z3i::Point previousPoint = belongingToReference;
+		// Z3i::RealPoint directionVector =  belongingToCurrentObject - belongingToReference;
+		// if (directionVector.norm() > 0) { 
+		// 	Z3i::RealPoint normal = directionVector.getNormalized();
+		// 	Z3i::RealPoint previousNormal = normal;
+		// 	belongingToReference += normal;
+
+		// 	vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
+		// 	chi = KernelFunction( 1.0, radius);
+
+		// 	set<Z3i::Point> processedPoints;
+		// 	while (minimizingObjectToReference->pointSet().find(belongingToReference) ==
+		// 		   minimizingObjectToReference->pointSet().end()) {
+		// 		radius = dt(previousPoint) + delta;
+		// 		processedPoints.insert(belongingToReference);
+		// 		Z3i::DigitalSet connectedComponent3D = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+		// 																	belongingToReference, normal, 0, previousNormal, radius);
+		// 		markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
+		// 		if (normal == Z3i::RealPoint())
+		// 			normal = previousNormal;
+		// 		if (normal.dot(previousNormal) < 0) {
+		// 			normal = -normal;
+		// 		}
+		// 		Z3i::Point centerOfMass = extractCenterOfMass3D(connectedComponent3D);
+				
+		// 		if (centerOfMass != Z3i::Point()) {
+		// 			reference.pointSet().insert(centerOfMass);
+		// 			skeletonPoints.insert(centerOfMass);
+		// 			previousPoint = belongingToReference;
+		// 			previousNormal = normal;
+		// 			int i = 1;
+		// 			auto pointInSet = setVolumeWeighted.begin();
+		// 			while (belongingToReference == previousPoint ||
+		// 				   processedPoints.find(belongingToReference) != processedPoints.end() || 
+		// 				   (pointInSet != setVolumeWeighted.end() && (*pointInSet)->myProcessed)) { 
+		// 				belongingToReference = centerOfMass + normal * i;
+		// 				i++;
+		// 				pointInSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+		// 						return (wpc->myPoint == belongingToReference);
+		// 					});
+		// 			}
+		// 		} else {
+		// 			break;
+		// 		}
+			
+		// 	}
+		// }
 		objects.erase(minimizingObjectToReference);
+	}
+
+	double radius = 0;
+	Z3i::RealPoint normal, previousNormal;
+	int i = 0;
+	for (auto it = pointsToProcess.begin(), ite = pointsToProcess.end();
+		 it != ite; ++it) {
+		trace.progressBar(i, pointsToProcess.size());
+		radius = dt(*it) + delta;
+		vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
+		chi = KernelFunction( 1.0, radius);
+		Z3i::DigitalSet connectedComponent3D = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+																	*it, normal, 0, previousNormal, radius);
+		Z3i::Point centerOfMass = extractCenterOfMass3D(connectedComponent3D);
+				
+		if (centerOfMass != Z3i::Point()) {
+			reference.pointSet().insert(centerOfMass);
+			skeletonPoints.insert(centerOfMass);
+		}
+		i++;
 	}
 	trace.endBlock();
 }
@@ -580,8 +629,20 @@ int main( int  argc, char**  argv )
 
 		// Compute discrete plane.
 		Z3i::DigitalSet connectedComponent3D = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted, currentPoint->myPoint, normal,
-													  previousNormal, radius);
+																	0, previousNormal, radius);
 		Z3i::Point centerOfMass = extractCenterOfMass3D(connectedComponent3D);
+
+
+		//Branching detection
+		Z3i::RealPoint longitudinalNormal, sagittalNormal;
+		// Z3i::DigitalSet longitudinalCrossSection = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+		// 																currentPoint->myPoint, longitudinalNormal, 1, previousNormal, radius);
+		// Z3i::DigitalSet sagittalCrossSection = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+		// 															currentPoint->myPoint, sagittalNormal, 2, previousNormal, radius);
+	    // for (auto it = longitudinalCrossSection.begin(), ite = longitudinalCrossSection.end(); it != ite; ++it) {
+		// 	viewer << CustomColors3D(Color(0, 255, 0, 40), Color(0, 255, 0, 40)) << *it;
+		// }
+		
 		if (centerOfMass != Z3i::Point()) {
 			bool add = markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
 			if (add) {
@@ -650,7 +711,10 @@ int main( int  argc, char**  argv )
 
 
 	//Second pass
-	connectDisconnectedComponents(skeletonPoints, dt, vcm, chi, setVolume, setVolumeWeighted);
+	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
+		(*it)->myProcessed = false;
+	}
+	connectDisconnectedComponents(skeletonPoints, dt, delta, vcm, chi, setVolume, setVolumeWeighted);
    
 	//Displaying
 	for (auto it = skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {
