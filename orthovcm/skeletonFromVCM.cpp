@@ -350,6 +350,74 @@ Z3i::DigitalSet computeDiscretePlane(const VCM& vcm, const KernelFunction& chi,
 	return connectedComponent3D;
 }
 
+template <typename Image>
+bool isBranchingPart(const Image& image) {
+	typedef typename Image::Domain Domain;
+	typedef typename Image::Value Scalar;
+	
+	Domain domain = image.domain();
+	Z2i::Point lower = domain.lowerBound(), upper = domain.upperBound();
+
+	int width = upper[0] - lower[0];
+	int height = upper[1] - lower[1];
+
+	bool ishape = false, yshape = false;
+	for (int i = 0; i < height; i++) {
+		int cpt = 0;
+		bool previousZero = false;
+		for (int j = 0; j < width; j++) {
+			Z2i::Point point(j, i);
+			if (domain.isInside(point)) {
+				Scalar value = image(point);
+			    int valueInt = (int)(value);
+				if (valueInt > 0 && previousZero) cpt++;
+				previousZero = (valueInt == 0);
+			}
+		}
+		if (cpt == 1) {
+			ishape = true;
+		}
+		if (cpt >= 2) {
+			yshape = true;
+		}
+	}
+	return (ishape && yshape);
+}
+
+template <typename ImageAdapterExtractor, typename Image, typename VCM, typename KernelFunction>
+bool isInABranch(const Image& volume, const VCM& vcm, const KernelFunction& chi,
+				 const Z3i::Point& point, double radius, int &cptPlane) {
+	DGtal::functors::Identity idV;
+	Z3i::Domain domain3Dyup(volume.domain().lowerBound() + Z3i::Point(-radius, -radius, -radius), volume.domain().upperBound() + Z3i::Point(radius, radius, radius));
+	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
+									  DGtal::Z2i::Point(radius, radius));
+	Z3i::RealPoint longitudinalNormal = computeNormalFromVCM(point, vcm, chi, 1); 
+	Z3i::RealPoint sagittalNormal = computeNormalFromVCM(point, vcm, chi, 2);
+
+	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedderLongitudinal(domain3Dyup, point, longitudinalNormal, radius, domain3Dyup.lowerBound());
+	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedderSagittal(domain3Dyup, point, sagittalNormal, radius, domain3Dyup.lowerBound());
+	ImageAdapterExtractor extractedImageLongitudinal(volume, domainImage2D, embedderLongitudinal, idV);
+	ImageAdapterExtractor extractedImageSagittal(volume, domainImage2D, embedderSagittal, idV);
+	extractedImageSagittal.setDefaultValue(0);
+	extractedImageLongitudinal.setDefaultValue(0);
+	bool isBranchingLongitudinal = isBranchingPart(extractedImageLongitudinal);
+	bool isBranchingSagittal = isBranchingPart(extractedImageSagittal);
+
+	if (isBranchingSagittal) {
+		string outName = "/home/florent/trash/slice_" + std::to_string(cptPlane) + ".pgm";
+		PGMWriter<ImageAdapterExtractor>::exportPGM(outName, extractedImageSagittal);
+		cptPlane++;
+	} else if (isBranchingLongitudinal) {
+		string outName = "/home/florent/trash/slice_" + std::to_string(cptPlane) + ".pgm";
+		PGMWriter<ImageAdapterExtractor>::exportPGM(outName, extractedImageLongitudinal);
+		cptPlane++;
+
+	}
+	
+	return (isBranchingSagittal || isBranchingLongitudinal);
+	
+}
+
 template <typename VCM, typename KernelFunction, typename Container, typename DT>
 void connectDisconnectedComponents(Z3i::DigitalSet& skeletonPoints, const DT& dt, double delta,
 								   VCM& vcm,  KernelFunction& chi,
@@ -398,60 +466,6 @@ void connectDisconnectedComponents(Z3i::DigitalSet& skeletonPoints, const DT& dt
 		for (auto it = points.begin(), ite = points.end(); it!=ite; ++it) {
 			pointsToProcess.insert(*it);
 		}
-		
-		// double radius = 0;
-		// if (dt(belongingToReference) < dt(belongingToCurrentObject))
-		// 	radius = dt(belongingToReference)+delta;
-		// else
-		// 	radius = dt(belongingToCurrentObject)+delta;
-
-		// Z3i::Point previousPoint = belongingToReference;
-		// Z3i::RealPoint directionVector =  belongingToCurrentObject - belongingToReference;
-		// if (directionVector.norm() > 0) { 
-		// 	Z3i::RealPoint normal = directionVector.getNormalized();
-		// 	Z3i::RealPoint previousNormal = normal;
-		// 	belongingToReference += normal;
-
-		// 	vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
-		// 	chi = KernelFunction( 1.0, radius);
-
-		// 	set<Z3i::Point> processedPoints;
-		// 	while (minimizingObjectToReference->pointSet().find(belongingToReference) ==
-		// 		   minimizingObjectToReference->pointSet().end()) {
-		// 		radius = dt(previousPoint) + delta;
-		// 		processedPoints.insert(belongingToReference);
-		// 		Z3i::DigitalSet connectedComponent3D = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
-		// 																	belongingToReference, normal, 0, previousNormal, radius);
-		// 		markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
-		// 		if (normal == Z3i::RealPoint())
-		// 			normal = previousNormal;
-		// 		if (normal.dot(previousNormal) < 0) {
-		// 			normal = -normal;
-		// 		}
-		// 		Z3i::Point centerOfMass = extractCenterOfMass3D(connectedComponent3D);
-				
-		// 		if (centerOfMass != Z3i::Point()) {
-		// 			reference.pointSet().insert(centerOfMass);
-		// 			skeletonPoints.insert(centerOfMass);
-		// 			previousPoint = belongingToReference;
-		// 			previousNormal = normal;
-		// 			int i = 1;
-		// 			auto pointInSet = setVolumeWeighted.begin();
-		// 			while (belongingToReference == previousPoint ||
-		// 				   processedPoints.find(belongingToReference) != processedPoints.end() || 
-		// 				   (pointInSet != setVolumeWeighted.end() && (*pointInSet)->myProcessed)) { 
-		// 				belongingToReference = centerOfMass + normal * i;
-		// 				i++;
-		// 				pointInSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-		// 						return (wpc->myPoint == belongingToReference);
-		// 					});
-		// 			}
-		// 		} else {
-		// 			break;
-		// 		}
-			
-		// 	}
-		// }
 		objects.erase(minimizingObjectToReference);
 	}
 
@@ -545,14 +559,21 @@ int main( int  argc, char**  argv )
 	double R = vm["radiusInside"].as<double>();
 	double r = vm["radiusNeighbour"].as<double>();
 	int delta = vm["delta"].as<int>();
-
+	int cptPlane = 0;
+	
 	Image volume = VolReader<Image>::importVol(inputFilename);
 	Z3i::Domain domainVolume = volume.domain();
 	Z3i::DigitalSet setVolume(domainVolume);
 	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume, 
 												  thresholdMin-1, thresholdMax);
 	set<WeightedPointCount*, WeightedPointCountComparator> setVolumeWeighted;
-	
+	Image volumeBinary(volume.domain());
+	for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
+		if (volume(*it) >= thresholdMin && volume(*it) <= thresholdMax) 
+			volumeBinary.setValue(*it, 255);
+		else
+			volumeBinary.setValue(*it, 0);
+	}
 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
 
 	vector<Point> vPoints;
@@ -581,27 +602,23 @@ int main( int  argc, char**  argv )
 	Domain domain = vcm.domain();
 	KernelFunction chi( 1.0, r );
 
-
+	const int IMAGE_PATCH_WIDTH = 100;
+	
 	Matrix vcm_r, evec;
 	RealVector eval;
 	Viewer3D<> viewer;
 	viewer.show();
  
-	const int IMAGE_PATCH_WIDTH = 100;
-	Z3i::Domain domain3Dyup(volume.domain().lowerBound() + Z3i::Point(-IMAGE_PATCH_WIDTH, -IMAGE_PATCH_WIDTH, -IMAGE_PATCH_WIDTH), volume.domain().upperBound() + Z3i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH));
-	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
-									  DGtal::Z2i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH));
-
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 
 	int i = 0;
 	int numberLeft = setVolumeWeighted.size();
+	
+	Z3i::RealPoint normal;
 	Z3i::RealPoint previousNormal;
 	Z3i::Point previousCenter;
 			
 	trace.beginBlock("Computing skeleton");
-	Z3i::RealPoint normal;
-
 	//Main loop to compute skeleton (stop when no vol points left to process)
 	while (numberLeft > 0)
 	{
@@ -634,15 +651,12 @@ int main( int  argc, char**  argv )
 
 
 		//Branching detection
-		Z3i::RealPoint longitudinalNormal, sagittalNormal;
-		// Z3i::DigitalSet longitudinalCrossSection = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
-		// 																currentPoint->myPoint, longitudinalNormal, 1, previousNormal, radius);
-		// Z3i::DigitalSet sagittalCrossSection = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
-		// 															currentPoint->myPoint, sagittalNormal, 2, previousNormal, radius);
-	    // for (auto it = longitudinalCrossSection.begin(), ite = longitudinalCrossSection.end(); it != ite; ++it) {
-		// 	viewer << CustomColors3D(Color(0, 255, 0, 40), Color(0, 255, 0, 40)) << *it;
-		// }
+		bool inABranch = isInABranch<ImageAdapterExtractor>(volumeBinary, vcm, chi, currentPoint->myPoint, IMAGE_PATCH_WIDTH, cptPlane);
+		if (inABranch) {
+			viewer << CustomColors3D(Color::Blue, Color::Blue) << currentPoint->myPoint;
+		}
 		
+		//Center of mass computation
 		if (centerOfMass != Z3i::Point()) {
 			bool add = markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
 			if (add) {

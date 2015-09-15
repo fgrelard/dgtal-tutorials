@@ -32,6 +32,12 @@ namespace SliceUtils {
 	template <typename Vector, typename Point>
 	Vector computeNormalFromCovarianceMatrix(const std::vector<Point>& points);
 
+	template <typename Vector, typename Matrix>
+	Vector extractEigenVector(const Matrix& m, int colNumber);
+
+	template <typename Matrix, typename Image2D>
+	Matrix computeCovarianceMatrix(const Image2D& image);
+	
 	template <typename Image2D>
 	Z2i::RealPoint centerOfMass(const Image2D& image);
 
@@ -52,8 +58,6 @@ namespace SliceUtils {
 	template <typename ImageAdapter>
 	double computeRadiusFromImage(const ImageAdapter& image, int thresholdMin, int thresholdMax);
 
-	template <typename Point>
-	std::vector<Point> computeIntersectionPointsBetweenTwoPlanes(const Point& normal1, const Point& normal2); 
 }
 
 
@@ -160,6 +164,46 @@ Vector SliceUtils::computeNormalFromCovarianceMatrix(const std::vector<Point> & 
 	Eigen::SelfAdjointEigenSolver<MatrixXd> eig(cov);
 	Vector normal;
 	auto veigen = eig.eigenvectors().col(0);
+	normal[0] = veigen[0];
+	normal[1] = veigen[1];
+	normal[2] = veigen[2];
+	return normal;
+}
+
+template <typename Matrix, typename Image2D>
+Matrix SliceUtils::computeCovarianceMatrix(const Image2D& image) {
+	typedef typename Image2D::Domain Domain;
+	typedef typename Domain::Point Point;
+	int size = 0;
+	for (typename Domain::ConstIterator it = image.domain().begin(), ite = image.domain().end();
+		 it != ite; ++it) {
+		Point point = *it;
+		if (image(*it) > 0) {
+			size++;
+		}
+	}
+	
+	Matrix A(size, 2);
+	int i = 0;
+	for (typename Domain::ConstIterator it = image.domain().begin(), ite = image.domain().end();
+		 it != ite; ++it) {
+		Point point = *it;
+		if (image(*it) > 0) {
+			A(i, 0) = (double) point[0] * 1.0;
+			A(i, 1) = (double) point[1] * 1.0;
+			i++;
+		}
+	}
+	Matrix centered = A.rowwise() - A.colwise().mean();
+	Matrix cov = (centered.adjoint() * centered) / double(A.rows() - 1);
+    return cov;
+}
+
+template <typename Vector, typename Matrix>
+Vector SliceUtils::extractEigenVector(const Matrix& m, int colNumber) {
+	Eigen::SelfAdjointEigenSolver<Matrix> eig(m);
+	Vector normal;
+	auto veigen = eig.eigenvectors().col(colNumber);
 	normal[0] = veigen[0];
 	normal[1] = veigen[1];
 	normal[2] = veigen[2];
@@ -274,9 +318,5 @@ void SliceUtils::slicesFromPlanes(Viewer3D<>& viewer, const std::vector<Pencil> 
 	}
 }
 
-template <typename Point>
-std::vector<Point> computeIntersectionPointsBetweenTwoPlanes(const Point& normal1, const Point& normal2) {
-
-}
 
 #endif
