@@ -122,32 +122,6 @@ Z3i::RealPoint computeNormalFromVCM(const Z3i::Point& currentPoint, VCM& vcm, Ke
 }
 
 
-template <typename Image>
-Z2i::DigitalSet extractConnectedComponent(const Image& image, const Z2i::Point& referencePoint, int thresholdMin,
-										  int thresholdMax) {
-	typedef ImageSelector<Z2i::Domain, unsigned char>::Type Image2D;
-	typedef Z2i::Object8_4 ObjectType;
-	
-	//Extracting connected components
-	Z2i::DigitalSet points2D(image.domain());
-	SetFromImage<Z2i::DigitalSet>::append<Image> (points2D, image, 
-												  thresholdMin-1, thresholdMax);
-	ObjectType objectImage2D(Z2i::dt8_4, points2D);
-	vector<ObjectType> objects;
-	back_insert_iterator< std::vector< ObjectType > > inserter( objects );
-	unsigned int nbConnectedComponents = objectImage2D.writeComponents(inserter);
-	Image2D image2D(image.domain());
-	if (nbConnectedComponents > 1) {
-		for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
-			Z2i::DigitalSet ccSet = it->pointSet();
-			if (ccSet.find(referencePoint) != ccSet.end()) {
-			    return ccSet;
-			}
-		}
-		return Z2i::DigitalSet(image.domain());
-	}
-	return points2D;
-}
 
 template <typename Domain, typename WeightedPoint>
 Z3i::DigitalSet extractConnectedComponent3D(const Domain & domain, const set<WeightedPoint*, WeightedPointCountComparator>& volume, const Z3i::RealPoint& normal, const Z3i::Point& referencePoint, double d, double omega, double distanceMax) {
@@ -169,11 +143,13 @@ Z3i::DigitalSet extractConnectedComponent3D(const Domain & domain, const set<Wei
 		for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
 			Z3i::DigitalSet ccSet = it->pointSet();
 			if (ccSet.find(referencePoint) != ccSet.end()) {
+				
 			    return ccSet;
 			}
 		}
 		return Z3i::DigitalSet(domain);
 	}
+   
 	return intersection;
 }
 
@@ -226,6 +202,49 @@ bool markConnectedComponent3D(set<WeightedPoint*, WeightedPointCountComparator>&
 		}
 	}
 	return (processedLabels.size() <= 2);	
+}
+
+template <typename WeightedPoint>
+set<WeightedPoint*> computePointsBelowPlane(set<WeightedPoint*, WeightedPointCountComparator>& volume, const Z3i::RealPoint& normal, const Z3i::Point& center, double distanceMax = numeric_limits<double>::max()) {
+	set<WeightedPoint*> inferiorPoints;
+	double d = -(-normal[0] * center[0] - normal[1] * center[1] - normal[2] * center[2]);
+	for (auto it = volume.begin(), ite = volume.end(); it!=ite; ++it) {
+		double valueToCheckForPlane = (*it)->myPoint[0] * normal[0] + (*it)->myPoint[1] * normal[1] + (*it)->myPoint[2] * normal[2];
+		if (valueToCheckForPlane < d && Z3i::l2Metric((*it)->myPoint, center) <= distanceMax)
+			inferiorPoints.insert((*it));
+	}
+	return inferiorPoints;
+}
+
+template <typename WeightedPoint>
+void markDifferenceBetweenPlanes(set<WeightedPoint*, WeightedPointCountComparator>& volume,
+											const Z3i::RealPoint& normalPrevious, const Z3i::Point& centerPrevious,
+								 const Z3i::RealPoint& normalNext, const Z3i::Point& centerNext,
+								 double distanceMax = numeric_limits<double>::max()) {
+	Z3i::RealPoint next = normalNext;
+	if (normalPrevious.dot(normalNext) < 0) {
+		next  = -normalNext;
+ 	}
+	set<WeightedPoint*> inferiorPointsPrevious = computePointsBelowPlane(volume, normalPrevious, centerPrevious, distanceMax);
+	set<WeightedPoint*> inferiorPointsNext = computePointsBelowPlane(volume, next, centerNext, distanceMax);
+		
+	set<WeightedPoint*> difference;
+	if (inferiorPointsNext.size() > inferiorPointsPrevious.size()) {
+		set_difference(inferiorPointsNext.begin(), inferiorPointsNext.end(),
+					   inferiorPointsPrevious.begin(), inferiorPointsPrevious.end(),
+					   inserter(difference, difference.end()));
+		
+	}
+	else {
+		set_difference(inferiorPointsPrevious.begin(), inferiorPointsPrevious.end(),
+					   inferiorPointsNext.begin(), inferiorPointsNext.end(),
+					   inserter(difference, difference.end()));
+	}
+	for (auto it = volume.begin(), ite = volume.end(); it != ite; ++it) {
+		if (difference.find(*it) != difference.end()) {
+			(*it)->myProcessed = true;
+		}
+	}
 }
 
 template <typename Adapter>
@@ -363,23 +382,29 @@ bool isBranchingPart(const Image& image) {
 
 	bool ishape = false, yshape = false;
 	for (int i = 0; i < height; i++) {
-		int cpt = 0;
+		int cpt = 0, numberOfBackgroundClusters = 0;
 		bool previousZero = false;
 		for (int j = 0; j < width; j++) {
 			Z2i::Point point(j, i);
 			if (domain.isInside(point)) {
 				Scalar value = image(point);
 			    int valueInt = (int)(value);
-				if (valueInt > 0 && previousZero) cpt++;
+				if (valueInt == 0 && previousZero) cpt++;
+				else if (valueInt > 0)
+				{
+					if (cpt >= 0.1*width)
+						numberOfBackgroundClusters++;
+					cpt = 0;
+				}
+
 				previousZero = (valueInt == 0);
 			}
 		}
-		if (cpt == 1) {
+		if (numberOfBackgroundClusters == 1)
 			ishape = true;
-		}
-		if (cpt >= 2) {
+		else if (numberOfBackgroundClusters == 2)
 			yshape = true;
-		}
+		
 	}
 	return (ishape && yshape);
 }
@@ -430,8 +455,9 @@ void connectDisconnectedComponents(Z3i::DigitalSet& skeletonPoints, const DT& dt
 	ObjectType objectImage(Z3i::dt26_6, skeletonPoints);
 	vector<ObjectType> objects;
 	back_insert_iterator< std::vector<ObjectType> > inserter( objects );
-	unsigned int nbConnectedComponents = objectImage.writeComponents(inserter);	
+	unsigned int nbConnectedComponents = objectImage.writeComponents(inserter);
 	trace.info() << nbConnectedComponents << endl;
+
 	ObjectType reference = *(objects.begin());
 	objects.erase(objects.begin());
 	trace.beginBlock("Connecting disconnected components");
@@ -651,14 +677,18 @@ int main( int  argc, char**  argv )
 
 
 		//Branching detection
-		bool inABranch = isInABranch<ImageAdapterExtractor>(volumeBinary, vcm, chi, currentPoint->myPoint, IMAGE_PATCH_WIDTH, cptPlane);
-		if (inABranch) {
-			viewer << CustomColors3D(Color::Blue, Color::Blue) << currentPoint->myPoint;
-		}
+		// bool inABranch = isInABranch<ImageAdapterExtractor>(volumeBinary, vcm, chi, currentPoint->myPoint, radius*3, cptPlane);
+		// if (inABranch) {
+		// 	viewer << CustomColors3D(Color::Blue, Color::Blue) << currentPoint->myPoint;
+		// }
 		
 		//Center of mass computation
 		if (centerOfMass != Z3i::Point()) {
-			bool add = markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
+		    bool add = markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
+			if (previousNormal != Z3i::RealPoint()) {
+			    markDifferenceBetweenPlanes(setVolumeWeighted, previousNormal, previousCenter,
+											normal, currentPoint->myPoint, radius);
+			}
 			if (add) {
 				skeletonPoints.insert(centerOfMass);
 				viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
@@ -696,6 +726,7 @@ int main( int  argc, char**  argv )
 							return (wpc->myPoint == current);
 						});
 					if (newPoint == setVolumeWeighted.end() || (*newPoint)->myProcessed) {
+						previousNormal = Z3i::RealPoint();
 						pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
 								return (!wpc->myProcessed);
 							});
@@ -706,6 +737,7 @@ int main( int  argc, char**  argv )
 				}
 			}
 		} else {
+			previousNormal = Z3i::RealPoint();
 			pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
 					return (!wpc->myProcessed);
 				});
@@ -723,6 +755,8 @@ int main( int  argc, char**  argv )
 	}
 	trace.endBlock();
 
+	viewer << Viewer3D<>::updateDisplay;
+	qApp->processEvents();
 
 	//Second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
