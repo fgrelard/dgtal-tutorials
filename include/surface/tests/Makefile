@@ -102,6 +102,19 @@ depend:
 .PHONY : depend
 
 #=============================================================================
+# Target rules for targets named TestMorphomaths
+
+# Build rule for target.
+TestMorphomaths: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 TestMorphomaths
+.PHONY : TestMorphomaths
+
+# fast build rule for target.
+TestMorphomaths/fast:
+	$(MAKE) -f CMakeFiles/TestMorphomaths.dir/build.make CMakeFiles/TestMorphomaths.dir/build
+.PHONY : TestMorphomaths/fast
+
+#=============================================================================
 # Target rules for targets named TestSurfaceTraversal
 
 # Build rule for target.
@@ -113,6 +126,30 @@ TestSurfaceTraversal: cmake_check_build_system
 TestSurfaceTraversal/fast:
 	$(MAKE) -f CMakeFiles/TestSurfaceTraversal.dir/build.make CMakeFiles/TestSurfaceTraversal.dir/build
 .PHONY : TestSurfaceTraversal/fast
+
+testMorphomaths.o: testMorphomaths.cpp.o
+.PHONY : testMorphomaths.o
+
+# target to build an object file
+testMorphomaths.cpp.o:
+	$(MAKE) -f CMakeFiles/TestMorphomaths.dir/build.make CMakeFiles/TestMorphomaths.dir/testMorphomaths.cpp.o
+.PHONY : testMorphomaths.cpp.o
+
+testMorphomaths.i: testMorphomaths.cpp.i
+.PHONY : testMorphomaths.i
+
+# target to preprocess a source file
+testMorphomaths.cpp.i:
+	$(MAKE) -f CMakeFiles/TestMorphomaths.dir/build.make CMakeFiles/TestMorphomaths.dir/testMorphomaths.cpp.i
+.PHONY : testMorphomaths.cpp.i
+
+testMorphomaths.s: testMorphomaths.cpp.s
+.PHONY : testMorphomaths.s
+
+# target to generate assembly for a file
+testMorphomaths.cpp.s:
+	$(MAKE) -f CMakeFiles/TestMorphomaths.dir/build.make CMakeFiles/TestMorphomaths.dir/testMorphomaths.cpp.s
+.PHONY : testMorphomaths.cpp.s
 
 testSurfaceTraversal.o: testSurfaceTraversal.cpp.o
 .PHONY : testSurfaceTraversal.o
@@ -144,9 +181,13 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
+	@echo "... TestMorphomaths"
 	@echo "... TestSurfaceTraversal"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... testMorphomaths.o"
+	@echo "... testMorphomaths.i"
+	@echo "... testMorphomaths.s"
 	@echo "... testSurfaceTraversal.o"
 	@echo "... testSurfaceTraversal.i"
 	@echo "... testSurfaceTraversal.s"

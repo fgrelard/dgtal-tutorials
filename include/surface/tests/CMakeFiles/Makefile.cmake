@@ -173,7 +173,6 @@ SET(CMAKE_MAKEFILE_DEPENDS
   "/usr/share/cmake-2.8/Modules/Compiler/GNU-C.cmake"
   "/usr/share/cmake-2.8/Modules/Compiler/GNU-CXX.cmake"
   "/usr/share/cmake-2.8/Modules/Compiler/GNU.cmake"
-  "/usr/share/cmake-2.8/Modules/FindBoost.cmake"
   "/usr/share/cmake-2.8/Modules/FindITK.cmake"
   "/usr/share/cmake-2.8/Modules/FindPackageHandleStandardArgs.cmake"
   "/usr/share/cmake-2.8/Modules/FindPackageMessage.cmake"
@@ -204,5 +203,6 @@ SET(CMAKE_MAKEFILE_PRODUCTS
 
 # Dependency information for all targets:
 SET(CMAKE_DEPEND_INFO_FILES
+  "CMakeFiles/TestMorphomaths.dir/DependInfo.cmake"
   "CMakeFiles/TestSurfaceTraversal.dir/DependInfo.cmake"
   )

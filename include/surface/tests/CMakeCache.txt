@@ -46,7 +46,7 @@ CGAL_DONT_OVERRIDE_CMAKE_FLAGS:BOOL=TRUE
 CMAKE_AR:FILEPATH=/usr/bin/ar
 
 //Build type: Release or Debug
-CMAKE_BUILD_TYPE:STRING=Release
+CMAKE_BUILD_TYPE:STRING=Debug
 
 //Enable/Disable color output during build.
 CMAKE_COLOR_MAKEFILE:BOOL=ON
@@ -827,6 +827,8 @@ CMAKE_AR-ADVANCED:INTERNAL=1
 CMAKE_BUILD_TOOL-ADVANCED:INTERNAL=1
 //What is the target build tool cmake is generating for.
 CMAKE_BUILD_TOOL:INTERNAL=/usr/bin/make
+//MODIFIED property for variable: CMAKE_BUILD_TYPE
+CMAKE_BUILD_TYPE-MODIFIED:INTERNAL=ON
 //This is the directory where this CMakeCache.txt was created
 CMAKE_CACHEFILE_DIR:INTERNAL=/home/florent/Documents/DGtal/tutorials-copy/include/surface/tests
 //Major version of cmake used to create the current loaded cache

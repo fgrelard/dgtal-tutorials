@@ -50,7 +50,7 @@ int* Agnes::diameter(const vector<vector<Point> >& cluster) {
 	if (mean_vector.size() == 0)
 		return indice_diameter;
 	//critere d'arret : % distance maximale
-	double seuil = euclideanDistance(*max_element(mean_vector.begin(), mean_vector.end()), *min_element(mean_vector.begin(), mean_vector.end()))*50/100;
+	double seuil = euclideanDistance(*max_element(mean_vector.begin(), mean_vector.end()), *min_element(mean_vector.begin(), mean_vector.end()))+1;
 	for (int i = 0; i<mean_vector.size(); i++){
 		for (int j = i+1; j<mean_vector.size(); j++){
 			diameter = euclideanDistance(mean_vector[i],mean_vector[j]);

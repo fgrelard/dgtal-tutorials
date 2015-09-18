@@ -56,13 +56,48 @@ CMAKE_SOURCE_DIR = /home/florent/Documents/DGtal/tutorials-copy/include/surface/
 CMAKE_BINARY_DIR = /home/florent/Documents/DGtal/tutorials-copy/include/surface/tests
 
 #=============================================================================
+# Target rules for target CMakeFiles/TestMorphomaths.dir
+
+# All Build rule for target.
+CMakeFiles/TestMorphomaths.dir/all:
+	$(MAKE) -f CMakeFiles/TestMorphomaths.dir/build.make CMakeFiles/TestMorphomaths.dir/depend
+	$(MAKE) -f CMakeFiles/TestMorphomaths.dir/build.make CMakeFiles/TestMorphomaths.dir/build
+	$(CMAKE_COMMAND) -E cmake_progress_report /home/florent/Documents/DGtal/tutorials-copy/include/surface/tests/CMakeFiles  1
+	@echo "Built target TestMorphomaths"
+.PHONY : CMakeFiles/TestMorphomaths.dir/all
+
+# Include target in all.
+all: CMakeFiles/TestMorphomaths.dir/all
+.PHONY : all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/TestMorphomaths.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/florent/Documents/DGtal/tutorials-copy/include/surface/tests/CMakeFiles 1
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/TestMorphomaths.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/florent/Documents/DGtal/tutorials-copy/include/surface/tests/CMakeFiles 0
+.PHONY : CMakeFiles/TestMorphomaths.dir/rule
+
+# Convenience name for target.
+TestMorphomaths: CMakeFiles/TestMorphomaths.dir/rule
+.PHONY : TestMorphomaths
+
+# clean rule for target.
+CMakeFiles/TestMorphomaths.dir/clean:
+	$(MAKE) -f CMakeFiles/TestMorphomaths.dir/build.make CMakeFiles/TestMorphomaths.dir/clean
+.PHONY : CMakeFiles/TestMorphomaths.dir/clean
+
+# clean rule for target.
+clean: CMakeFiles/TestMorphomaths.dir/clean
+.PHONY : clean
+
+#=============================================================================
 # Target rules for target CMakeFiles/TestSurfaceTraversal.dir
 
 # All Build rule for target.
 CMakeFiles/TestSurfaceTraversal.dir/all:
 	$(MAKE) -f CMakeFiles/TestSurfaceTraversal.dir/build.make CMakeFiles/TestSurfaceTraversal.dir/depend
 	$(MAKE) -f CMakeFiles/TestSurfaceTraversal.dir/build.make CMakeFiles/TestSurfaceTraversal.dir/build
-	$(CMAKE_COMMAND) -E cmake_progress_report /home/florent/Documents/DGtal/tutorials-copy/include/surface/tests/CMakeFiles  1
+	$(CMAKE_COMMAND) -E cmake_progress_report /home/florent/Documents/DGtal/tutorials-copy/include/surface/tests/CMakeFiles  2
 	@echo "Built target TestSurfaceTraversal"
 .PHONY : CMakeFiles/TestSurfaceTraversal.dir/all
 

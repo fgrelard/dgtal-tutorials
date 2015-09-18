@@ -61,10 +61,12 @@
 #include "geometry/MSTTangent.h"
 #include "geometry/PointUtil.h"
 #include "geometry/WeightedPoint.h"
+#include "geometry/MedialAxis.h"
 #include "surface/SurfaceUtils.h"
+#include "surface/Morphomaths.h"
 #include "clustering/diana.hpp"
 #include "WeightedPointCount.h"
-#include "geometry/MedialAxis.h"
+
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -153,6 +155,19 @@ Z3i::DigitalSet extractConnectedComponent3D(const Domain & domain, const set<Wei
 	return intersection;
 }
 
+Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, const Z3i::RealPoint& aPoint) {
+	double distanceMin = numeric_limits<double>::max();
+	Z3i::Point toReturn;
+	for (auto it = aSet.begin(), ite = aSet.end(); it != ite; ++it) {
+		double distanceToPoint = sqrt(pow(((*it)[0] - aPoint[0]), 2) + pow(((*it)[1] - aPoint[1]), 2) + pow(((*it)[2] - aPoint[2]), 2));
+		if (distanceToPoint < distanceMin) {
+			distanceMin = distanceToPoint;
+			toReturn = *it;
+		}
+	}
+	return toReturn;
+}
+
 template <typename Domain>
 Z3i::DigitalSet extractConnectedComponent3D(const Domain & domain, const Z3i::DigitalSet& volume, const Z3i::RealPoint& normal, const Z3i::Point& referencePoint, double d, double omega, double distanceMax = numeric_limits<double>::max()) {
 	typedef Z3i::Object26_6 ObjectType;
@@ -160,7 +175,8 @@ Z3i::DigitalSet extractConnectedComponent3D(const Domain & domain, const Z3i::Di
 	Z3i::DigitalSet intersection(domain);
 	for (auto it = volume.begin(), ite = volume.end(); it != ite; ++it) {
 		double valueToCheckForPlane = (*it)[0] * normal[0] + (*it)[1] * normal[1] + (*it)[2] * normal[2];
-		if (valueToCheckForPlane >= d && valueToCheckForPlane < d + omega && Z3i::l2Metric((*it), referencePoint) <= distanceMax) {
+		if (valueToCheckForPlane >= d && valueToCheckForPlane < d + omega &&
+			Z3i::l2Metric((*it), referencePoint) <= distanceMax) {
 			intersection.insert((*it));
 		}
 	}
@@ -280,7 +296,7 @@ Z3i::RealPoint extractCenterOfMass3D(const Z3i::DigitalSet& set) {
 
 
 
-vector<Z3i::Point> computePlaneWithGaussianMap(const Z3i::DigitalSet& setSurface, const map<Z3i::Point, Z3i::RealPoint>& normalToFacet, Z3i::RealPoint& normal, const Z3i::Point& currentPoint) {
+bool computePlaneWithGaussianMap(const Z3i::DigitalSet& setSurface, Z3i::DigitalSet& connectedComponent3D, const map<Z3i::Point, Z3i::RealPoint>& normalToFacet, Z3i::RealPoint& normal, const Z3i::Point& currentPoint) {
 	typedef Z3i::Object26_6 ObjectType;
 
 	ObjectType object(Z3i::dt26_6, setSurface);
@@ -327,10 +343,12 @@ vector<Z3i::Point> computePlaneWithGaussianMap(const Z3i::DigitalSet& setSurface
 			index = i;
 		}
 	}
-	if (index == -1)
-		return plane;
-	else
-		return clusters[index];
+	if (index != -1) 
+	    plane = clusters[index];
+	for (auto it = plane.begin(), ite = plane.end(); it != ite; ++it) {
+		connectedComponent3D.insert(*it);
+	}
+	return (clusters.size() == 1);
 }
 
 
@@ -600,7 +618,6 @@ int main( int  argc, char**  argv )
 		else
 			volumeBinary.setValue(*it, 0);
 	}
-	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
 
 	vector<Point> vPoints;
 	Z3i::DigitalSet skeletonPoints(domainVolume);
@@ -628,12 +645,13 @@ int main( int  argc, char**  argv )
 	Domain domain = vcm.domain();
 	KernelFunction chi( 1.0, r );
 
-	const int IMAGE_PATCH_WIDTH = 100;
 	
 	Matrix vcm_r, evec;
 	RealVector eval;
+
 	Viewer3D<> viewer;
 	viewer.show();
+   
  
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 
@@ -643,13 +661,15 @@ int main( int  argc, char**  argv )
 	Z3i::RealPoint normal;
 	Z3i::RealPoint previousNormal;
 	Z3i::Point previousCenter;
-			
+
+
+	
 	trace.beginBlock("Computing skeleton");
 	//Main loop to compute skeleton (stop when no vol points left to process)
 	while (numberLeft > 0)
 	{
-		currentPoint->myProcessed = true;
 		trace.progressBar((setVolume.size() - numberLeft), setVolume.size());		
+		currentPoint->myProcessed = true;
 		double radius = r;
 
 		//Distance transform value for VCM radius
@@ -664,31 +684,22 @@ int main( int  argc, char**  argv )
 				chi = KernelFunction( 1.0, radius);
 			}
 		}
-
-		
-		viewer.setLineColor(Color::Red);
-		viewer.setFillColor(Color::Red);
-		viewer.setFillTransparency(150);
-
-		// Compute discrete plane.
+	
+		// Compute discrete plane
 		Z3i::DigitalSet connectedComponent3D = computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted, currentPoint->myPoint, normal,
 																	0, previousNormal, radius);
-		Z3i::Point centerOfMass = extractCenterOfMass3D(connectedComponent3D);
-
+		Z3i::RealPoint realCenter = extractCenterOfMass3D(connectedComponent3D);
+		Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 
 		//Branching detection
-		// bool inABranch = isInABranch<ImageAdapterExtractor>(volumeBinary, vcm, chi, currentPoint->myPoint, radius*3, cptPlane);
-		// if (inABranch) {
-		// 	viewer << CustomColors3D(Color::Blue, Color::Blue) << currentPoint->myPoint;
-		// }
+		bool inABranch = isInABranch<ImageAdapterExtractor>(volumeBinary, vcm, chi, currentPoint->myPoint, (radius-delta)*7, cptPlane);
+		if (inABranch) {
+			viewer << CustomColors3D(Color::Blue, Color::Blue) << currentPoint->myPoint;
+		}
 		
 		//Center of mass computation
 		if (centerOfMass != Z3i::Point()) {
 		    bool add = markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
-			if (previousNormal != Z3i::RealPoint()) {
-			    markDifferenceBetweenPlanes(setVolumeWeighted, previousNormal, previousCenter,
-											normal, currentPoint->myPoint, radius);
-			}
 			if (add) {
 				skeletonPoints.insert(centerOfMass);
 				viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
@@ -699,6 +710,7 @@ int main( int  argc, char**  argv )
 
 		previousNormal = normal;
 		previousCenter = centerOfMass;
+		
 
 		//Go to next point according to normal OR to max value in DT
 		auto pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
@@ -708,7 +720,8 @@ int main( int  argc, char**  argv )
 		Point current = centerOfMass;
 	    auto newPoint = setVolumeWeighted.begin();
 		if (pointInWeightedSet != setVolumeWeighted.end()) {
-			while (current == centerOfMass) {
+			while (current == centerOfMass ||
+				   connectedComponent3D.find(current) != connectedComponent3D.end()) {
 				current = centerOfMass + normal * scalar;
 				scalar++;
 			}
@@ -716,9 +729,11 @@ int main( int  argc, char**  argv )
 					return (wpc->myPoint == current);
 				});
 			if (newPoint == setVolumeWeighted.end() || (*newPoint)->myProcessed) {
+				scalar = 1;
 				current = centerOfMass;
 				if (pointInWeightedSet != setVolumeWeighted.end()) {
-					while (current == centerOfMass) {
+					while (current == centerOfMass ||
+						connectedComponent3D.find(current) != connectedComponent3D.end()) {
 						current = centerOfMass - normal * scalar;
 						scalar++;
 					}
@@ -747,6 +762,7 @@ int main( int  argc, char**  argv )
 		}		
 
 		currentPoint = (*newPoint);
+		
 		numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
 							  [&](WeightedPointCount* wpc) {
 								  return (!wpc->myProcessed);
@@ -762,7 +778,7 @@ int main( int  argc, char**  argv )
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
 		(*it)->myProcessed = false;
 	}
-	connectDisconnectedComponents(skeletonPoints, dt, delta, vcm, chi, setVolume, setVolumeWeighted);
+//	connectDisconnectedComponents(skeletonPoints, dt, delta, vcm, chi, setVolume, setVolumeWeighted);
    
 	//Displaying
 	for (auto it = skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {

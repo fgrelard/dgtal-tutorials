@@ -93,7 +93,6 @@ TestSurfaceTraversal: /usr/lib/x86_64-linux-gnu/libboost_system.so
 TestSurfaceTraversal: /usr/lib/x86_64-linux-gnu/libpthread.so
 TestSurfaceTraversal: /usr/local/lib/libDGtal.so
 TestSurfaceTraversal: /usr/local/lib/libDGtalIO.so
-TestSurfaceTraversal: /usr/lib/x86_64-linux-gnu/libboost_program_options.a
 TestSurfaceTraversal: /usr/local/lib/libDGtal.so
 TestSurfaceTraversal: /usr/lib/libblas.so
 TestSurfaceTraversal: /usr/lib/liblapack.so
