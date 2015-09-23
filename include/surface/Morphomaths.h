@@ -98,7 +98,7 @@ template <typename Image>
 Image Morphomaths::dilation(const Image& image, int size) {
 	typedef typename Image::Domain Domain;
 	typedef typename Image::Point Point;	
-	typedef DGtal::functors::NotPointPredicate<Image> BackgroundPredicate; 
+	otypedef DGtal::functors::NotPointPredicate<Image> BackgroundPredicate; 
 	
 	
 	Image toReturn = constructOnePxBorderImage(image);

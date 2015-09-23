@@ -14,7 +14,6 @@
 #include "DGtal/kernel/BasicPointPredicates.h"
 #include "DGtal/images/IntervalForegroundPredicate.h"
 #include "Distance.h"
-#include <Eigen/Dense>
 
 using namespace DGtal;
 
@@ -26,23 +25,10 @@ namespace SliceUtils {
 	template <typename Vector, typename Point>
 	std::vector<Vector> computePlaneFromNormalVector(Vector normal, Point origin);
 
-	template <typename Vector, typename Point>
-	Vector computeNormalFromLinearRegression(const std::vector<Point>& points);
-
-	template <typename Vector, typename Point>
-	Vector computeNormalFromCovarianceMatrix(const std::vector<Point>& points);
-
-	template <typename Vector, typename Matrix>
-	Vector extractEigenVector(const Matrix& m, int colNumber);
-
-	template <typename Matrix, typename Image2D>
-	Matrix computeCovarianceMatrix(const Image2D& image);
+	template <typename Vector>
+	Vector computeProjectionOnSet(const Z3i::DigitalSet& aSet, const Z3i::Point& aPoint,
+								  const Z3i::RealPoint& aNormal);
 	
-	template <typename Image2D>
-	Z2i::RealPoint centerOfMass(const Image2D& image);
-
-	template <typename Image3D>
-	Z3i::RealPoint centerOfMass3D(const Image3D& image); 
 	
 	template <typename Pencil, typename Image>
 	void slicesFromPlanes(Viewer3D<>&, const std::vector<Pencil> &, const Image&, std::string);
@@ -116,99 +102,7 @@ std::vector<Vector> SliceUtils::computePlaneFromNormalVector(Vector normal, Poin
 	return fourPointsForPlane;
 }
 
-/**
- * Computes the normal of a plane from a set of points
- * Method : linear regression
- */
-template <typename Vector, typename Point>
-Vector SliceUtils::computeNormalFromLinearRegression(const std::vector<Point> & points) {
-	typedef Eigen::Matrix<double, Eigen::Dynamic, 3> MatrixXi;
-	typedef Eigen::Matrix<double, Eigen::Dynamic, 1> VectorXi;
-	unsigned int size = points.size();
-	MatrixXi A(size, 3);
-	VectorXi b = VectorXi::Zero(size, 1);
-	
-	for (int i = 0; i < size; i++) {
-		A(i, 0) = (double)points[i][0]*1.0;
-		A(i, 1) = (double)points[i][1]*1.0;
-		A(i, 2) = 1.0;
-		b(i, 0) = (double)points[i][2]*1.0;
-	}
-	Eigen::Vector3d x = A.colPivHouseholderQr().solve(b);
-	Vector normal;
-	normal[0] = x(0, 0);
-	normal[1] = x(1, 0);
-	normal[2] = -1;
-	return normal.getNormalized();
-}
 
-/**
- * Computes the normal of a plane from a set of points
- * Method : covariance matrix
- */
-template <typename Vector, typename Point>
-Vector SliceUtils::computeNormalFromCovarianceMatrix(const std::vector<Point> & points) {
-	typedef Eigen::MatrixXd MatrixXd;
-	
-	unsigned int size = points.size();
-	if (size < 2) return Vector::zero;
-	
-	MatrixXd A(size, 3);
-	for (int i = 0; i < size; i++) {
-		A(i, 0) = (double)points[i][0] * 1.0;
-		A(i, 1) = (double)points[i][1] * 1.0;
-		A(i, 2) = (double)points[i][2] * 1.0;
-	}
-	MatrixXd centered = A.rowwise() - A.colwise().mean();
-	MatrixXd cov = (centered.adjoint() * centered) / double(A.rows() - 1);
-	Eigen::SelfAdjointEigenSolver<MatrixXd> eig(cov);
-	Vector normal;
-	auto veigen = eig.eigenvectors().col(0);
-	normal[0] = veigen[0];
-	normal[1] = veigen[1];
-	normal[2] = veigen[2];
-	return normal;
-}
-
-template <typename Matrix, typename Image2D>
-Matrix SliceUtils::computeCovarianceMatrix(const Image2D& image) {
-	typedef typename Image2D::Domain Domain;
-	typedef typename Domain::Point Point;
-	int size = 0;
-	for (typename Domain::ConstIterator it = image.domain().begin(), ite = image.domain().end();
-		 it != ite; ++it) {
-		Point point = *it;
-		if (image(*it) > 0) {
-			size++;
-		}
-	}
-	
-	Matrix A(size, 2);
-	int i = 0;
-	for (typename Domain::ConstIterator it = image.domain().begin(), ite = image.domain().end();
-		 it != ite; ++it) {
-		Point point = *it;
-		if (image(*it) > 0) {
-			A(i, 0) = (double) point[0] * 1.0;
-			A(i, 1) = (double) point[1] * 1.0;
-			i++;
-		}
-	}
-	Matrix centered = A.rowwise() - A.colwise().mean();
-	Matrix cov = (centered.adjoint() * centered) / double(A.rows() - 1);
-    return cov;
-}
-
-template <typename Vector, typename Matrix>
-Vector SliceUtils::extractEigenVector(const Matrix& m, int colNumber) {
-	Eigen::SelfAdjointEigenSolver<Matrix> eig(m);
-	Vector normal;
-	auto veigen = eig.eigenvectors().col(colNumber);
-	normal[0] = veigen[0];
-	normal[1] = veigen[1];
-	normal[2] = veigen[2];
-	return normal;
-}
 
 /**
  * Constructs the intersection of a given object image with a plane (defined by normal and origin)
@@ -244,44 +138,6 @@ double SliceUtils::computeRadiusFromImage(const ImageAdapter& image, int thresho
 	return maxDT;	
 }
 
-template <typename Image2D>
-Z2i::RealPoint SliceUtils::centerOfMass(const Image2D& image) {
-	double m00 = 0;
-	double m10 = 0;
-	double m01 = 0;
-
-    for (auto it = image.domain().begin(), ite = image.domain().end(); it != ite; ++it) {
-		Z2i::Point current = *it;
-		m00 += image(current);
-		m10 += current[0] * image(current);
-		m01 += current[1] * image(current);
-	}
-	if (m00 != 0) 
-		return Z2i::RealPoint(m10/m00, m01/m00);
-	else
-		return Z2i::RealPoint();
-}
-
-template <typename Image3D>
-Z3i::RealPoint SliceUtils::centerOfMass3D(const Image3D& image) {
-	double m000 = 0;
-	double m100 = 0;
-	double m010 = 0;
-	double m001 = 0;
-
-    for (auto it = image.domain().begin(), ite = image.domain().end(); it != ite; ++it) {
-		Z3i::Point current = *it;
-		m000 += image(current);
-		m100 += current[0] * image(current);
-		m010 += current[1] * image(current);
-		m001 += current[2] * image(current);
-	}
-	if (m000 != 0) 
-		return Z3i::RealPoint(m100/m000, m010/m000, m001/m000);
-	else
-		return Z3i::RealPoint();
-
-}
 /**
  * Utility function designed at viewing and saving the 2D extracted slices
  */
