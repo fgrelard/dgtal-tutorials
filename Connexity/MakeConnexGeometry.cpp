@@ -39,6 +39,80 @@ using namespace DGtal;
 namespace po = boost::program_options;
 
 
+Z3i::DigitalSet computeTraversedPoints(const Z3i::Object26_6& reference,
+									  const Z3i::DigitalSet setVolume,
+									  const Z3i::Point& point,
+									  const Z3i::RealPoint& normal ) {
+	int scalar = 1;
+	Z3i::DigitalSet traversed(setVolume.domain());
+	Z3i::Point projection = point;
+	while (reference.pointSet().find(projection) == reference.pointSet().end() &&
+		   setVolume.find(projection) != setVolume.end()) {
+		projection = point + normal * scalar;
+		traversed.insert(projection);
+		scalar++;	
+	}
+	return traversed;
+}
+
+Z3i::DigitalSet computeNearestPoints(const Z3i::DigitalSet& traversed, const Z3i::Object26_6& reference) {
+	Z3i::DigitalSet closestPoints(traversed.domain());
+	
+	for (auto it = traversed.begin(), ite = traversed.end(); it != ite; ++it) {
+		double distanceMin = numeric_limits<double>::max();
+		Z3i::Point closest;
+		for (auto itO = reference.pointSet().begin(), itOe = reference.pointSet().end(); itO != itOe; ++itO) {
+			double distance = Z3i::l2Metric(*itO, *it);
+			if (distance < distanceMin) {
+				distanceMin = distance;
+				closest = *itO;
+			}
+		}
+		closestPoints.insert(closest);
+	}
+	return closestPoints;
+}
+
+template <typename WeightedPointCount>
+set<WeightedPointCount*> computeAccumulator(const Z3i::DigitalSet& traversed, const Z3i::DigitalSet& nearest) {
+	set<WeightedPointCount*> aSet;
+	for (auto it = nearest.begin(), ite = nearest.end(); it != ite; ++it) {
+		aSet.insert(new WeightedPointCount(*it, 0, traversed.size()));
+	}
+	
+	for (auto it = traversed.begin(), ite = traversed.end(); it != ite; ++it) {
+		for (auto itN = nearest.begin(), itNe = nearest.end(); itN != itNe; ++itN) {
+			double distance = Z3i::l2Metric(*it, *itN);
+			auto nearestInSetIterator = find_if(aSet.begin(), aSet.end(), [&](WeightedPointCount* wpc) {
+					return wpc->myPoint == *itN;
+				});
+			(*nearestInSetIterator)->myWeight += distance;
+		}
+	}
+	return aSet;
+}
+
+template <typename WeightedPointCount>
+WeightedPointCount candidate(const set<WeightedPointCount*>& accumulator, const Z3i::Point& point) {
+	double valMax = (*max_element(accumulator.begin(), accumulator.end(), [&](const WeightedPointCount* a, const WeightedPointCount* b) {
+				return a->getWeightedValue() < b->getWeightedValue();
+			}))->getWeightedValue();
+
+	double valMin = (*min_element(accumulator.begin(), accumulator.end(), [&](const WeightedPointCount* a, const WeightedPointCount* b) {
+				return a->getWeightedValue() < b->getWeightedValue();
+			}))->getWeightedValue();
+
+	if (valMin == valMax) return WeightedPointCount(point, std::numeric_limits<double>::max(), 1);
+	set<WeightedPointCount> reorderedAccumulator;
+	for (auto it = accumulator.begin(), ite = accumulator.end(); it != ite; ++it) {
+		double value = ((*it)->getWeightedValue() - valMin) / (valMax - valMin);
+		double weight = value * Z3i::l2Metric(point, (*it)->myPoint);
+		reorderedAccumulator.insert(WeightedPointCount((*it)->myPoint, weight, 1));
+	}
+	trace.info() << (*(--reorderedAccumulator.end())).myWeight << " " << (*(reorderedAccumulator.begin())).myWeight << endl;
+	return (*(--reorderedAccumulator.end()));
+}
+
 int main( int  argc, char**  argv )
 {
 	QApplication application(argc,argv);
@@ -101,13 +175,13 @@ int main( int  argc, char**  argv )
 	int thresholdMin = vm["thresholdMin"].as<int>();
 	int thresholdMax = vm["thresholdMax"].as<int>();
 	int R = vm["radius"].as<int>();
-int delta = vm["delta"].as<int>();
-string volumeFilename = vm["volume"].as<std::string>();
+	int delta = vm["delta"].as<int>();
+	string volumeFilename = vm["volume"].as<std::string>();
 
-Image skeleton = VolReader<Image>::importVol(inputFilename);
-Image volume = VolReader<Image>::importVol(volumeFilename);
-Z3i::DigitalSet setVolume(volume.domain());
-Z3i::Domain domainVolume = setVolume.domain();
+	Image skeleton = VolReader<Image>::importVol(inputFilename);
+	Image volume = VolReader<Image>::importVol(volumeFilename);
+	Z3i::DigitalSet setVolume(volume.domain());
+	Z3i::Domain domainVolume = setVolume.domain();
 	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume, 
 												  thresholdMin-1, thresholdMax);
 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
@@ -205,94 +279,20 @@ Z3i::Domain domainVolume = setVolume.domain();
 
 		Z3i::RealPoint normal = VCMUtil::computeNormalFromVCM(belongingToCurrentObject, vcm, chi, 0);
 
-		Z3i::Point projection(belongingToCurrentObject);
-		Z3i::Point previousProjection(belongingToCurrentObject);
-		int scalar = 1;
-	    vector<WeightedPointCount> accumulator;
-		while (reference.pointSet().find(projection) == reference.pointSet().end() &&
-			   setVolume.find(projection) != setVolume.end()) {
+		Z3i::DigitalSet traversedNormal = computeTraversedPoints(reference, setVolume, belongingToCurrentObject, normal);
+		Z3i::DigitalSet traversedAntiNormal = computeTraversedPoints(reference, setVolume, belongingToCurrentObject, -normal);
+		Z3i::DigitalSet nearestNormal = computeNearestPoints(traversedNormal, reference);
+		Z3i::DigitalSet nearestAntiNormal = computeNearestPoints(traversedAntiNormal, reference);
+		set<WeightedPointCount*> accumulatorNormal = computeAccumulator<WeightedPointCount>(traversedNormal, nearestNormal);
+		set<WeightedPointCount*> accumulatorAntiNormal = computeAccumulator<WeightedPointCount>(traversedAntiNormal, nearestAntiNormal);
+		WeightedPointCount candidateNormal = candidate(accumulatorNormal, belongingToCurrentObject);
+		WeightedPointCount candidateAntiNormal = candidate(accumulatorAntiNormal, belongingToCurrentObject);
 
-			projection = belongingToCurrentObject + normal * scalar;
-			
-			if (projection != previousProjection) {
-				double distanceMin = numeric_limits<int>::max();
-				Z3i::Point referencePoint;
-				for (auto it = reference.pointSet().begin(), ite = reference.pointSet().end();
-					 it != ite; ++it) {
-					double distance = Z3i::l2Metric(*it, projection);
-					if (distance < distanceMin) {
-						distanceMin = distance;
-						referencePoint = *it;
-					}
-				}
-				auto itAccumulator = find_if(accumulator.begin(), accumulator.end(), [&](const WeightedPointCount& wpc) {
-						return wpc.myPoint == referencePoint;
-					});
-				if (itAccumulator  == accumulator.end()) {
-					accumulator.push_back(WeightedPointCount(referencePoint, distanceMin, 1));
-				} else {
-					itAccumulator->myWeight += distanceMin;
-					itAccumulator->myCount++;
-				}
-			}
-		
-			scalar++;	
-			previousProjection = projection;
-			
-		}
-
-		sort(accumulator.begin(), accumulator.end(), [](const WeightedPointCount& a, const WeightedPointCount& b)
-			 {
-				 return a.getWeightedValue() < b.getWeightedValue();
-			 }
-			);
-		WeightedPointCount propositionOne( *(accumulator.begin()));
-		
-		accumulator.clear();
-		projection = belongingToCurrentObject;
-		scalar = 1;
-		while (reference.pointSet().find(projection) == reference.pointSet().end() &&
-			   setVolume.find(projection) != setVolume.end()) {
-			projection = belongingToCurrentObject - normal * scalar;
-			
-			if (projection != previousProjection) {
-				double distanceMin = numeric_limits<int>::max();
-				Z3i::Point referencePoint;
-				for (auto it = reference.pointSet().begin(), ite = reference.pointSet().end();
-					 it != ite; ++it) {
-					double distance = Z3i::l2Metric(*it, projection);
-					if (distance < distanceMin) {
-						distanceMin = distance;
-						referencePoint = *it;
-					}
-				}
-				auto itAccumulator = find_if(accumulator.begin(), accumulator.end(), [&](const WeightedPointCount& wpc) {
-						return wpc.myPoint == referencePoint;
-					});
-				if (itAccumulator  == accumulator.end()) {
-					accumulator.push_back(WeightedPointCount(referencePoint, distanceMin, 1));
-				} else {
-					itAccumulator->myWeight += distanceMin;
-					itAccumulator->myCount++;
-				}
-			}
-		
-			scalar++;	
-			previousProjection = projection;
-		}
-		
-		sort(accumulator.begin(), accumulator.end(), [](const WeightedPointCount& a, const WeightedPointCount& b)
-			 {
-				 return a.getWeightedValue() < b.getWeightedValue();
-			 }
-			);
-	
-		WeightedPointCount propositionTwo(*(accumulator.begin()));
-		
-		if (propositionOne.getWeightedValue() < propositionTwo.getWeightedValue()) {
-			belongingToReference = propositionOne.myPoint;
+	  
+		if (candidateNormal.myWeight < candidateAntiNormal.myWeight) {
+			belongingToReference = candidateNormal.myPoint;
 		} else  {
-			belongingToReference = propositionTwo.myPoint;
+			belongingToReference = candidateAntiNormal.myPoint;
 		}
 		for (auto it = minimizingObjectToReference->pointSet().begin(),
 				 ite = minimizingObjectToReference->pointSet().end();

@@ -284,8 +284,8 @@ bool isInABranch(const Image& volume, const VCM& vcm, const KernelFunction& chi,
 	Z3i::Domain domain3Dyup(volume.domain().lowerBound() + Z3i::Point(-radius, -radius, -radius), volume.domain().upperBound() + Z3i::Point(radius, radius, radius));
 	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
 									  DGtal::Z2i::Point(radius, radius));
-	Z3i::RealPoint longitudinalNormal = computeNormalFromVCM(point, vcm, chi, 1); 
-	Z3i::RealPoint sagittalNormal = computeNormalFromVCM(point, vcm, chi, 2);
+	Z3i::RealPoint longitudinalNormal = VCMUtil::computeNormalFromVCM(point, vcm, chi, 1); 
+	Z3i::RealPoint sagittalNormal = VCMUtil::computeNormalFromVCM(point, vcm, chi, 2);
 
 	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedderLongitudinal(domain3Dyup, point, longitudinalNormal, radius, domain3Dyup.lowerBound());
 	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedderSagittal(domain3Dyup, point, sagittalNormal, radius, domain3Dyup.lowerBound());
@@ -601,10 +601,10 @@ int main( int  argc, char**  argv )
 	
 
 		//Branching detection
-		//bool inABranch = isInABranch<ImageAdapterExtractor>(volumeBinary, vcm, chi, currentPoint->myPoint, (radius)*5, cptPlane);
-		// if (inABranch) {
-		// 	viewer << CustomColors3D(Color::Blue, Color::Blue) << currentPoint->myPoint;
-		// }
+		bool inABranch = isInABranch<ImageAdapterExtractor>(volumeBinary, vcm, chi, currentPoint->myPoint, (radius)*5, cptPlane);
+	    if (inABranch) {
+		 	viewer << CustomColors3D(Color::Blue, Color::Blue) << currentPoint->myPoint;
+		}
 		
 		//Center of mass computation
 		if (realCenter != Z3i::RealPoint()) {
@@ -686,7 +686,7 @@ int main( int  argc, char**  argv )
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
 		(*it)->myProcessed = false;
 	}
-	connectDisconnectedComponents(skeletonPoints, dt, delta, vcm, chi, setVolume, setVolumeWeighted);
+	//connectDisconnectedComponents(skeletonPoints, dt, delta, vcm, chi, setVolume, setVolumeWeighted);
    
 	//Displaying
 	for (auto it = skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {

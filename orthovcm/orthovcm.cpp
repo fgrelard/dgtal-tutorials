@@ -216,12 +216,12 @@ int main( int  argc, char**  argv )
 		RealVector n2 = evec.column( 1 );
 		n2*=size;
 
-		if(sliceNumber > 2280 && sliceNumber < 2420 && sliceNumber % 10 ==0) {
+		//if(sliceNumber > 2280 && sliceNumber < 2420 && sliceNumber % 10 ==0) {
 			viewer.setLineColor(Color::Blue);
 			viewer.setFillColor(Color::Blue);
 			viewer.setFillTransparency(150);
 			viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
-		}
+			//}
 		sliceNumber++;
 	}
 
