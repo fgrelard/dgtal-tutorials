@@ -27,8 +27,8 @@ void testSurfaceTraversal(int argc, char** argv) {
 
 	Z3i::Point source(1, -9, 8);
 	Z3i::Point destination(-9, -1, 8);
-	//vector<Z3i::Point> path = SurfaceTraversal::AStarAlgorithm(graphSurface, source, destination);
-	vector<Z3i::Point> path = SurfaceTraversal::DijkstraAlgorithm(graphSurface, source, destination);
+	vector<Z3i::Point> path = SurfaceTraversal::AStarAlgorithm(graphSurface, source, destination);
+	//vector<Z3i::Point> path = SurfaceTraversal::DijkstraAlgorithm(graphSurface, source, destination);
 	
 	QApplication app(argc, argv);
 	Viewer3D<> viewer;
