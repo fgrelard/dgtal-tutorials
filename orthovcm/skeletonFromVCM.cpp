@@ -72,7 +72,7 @@
 #include "geometry/VCMUtil.h"
 #include "geometry/WeightedPointCount.h"
 #include "Statistics.h"
-
+#include "shapes/Ball.h"
 ///////////////////////////////////////////////////////////////////////////////
 
 using namespace std;
@@ -102,6 +102,30 @@ Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const Domain
 			aSet.insert(it->first);
 	}
 	return aSet; 
+}
+
+template <typename WeightedPoint>
+void detectBranchingPointsInNeighborhood(const Z3i::DigitalSet& branchingPoints, set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint>>& weightedSet, const Z3i::Point& current, double radius) {
+	Ball<Z3i::Point> ball(current, radius);
+	std::vector<Z3i::Point> pointsInBall = ball.pointsInBall();
+	bool toMark = false;
+	for (auto it = pointsInBall.begin(), ite = pointsInBall.end(); it != ite; ++it) {
+		if (branchingPoints.find(*it) != branchingPoints.end()) {
+			toMark = true;
+			break;
+		}
+	}
+
+	if (toMark) {
+		for (auto it = pointsInBall.begin(), ite = pointsInBall.end(); it != ite; ++it) {
+			Z3i::Point current = *it;
+		    auto wpIterator = find_if(weightedSet.begin(), weightedSet.end(), [&](WeightedPoint* wp) {
+					return wp->myPoint == current;
+				});
+			if (wpIterator != weightedSet.end())
+				(*wpIterator)->myProcessed = true;
+		}
+	}
 }
 
 Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, const Z3i::RealPoint& aPoint) {
@@ -579,15 +603,6 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(vcm_surface, domainVolume, thresholdFeature);
 	
 	
-	for (auto it = branchingPoints.begin() , ite = branchingPoints.end(); it != ite; ++it) {
-		viewer << CustomColors3D(Color::Red, Color::Red) << *it;
-	}
-	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
-		viewer << CustomColors3D(Color(0,0,50,50), Color(0,0,50,50)) << *it;
-	}
-	viewer << Viewer3D<>::updateDisplay;
-	application.exec();
-	return 0;
 	
 	DTL2::Domain domainDT = dt.domain();
 	for (auto it = domainDT.begin(), ite = domainDT.end(); it != ite; ++it) {
@@ -653,14 +668,12 @@ int main( int  argc, char**  argv )
 	
 
 		//Branching detection
-		bool inABranch = isInABranch<ImageAdapterExtractor>(volumeBinary, vcm, chi, currentPoint->myPoint, (radius)*5, cptPlane);
-	    if (inABranch) {
-		 	viewer << CustomColors3D(Color::Blue, Color::Blue) << currentPoint->myPoint;
-		}
+		detectBranchingPointsInNeighborhood(branchingPoints, setVolumeWeighted, currentPoint->myPoint, radius);
 		
 		//Center of mass computation
 		if (realCenter != Z3i::RealPoint()) {
-		    bool add = VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
+		    VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
+			bool add = true;
 			if (add) {
 				centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 				previousNormal = normal;
