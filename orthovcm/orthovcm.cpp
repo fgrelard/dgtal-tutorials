@@ -53,6 +53,8 @@
 #include "geometry/SliceUtils.h"
 #include "geometry/Pencil.h"
 #include "geometry/MSTTangent.h"
+#include "geometry/MedialAxis.h"
+#include "surface/SurfaceUtils.h"
 ///////////////////////////////////////////////////////////////////////////////
 
 using namespace std;
@@ -123,9 +125,11 @@ int main( int  argc, char**  argv )
 
 	Image volume = VolReader<Image>::importVol(inputFilename);
 	Z3i::Domain domainVolume = volume.domain();
-  
+	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
+	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer; 
+	Binarizer binarizer(volume, thresholdMin-1, thresholdMax);
 	Image image = VolReader<Image>::importVol(skeletonFilename); 
-
+	typedef DGtal::DistanceTransformation<Space, Binarizer, Z3i::L2Metric> DTL2;
 	Point p;	
 	vector<Point> vPoints;
 	for (auto it = image.domain().begin(), itE = image.domain().end(); it != itE; ++it) {
@@ -133,6 +137,14 @@ int main( int  argc, char**  argv )
 			p = *it;
 		}
 	}
+
+	Metric l2;
+	Viewer3D<> viewer;
+	viewer.show();
+
+
+
+	
 // We have to visit the direct neighbours in order to have a container with voxels
 // ordered sequentially by their connexity
 // Otherwise we have a point container with points which are not neighbours
@@ -169,7 +181,6 @@ int main( int  argc, char**  argv )
 //Computing lambda MST tangents
 	std::vector<Pencil> tangents = TangentUtils::orthogonalPlanesWithTangents<Pencil>(vPoints.begin(), vPoints.end());
   
-	Metric l2;
 	VCM vcm( R, ceil( r ), l2, true );
 	vcm.init( vPoints.begin(), vPoints.end() );
 	Domain domain = vcm.domain();
@@ -179,8 +190,7 @@ int main( int  argc, char**  argv )
 // more curved zones are yellow till red.
 	Matrix vcm_r, evec;
 	RealVector eval;
-	Viewer3D<> viewer;
-	viewer.show();
+
 	int sliceNumber = 0;
  
 	const int IMAGE_PATCH_WIDTH = 100;

@@ -268,6 +268,7 @@ int main( int  argc, char**  argv )
 						distanceMin = distance;
 						belongingToCurrentObject = *itCurrentObject;
 						belongingToReference = *itReference;
+
 					}
 				}
 			}
@@ -275,7 +276,7 @@ int main( int  argc, char**  argv )
 
 		double radius = dt(belongingToCurrentObject) + delta;
 		vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
-		chi = KernelFunction( 1.0, radius);
+		chi = KernelFunction( 1.0, radius );
 
 		Z3i::RealPoint normal = VCMUtil::computeNormalFromVCM(belongingToCurrentObject, vcm, chi, 0);
 

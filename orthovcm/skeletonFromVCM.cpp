@@ -38,6 +38,7 @@
 #include "DGtal/math/linalg/EigenDecomposition.h"
 #include "DGtal/geometry/volumes/distance/ExactPredicateLpSeparableMetric.h"
 #include "geometry/VoronoiCovarianceMeasure.h"
+#include "geometry/VoronoiCovarianceMeasureOnDigitalSurface.h"
 #include "DGtal/io/colormaps/GradientColorMap.h"
 #include "DGtal/io/boards/Board2D.h"
 #include "DGtal/shapes/Shapes.h"
@@ -50,6 +51,7 @@
 #include "DGtal/graph/DepthFirstVisitor.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 #include "DGtal/kernel/sets/DigitalSetInserter.h"
+#include "DGtal/topology/ImplicitDigitalSurface.h"
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
@@ -86,7 +88,21 @@ class LabelledPoint : public WeightedPoint<Z3i::Point> {
 };
 
 
+template <typename VCM, typename Domain>
+Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const Domain& domain, double threshold) {
+	typedef typename VCM::Point2EigenStructure::const_iterator P2EConstIterator;
 
+	Z3i::DigitalSet aSet(domain);
+	for (P2EConstIterator  it = vcm.mapPoint2ChiVCM().begin(),
+			  itE = vcm.mapPoint2ChiVCM().end(); it != itE; ++it )
+    {
+		auto lambda = it->second.values;
+		double ratio = lambda[ 0 ] / ( lambda[ 0 ] + lambda[ 1 ] + lambda[ 2 ] );
+		if (ratio > threshold)
+			aSet.insert(it->first);
+	}
+	return aSet; 
+}
 
 Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, const Z3i::RealPoint& aPoint) {
 	double distanceMin = numeric_limits<double>::max();
@@ -467,6 +483,13 @@ int main( int  argc, char**  argv )
 	typedef MetricAdjacency<Space, 3> MetricAdjacency;
 	typedef WeightedPointCount<Point> WeightedPointCount;
 	typedef functors::NotPointPredicate<Z3i::DigitalSet> NotPointPredicate;
+	typedef functors::IntervalForegroundPredicate<Image> ThresholdedImage;
+	typedef DGtal::DistanceTransformation<Space, ThresholdedImage, Z3i::L2Metric> DTL2;
+	typedef Z3i::KSpace KSpace;
+	typedef ImplicitDigitalSurface< KSpace, ThresholdedImage > DigitalSurfaceContainer;
+
+	typedef VoronoiCovarianceMeasureOnDigitalSurface< DigitalSurfaceContainer, Metric, KernelFunction, DTL2 > VCMOnSurface;
+	typedef KSpace::Surfel Surfel;
 	
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
@@ -479,6 +502,7 @@ int main( int  argc, char**  argv )
 		("thresholdMax,M", po::value<int>()->default_value(255), "maximum threshold for binarization")
 		("radiusInside,R", po::value<double>()->default_value(10), "radius of the ball inside voronoi cell")
 		("radiusNeighbour,r", po::value<double>()->default_value(10), "radius of the ball for the neighbourhood")
+		("thresholdFeature,T", po::value<double>()->default_value(0.1), "feature threshold")
 		; 
 
 	bool parseOK=true;
@@ -511,6 +535,10 @@ int main( int  argc, char**  argv )
 	double r = vm["radiusNeighbour"].as<double>();
 	int delta = vm["delta"].as<int>();
 	int cptPlane = 0;
+	double thresholdFeature = vm["thresholdFeature"].as<double>();
+
+	Viewer3D<> viewer;
+	viewer.show();
 	
 	Image volume = VolReader<Image>::importVol(inputFilename);
 	Z3i::Domain domainVolume = volume.domain();
@@ -527,14 +555,40 @@ int main( int  argc, char**  argv )
 	}
 
 	vector<Point> vPoints;
-	Z3i::DigitalSet skeletonPoints(domainVolume);
-	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer; 
-	Binarizer binarizer(volume, thresholdMin-1, thresholdMax);
-	typedef DGtal::DistanceTransformation<Space, Binarizer, Z3i::L2Metric> DTL2;
-	
+	Z3i::DigitalSet skeletonPoints(domainVolume);  
+	ThresholdedImage binarizer(volume, thresholdMin-1, thresholdMax);	
 	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
-		
 
+
+	//Construct VCM surface
+	Metric l2;
+	KSpace ks;
+	ks.init( volume.domain().lowerBound(),
+			 volume.domain().upperBound(), true );
+	SurfelAdjacency<KSpace::dimension> surfAdj( true ); // interior in all directions.
+	Surfel bel = Surfaces<KSpace>::findABel( ks, binarizer, 1000000 );
+	DigitalSurfaceContainer* container =
+		new DigitalSurfaceContainer( ks, binarizer, surfAdj, bel, false  );
+	DigitalSurface< DigitalSurfaceContainer > surface( container ); //acquired
+
+	//! [DVCM3D-instantiation]
+	Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel;
+	KernelFunction chiSurface( 1.0, r );             // hat function with support of radius r
+	VCMOnSurface vcm_surface( surface, embType, R, r,
+					 chiSurface, dt, 3, l2, true /* verbose */ );
+	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(vcm_surface, domainVolume, thresholdFeature);
+	
+	
+	for (auto it = branchingPoints.begin() , ite = branchingPoints.end(); it != ite; ++it) {
+		viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+	}
+	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
+		viewer << CustomColors3D(Color(0,0,50,50), Color(0,0,50,50)) << *it;
+	}
+	viewer << Viewer3D<>::updateDisplay;
+	application.exec();
+	return 0;
+	
 	DTL2::Domain domainDT = dt.domain();
 	for (auto it = domainDT.begin(), ite = domainDT.end(); it != ite; ++it) {
 		double value = dt(*it);
@@ -546,7 +600,7 @@ int main( int  argc, char**  argv )
 	trace.info() << vPoints.size() << endl;
 	WeightedPointCount* currentPoint = *setVolumeWeighted.begin();
   
-	Metric l2;
+	
 	VCM vcm( R, ceil( r ), l2, true );
 	vcm.init( setVolume.begin(), setVolume.end() );
 	Domain domain = vcm.domain();
@@ -556,9 +610,7 @@ int main( int  argc, char**  argv )
 	Matrix vcm_r, evec;
 	RealVector eval;
 
-	Viewer3D<> viewer;
-	viewer.show();
-   
+
  
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 
