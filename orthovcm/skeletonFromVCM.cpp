@@ -71,6 +71,7 @@
 #include "geometry/WeightedPointCount.h"
 #include "geometry/VCMUtil.h"
 #include "geometry/WeightedPointCount.h"
+
 #include "Statistics.h"
 #include "shapes/Ball.h"
 ///////////////////////////////////////////////////////////////////////////////
@@ -104,28 +105,77 @@ Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const Domain
 	return aSet; 
 }
 
-template <typename WeightedPoint>
-void detectBranchingPointsInNeighborhood(const Z3i::DigitalSet& branchingPoints, set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint>>& weightedSet, const Z3i::Point& current, double radius) {
+template <typename DTL2>
+Z3i::Point projectionOnSurface(const DTL2& dt, const Z3i::DigitalSet& aSet, const Z3i::Point& origin, const Z3i::RealPoint& normal) {
+	int scalar = 1;
+	Z3i::Point current = origin + normal;
+	while (aSet.find(current) != aSet.end() && (current != origin || dt(current) > 1)) {
+		scalar++;
+		current = origin + normal * scalar;
+	}
+	return current;
+}
+
+template <typename VCM>
+Z3i::RealPoint extractVectorVCMAtPoint(const VCM& vcm, const Z3i::Point& point, int coordinate) {
+	typedef typename VCM::Point2EigenStructure::const_iterator P2EConstIterator;
+
+	auto mapPointEigen = vcm.mapPoint2ChiVCM();
+	Z3i::RealPoint vector = mapPointEigen[point].vectors.column(coordinate);
+	double scalar = mapPointEigen[point].values[coordinate];
+	return vector;
+}
+
+Z3i::DigitalSet markAroundBranchingPoints(const Z3i::DigitalSet& setVolume, const Z3i::Point& center, double radius) {
+	Z3i::DigitalSet aSet(setVolume.domain());
+	Ball<Z3i::Point> ball(center, radius);
+	std::vector<Z3i::Point> pointsInBall = ball.pointsInBall();
+	for (auto it = pointsInBall.begin(), ite = pointsInBall.end(); it != ite; ++it) {
+		if (setVolume.find(*it) != setVolume.end()) {
+			aSet.insert(*it);
+		}
+	}
+	return aSet;
+}
+
+template <typename ImageAdapterExtractor, typename Matrix, typename Image>
+double computeRadiusFromIntersection(const Image& volume, const Z3i::Point& point, const Z3i::RealPoint& normal,
+									 double radius) {
+	typedef ImageSelector<Z2i::Domain, bool>::Type Image2D;
+	DGtal::functors::Identity idV;
+	Z3i::Domain domain3Dyup(volume.domain().lowerBound() + Z3i::Point(-radius, -radius, -radius), volume.domain().upperBound() + Z3i::Point(radius, radius, radius));
+	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
+									  DGtal::Z2i::Point(radius, radius));
+    
+
+	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(domain3Dyup, point, normal, radius, domain3Dyup.lowerBound());
+
+	ImageAdapterExtractor extractedImage(volume, domainImage2D, embedder, idV);
+	Image2D processImage = ImageUtil::convertImage<Image2D>(extractedImage);
+    Matrix covmatrix = Statistics::computeCovarianceMatrix<Matrix>(processImage);
+	Z2i::RealPoint vector2 = Statistics::extractEigenVector<Z2i::RealPoint>(covmatrix, 1);
+	double eigenvalue = Statistics::extractEigenValue<Z2i::RealPoint>(covmatrix, 0)[1];
+	return sqrt(eigenvalue);
+}
+
+Z3i::DigitalSet detectBranchingPointsInNeighborhood(const Z3i::DigitalSet& branchingPoints,
+													const Z3i::Point& current, double radius) {
+
+	Z3i::DigitalSet aSet(branchingPoints.domain());
 	Ball<Z3i::Point> ball(current, radius);
 	std::vector<Z3i::Point> pointsInBall = ball.pointsInBall();
 	bool toMark = false;
-	for (auto it = pointsInBall.begin(), ite = pointsInBall.end(); it != ite; ++it) {
-		if (branchingPoints.find(*it) != branchingPoints.end()) {
+	for (auto it = branchingPoints.begin(), ite = branchingPoints.end(); it != ite; ++it) {
+		if (ball.contains(*it)) {
 			toMark = true;
 			break;
 		}
 	}
 
 	if (toMark) {
-		for (auto it = pointsInBall.begin(), ite = pointsInBall.end(); it != ite; ++it) {
-			Z3i::Point current = *it;
-		    auto wpIterator = find_if(weightedSet.begin(), weightedSet.end(), [&](WeightedPoint* wp) {
-					return wp->myPoint == current;
-				});
-			if (wpIterator != weightedSet.end())
-				(*wpIterator)->myProcessed = true;
-		}
+		aSet.insert(pointsInBall.begin(), pointsInBall.end());
 	}
+	return aSet;
 }
 
 Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, const Z3i::RealPoint& aPoint) {
@@ -141,6 +191,17 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 	return toReturn;
 }
 
+template <typename VoronoiMap>
+Z3i::DigitalSet extractVoronoiCell(const Z3i::DigitalSet& backgroundSet, const VoronoiMap& voronoiMap, const Z3i::Point& point) {
+	Z3i::DigitalSet aSet(backgroundSet.domain());
+	for (auto it = backgroundSet.begin(), ite = backgroundSet.end(); it != ite; ++it) {
+		if (voronoiMap(*it) == point) {
+			aSet.insert(*it);
+		}
+	}
+	return aSet;
+}
+
 
 template <typename WeightedPoint>
 set<WeightedPoint*> computePointsBelowPlane(set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint>>& volume, const Z3i::RealPoint& normal, const Z3i::Point& center, double distanceMax = numeric_limits<double>::max()) {
@@ -154,211 +215,7 @@ set<WeightedPoint*> computePointsBelowPlane(set<WeightedPoint*, WeightedPointCou
 	return inferiorPoints;
 }
 
-template <typename WeightedPoint>
-void markDifferenceBetweenPlanes(set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint>>& volume,
-											const Z3i::RealPoint& normalPrevious, const Z3i::Point& centerPrevious,
-								 const Z3i::RealPoint& normalNext, const Z3i::Point& centerNext,
-								 double distanceMax = numeric_limits<double>::max()) {
-	Z3i::RealPoint next = normalNext;
-	if (normalPrevious.dot(normalNext) < 0) {
-		next  = -normalNext;
- 	}
-	set<WeightedPoint*> inferiorPointsPrevious = computePointsBelowPlane(volume, normalPrevious, centerPrevious, distanceMax);
-	set<WeightedPoint*> inferiorPointsNext = computePointsBelowPlane(volume, next, centerNext, distanceMax);
-		
-	set<WeightedPoint*> difference;
-	if (inferiorPointsNext.size() > inferiorPointsPrevious.size()) {
-		set_difference(inferiorPointsNext.begin(), inferiorPointsNext.end(),
-					   inferiorPointsPrevious.begin(), inferiorPointsPrevious.end(),
-					   inserter(difference, difference.end()));
-		
-	}
-	else {
-		set_difference(inferiorPointsPrevious.begin(), inferiorPointsPrevious.end(),
-					   inferiorPointsNext.begin(), inferiorPointsNext.end(),
-					   inserter(difference, difference.end()));
-	}
-	for (auto it = volume.begin(), ite = volume.end(); it != ite; ++it) {
-		if (difference.find(*it) != difference.end()) {
-			(*it)->myProcessed = true;
-		}
-	}
-}
 
-template <typename Adapter>
-Z3i::DigitalSet project2DSetIn3D(const Z2i::DigitalSet& set, const Z3i::Domain& domain3D, const Adapter& adapter) {
-	Z3i::DigitalSet set3D(domain3D);
-	for (auto it = set.begin(), ite = set.end(); it != ite; ++it) {
-		set3D.insert(adapter(*it));
-	}
-	return set3D;
-}
-
-
-
-bool computePlaneWithGaussianMap(const Z3i::DigitalSet& setSurface, Z3i::DigitalSet& connectedComponent3D, const map<Z3i::Point, Z3i::RealPoint>& normalToFacet, Z3i::RealPoint& normal, const Z3i::Point& currentPoint) {
-	typedef Z3i::Object26_6 ObjectType;
-
-	ObjectType object(Z3i::dt26_6, setSurface);
-	vector<Z3i::Point> plane;
-	unsigned int previousSize = 0;
-	int i = 0;
-
-	do {
-		previousSize = plane.size();
-
-		auto neighbors = object.neighborhood(currentPoint);
-		double d = -(-normal[0] * currentPoint[0] - normal[1] * currentPoint[1] - normal[2] * currentPoint[2]);
-		//Naive plane (26 connexity)
-		double omega = max(abs(normal[0]), max(abs(normal[1]), abs(normal[2])));
-		Z3i::DigitalSet connectedComponent = VCMUtil::extractConnectedComponent3D(setSurface.domain(), setSurface, normal, currentPoint, d, omega);
-		for (auto it = connectedComponent.begin(), ite = connectedComponent.end(); it != ite; ++it) {
-			if (find(plane.begin(), plane.end(), *it) == plane.end())
-				plane.push_back(*it);
-		}
-		vector<Z3i::RealPoint> fittingPlane;
-		for (auto it = plane.begin(), ite = plane.end(); it != ite; ++it) {
-			fittingPlane.push_back(normalToFacet.at(*it));
-		}
-		normal = Statistics::computeNormalFromLinearRegression<Z3i::RealPoint>(fittingPlane);
-		i++;
-	}
-	while (plane.size() != previousSize);
-
-	vector<vector<Z3i::Point> > clusters(plane.size(), vector<Z3i::Point>());
-	for (unsigned int i = 0; i < plane.size(); i++) {
-		clusters[i].push_back(plane[i]);
-	}
-	Agnes::mainLoop<Z3i::Point>(clusters);
-	double minDistance = numeric_limits<double>::max();
-	int index = -1;
-	for (unsigned int i = 0; i < clusters.size(); i++) {
-		double sum = 0;
-		for (auto it = clusters[i].begin(), ite = clusters[i].end(); it != ite; ++it) {
-			sum += Z3i::l2Metric(*it, currentPoint);
-		}
-		sum /= clusters[i].size();
-		if (sum < minDistance) {
-			minDistance = sum;
-			index = i;
-		}
-	}
-	if (index != -1) 
-	    plane = clusters[index];
-	for (auto it = plane.begin(), ite = plane.end(); it != ite; ++it) {
-		connectedComponent3D.insert(*it);
-	}
-	return (clusters.size() == 1);
-}
-
-
-
-template <typename Image>
-bool isBranchingPart(const Image& image) {
-	typedef typename Image::Domain Domain;
-	typedef typename Image::Value Scalar;
-	
-	Domain domain = image.domain();
-	Z2i::Point lower = domain.lowerBound(), upper = domain.upperBound();
-
-	int width = upper[0] - lower[0];
-	int height = upper[1] - lower[1];
-
-	bool ishape = false, yshape = false;
-	for (int i = 0; i < height; i++) {
-		int cpt = 0, numberOfBackgroundClusters = 0;
-		bool previousZero = false;
-		for (int j = 0; j < width; j++) {
-			Z2i::Point point(j, i);
-			if (domain.isInside(point)) {
-				Scalar value = image(point);
-			    int valueInt = (int)(value);
-				if (valueInt == 0 && previousZero) cpt++;
-				else if (valueInt > 0)
-				{
-					if (cpt >= 0.1*width)
-						numberOfBackgroundClusters++;
-					cpt = 0;
-				}
-
-				previousZero = (valueInt == 0);
-			}
-		}
-		if (numberOfBackgroundClusters == 1)
-			ishape = true;
-		else if (numberOfBackgroundClusters == 2)
-			yshape = true;
-		
-	}
-	return (ishape && yshape);
-}
-
-template <typename Image>
-bool isBranchingPartConnectedBased(const Image& image) {
-	typedef Z2i::Object8_4 ObjectType;
-    typedef DGtal::functors::NotPointPredicate<Image> BackgroundPredicate;
-	
-	Z2i::Domain domain = image.domain();
-	Z2i::DigitalSet points(domain);
-	BackgroundPredicate bgPredicate(image);
-	for (auto it = domain.begin(), ite = domain.end(); it != ite; ++it) {
-		if (bgPredicate(*it) > 0)
-			points.insert(*it);
-	}
-	
-	ObjectType objectImage(Z2i::dt8_4, points);
-	vector<ObjectType> objects;
-	back_insert_iterator< std::vector<ObjectType> > inserter( objects );
-	unsigned int nbConnectedComponents = objectImage.writeComponents(inserter);
-	return (nbConnectedComponents == 3);
-}
-
-template <typename ImageAdapterExtractor, typename Image, typename VCM, typename KernelFunction>
-bool isInABranch(const Image& volume, const VCM& vcm, const KernelFunction& chi,
-				 const Z3i::Point& point, double radius, int &cptPlane) {
-	
-	typedef ImageSelector<Z2i::Domain, bool>::Type Image2D;
-	typedef ImageSelector<Z2i::Domain, unsigned char>::Type ImageOut;
-	
-	DGtal::functors::Identity idV;
-	Z3i::Domain domain3Dyup(volume.domain().lowerBound() + Z3i::Point(-radius, -radius, -radius), volume.domain().upperBound() + Z3i::Point(radius, radius, radius));
-	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
-									  DGtal::Z2i::Point(radius, radius));
-	Z3i::RealPoint longitudinalNormal = VCMUtil::computeNormalFromVCM(point, vcm, chi, 1); 
-	Z3i::RealPoint sagittalNormal = VCMUtil::computeNormalFromVCM(point, vcm, chi, 2);
-
-	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedderLongitudinal(domain3Dyup, point, longitudinalNormal, radius, domain3Dyup.lowerBound());
-	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedderSagittal(domain3Dyup, point, sagittalNormal, radius, domain3Dyup.lowerBound());
-	ImageAdapterExtractor extractedImageLongitudinal(volume, domainImage2D, embedderLongitudinal, idV);
-	ImageAdapterExtractor extractedImageSagittal(volume, domainImage2D, embedderSagittal, idV);
-	Image2D processImageLongitudinal = ImageUtil::convertImage<Image2D>(extractedImageLongitudinal);
-	Image2D processImageSagittal = ImageUtil::convertImage<Image2D>(extractedImageSagittal);
-
-	//Morphological opening
-	processImageLongitudinal = Morphomaths::open(processImageLongitudinal, 1);
-	processImageSagittal = Morphomaths::open(processImageSagittal, 1);
-	
-	extractedImageSagittal.setDefaultValue(0);
-	extractedImageLongitudinal.setDefaultValue(0);
-	bool isBranchingLongitudinal = isBranchingPartConnectedBased(processImageLongitudinal);
-	bool isBranchingSagittal = isBranchingPartConnectedBased(processImageSagittal);
-
-	if (isBranchingSagittal) {
-		string outName = "/home/florent/trash/slice_" + std::to_string(cptPlane) + ".pgm";
-		ImageOut outSagittal = ImageUtil::convertImage<ImageOut>(processImageSagittal, 255);
-		PGMWriter<ImageOut>::exportPGM(outName, outSagittal);
-		cptPlane++;
-	} if (isBranchingLongitudinal) {
-		string outName = "/home/florent/trash/slice_" + std::to_string(cptPlane) + ".pgm";
-		ImageOut outLongitudinal = ImageUtil::convertImage<ImageOut>(processImageLongitudinal, 255);
-		PGMWriter<ImageOut>::exportPGM(outName, outLongitudinal);
-		cptPlane++;
-
-	}
-	
-	return (isBranchingSagittal || isBranchingLongitudinal);
-	
-}
 
 template <typename VCM, typename KernelFunction, typename Container, typename DT>
 void connectDisconnectedComponents(Z3i::DigitalSet& skeletonPoints, const DT& dt, double delta,
@@ -510,10 +367,13 @@ int main( int  argc, char**  argv )
 	typedef functors::IntervalForegroundPredicate<Image> ThresholdedImage;
 	typedef DGtal::DistanceTransformation<Space, ThresholdedImage, Z3i::L2Metric> DTL2;
 	typedef Z3i::KSpace KSpace;
-	typedef ImplicitDigitalSurface< KSpace, ThresholdedImage > DigitalSurfaceContainer;
+	typedef DGtal::functors::NotPointPredicate<ThresholdedImage> BackgroundPredicate;
+	typedef ImplicitDigitalSurface< KSpace, BackgroundPredicate > DigitalSurfaceContainer;
 
 	typedef VoronoiCovarianceMeasureOnDigitalSurface< DigitalSurfaceContainer, Metric, KernelFunction, DTL2 > VCMOnSurface;
 	typedef KSpace::Surfel Surfel;
+	typedef VoronoiMap<Space, NotPointPredicate, Metric> VoronoiMap;
+	typedef Eigen::MatrixXd MatrixXd;
 	
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
@@ -558,7 +418,6 @@ int main( int  argc, char**  argv )
 	double R = vm["radiusInside"].as<double>();
 	double r = vm["radiusNeighbour"].as<double>();
 	int delta = vm["delta"].as<int>();
-	int cptPlane = 0;
 	double thresholdFeature = vm["thresholdFeature"].as<double>();
 
 	Viewer3D<> viewer;
@@ -580,28 +439,28 @@ int main( int  argc, char**  argv )
 
 	vector<Point> vPoints;
 	Z3i::DigitalSet skeletonPoints(domainVolume);  
-	ThresholdedImage binarizer(volume, thresholdMin-1, thresholdMax);	
+	ThresholdedImage binarizer(volume, thresholdMin-1, thresholdMax);
+	BackgroundPredicate backgroundPredicate(binarizer);
 	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
 
 
 	//Construct VCM surface
-	Metric l2;
+	 Metric l2;
 	KSpace ks;
 	ks.init( volume.domain().lowerBound(),
 			 volume.domain().upperBound(), true );
 	SurfelAdjacency<KSpace::dimension> surfAdj( true ); // interior in all directions.
-	Surfel bel = Surfaces<KSpace>::findABel( ks, binarizer, 1000000 );
+	Surfel bel = Surfaces<KSpace>::findABel( ks, backgroundPredicate, 1000000 );
 	DigitalSurfaceContainer* container =
-		new DigitalSurfaceContainer( ks, binarizer, surfAdj, bel, false  );
+		new DigitalSurfaceContainer( ks, backgroundPredicate, surfAdj, bel, false  );
 	DigitalSurface< DigitalSurfaceContainer > surface( container ); //acquired
 
 	//! [DVCM3D-instantiation]
 	Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel;
 	KernelFunction chiSurface( 1.0, r );             // hat function with support of radius r
-	VCMOnSurface vcm_surface( surface, embType, R, r,
-					 chiSurface, dt, 3, l2, true /* verbose */ );
-	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(vcm_surface, domainVolume, thresholdFeature);
-	
+	VCMOnSurface* vcm_surface = new VCMOnSurface( surface, embType, R, r,
+					 chiSurface, dt, r, l2, true);
+	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, thresholdFeature);
 	
 	
 	DTL2::Domain domainDT = dt.domain();
@@ -612,10 +471,44 @@ int main( int  argc, char**  argv )
 			checkPointForMedialAxis(dt, vPoints, *it);
 		}		
 	}
-	trace.info() << vPoints.size() << endl;
+	
+
+
+	// NotPointPredicate notBranching(branchingPoints);
+	// Z3i::Object26_6 obj(Z3i::dt26_6, branchingPoints);
+	// vector<Z3i::Object26_6> objects;
+	// back_insert_iterator< std::vector<Z3i::Object26_6> > inserter( objects );
+	// unsigned int nbConnectedComponents = obj.writeComponents(inserter);
+	// Z3i::DigitalSet maxCurvaturePoints(domainVolume);
+	// Matrix vcmrB, evecB;
+	// Z3i::RealVector evalB;
+	// for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
+	// 	double ratioMax = 0;
+	// 	Point maximizingCurvaturePoint;
+	// 	for (auto itPoint = it->pointSet().begin(), itPointE = it->pointSet().end(); itPoint != itPointE; ++itPoint) {
+	// 		auto lambda = (vcm_surface->mapPoint2ChiVCM()).at(*itPoint).values;
+	// 		double ratio = lambda[0] / (lambda[0] + lambda[1] + lambda[2]); 
+	// 		if (ratio > ratioMax) {
+	// 			ratioMax = ratio;
+	// 			maximizingCurvaturePoint = *itPoint;
+	// 		}
+	// 	}
+   
+ 	// 	maxCurvaturePoints.insert(maximizingCurvaturePoint);
+	// }
+	// delete vcm_surface;
+
+
+	// for (auto it = maxCurvaturePoints.begin(), ite = maxCurvaturePoints.end(); it != ite; ++it) {
+	// 	 viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
+	// }
+	// for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
+	// 	viewer << CustomColors3D(Color(0,0,50,50), Color(0,0,50,50)) << *it;
+	// }
+
+	
 	WeightedPointCount* currentPoint = *setVolumeWeighted.begin();
   
-	
 	VCM vcm( R, ceil( r ), l2, true );
 	vcm.init( setVolume.begin(), setVolume.end() );
 	Domain domain = vcm.domain();
@@ -636,10 +529,11 @@ int main( int  argc, char**  argv )
 	Z3i::RealPoint previousNormal;
 
 	Z3i::DigitalSet connectedComponent3D(domainVolume);
+	Z3i::DigitalSet branchingParts(domainVolume);
 	Z3i::RealPoint realCenter;
 	Z3i::Point centerOfMass;
 	Z3i::Point previousCenter;
-	
+
 	trace.beginBlock("Computing skeleton");
 	//Main loop to compute skeleton (stop when no vol points left to process)
 	while (numberLeft > 0)
@@ -653,29 +547,41 @@ int main( int  argc, char**  argv )
 			Point closestPointToCurrent = *min_element(vPoints.begin(), vPoints.end(), [&](const Point& one, const Point& two) {
 					return Z3i::l2Metric(one, currentPoint->myPoint) < Z3i::l2Metric(two, currentPoint->myPoint);
 				});
-			radius = dt(closestPointToCurrent);
+			if (dt(closestPointToCurrent) > dt(currentPoint->myPoint))
+				radius = dt(closestPointToCurrent);
+			else
+				radius = dt(currentPoint->myPoint);
 			radius += delta;
 			if (radius > 0) {
-				vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
+				//	vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
 				chi = KernelFunction( 1.0, radius);
 			}
 		}
-	
+
+
+		
 		// Compute discrete plane
 		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted, currentPoint->myPoint, normal,
 																	0, previousNormal, radius);
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-	
+		double radis = computeRadiusFromIntersection<ImageAdapterExtractor, MatrixXd>(volume, currentPoint->myPoint, normal, radius*3);
 
 		//Branching detection
-		detectBranchingPointsInNeighborhood(branchingPoints, setVolumeWeighted, currentPoint->myPoint, radius);
-		
+		Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, realCenter, radis);
+		VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 1);
+
+		for (auto it = branch.begin(), ite = branch.end(); it != ite; ++it) {
+			viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
+		}
+		 
 		//Center of mass computation
 		if (realCenter != Z3i::RealPoint()) {
-		    VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, i);
-			bool add = true;
-			if (add) {
-				centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
+			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);		    
+			int label = (*find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+						return (wpc->myPoint == centerOfMass);
+					}))->myCount;
+			VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
+			if (label != 1) {
 				previousNormal = normal;
 				previousCenter = centerOfMass;
 				skeletonPoints.insert(centerOfMass);

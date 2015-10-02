@@ -106,6 +106,8 @@ VoronoiCovarianceMeasureOnDigitalSurface( ConstAlias< Surface > _surface,
 		double radius = myDT(closestPointToCurrent);
 		if (radius > 0) {
 			myChi = KernelFunction( 1.0, radius);
+		} else {
+			myChi = KernelFunction( 1.0, _r);
 		}
 		
 		Point p = *it;

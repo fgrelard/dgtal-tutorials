@@ -114,7 +114,8 @@ bool VCMUtil::markConnectedComponent3D(std::set<WeightedPoint*, WeightedPointCou
 	for (auto it = volume.begin(), ite = volume.end(); it != ite; ++it) {
 		if (!(*it)->myProcessed && intersection.find((*it)->myPoint) != intersection.end()) {
 			(*it)->myProcessed = true;
-			(*it)->myCount = label;
+			if ((*it)->myCount != 1)
+				(*it)->myCount = label;
 		}
 		else if ((*it)->myProcessed  && intersection.find((*it)->myPoint) != intersection.end()) {
 			processedLabels.insert((*it)->myCount);

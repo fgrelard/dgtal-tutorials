@@ -18,6 +18,7 @@
 #include "DGtal/io/writers/GenericWriter.h"
 #include "DGtal/graph/DepthFirstVisitor.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
+#include "DGtal/topology/ImplicitDigitalSurface.h"
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
@@ -33,18 +34,37 @@
 #include "geometry/WeightedPointCount.h"
 #include "geometry/VCMUtil.h"
 #include "Statistics.h"
+#include "geometry/VoronoiCovarianceMeasureOnDigitalSurface.h"
+#include "shapes/Ball.h"
 
 using namespace std;
 using namespace DGtal;
 namespace po = boost::program_options;
 
+template <typename VCM, typename Domain>
+Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const Domain& domain, double threshold) {
+	typedef typename VCM::Point2EigenStructure::const_iterator P2EConstIterator;
+
+	Z3i::DigitalSet aSet(domain);
+	for (P2EConstIterator  it = vcm.mapPoint2ChiVCM().begin(),
+			 itE = vcm.mapPoint2ChiVCM().end(); it != itE; ++it )
+    {
+		auto lambda = it->second.values;
+		double ratio = lambda[ 0 ] / ( lambda[ 0 ] + lambda[ 1 ] + lambda[ 2 ] );
+		if (ratio > threshold)
+			aSet.insert(it->first);
+	}
+	return aSet; 
+}
+
 
 Z3i::DigitalSet computeTraversedPoints(const Z3i::Object26_6& reference,
-									  const Z3i::DigitalSet setVolume,
-									  const Z3i::Point& point,
-									  const Z3i::RealPoint& normal ) {
+									   const Z3i::DigitalSet setVolume,
+									   const Z3i::Point& point,
+									   const Z3i::RealPoint& normal ) {
 	int scalar = 1;
 	Z3i::DigitalSet traversed(setVolume.domain());
+	
 	Z3i::Point projection = point;
 	while (reference.pointSet().find(projection) == reference.pointSet().end() &&
 		   setVolume.find(projection) != setVolume.end()) {
@@ -92,6 +112,22 @@ set<WeightedPointCount*> computeAccumulator(const Z3i::DigitalSet& traversed, co
 	return aSet;
 }
 
+template <typename DTL2>
+Z3i::DigitalSet computeBallAroundVector(const std::vector<Z3i::Point>& points, const Z3i::DigitalSet& setVolume,
+	const DTL2& dt) {
+	Z3i::DigitalSet areaOfComputation(setVolume.domain());
+	for (auto it = points.begin(), ite = points.end(); it != ite; ++it) {
+		Ball<Z3i::Point> ball(*it, dt(*it));
+		vector<Z3i::Point> pointsInBall = ball.pointsInBall();
+		for (auto it = pointsInBall.begin(), ite = pointsInBall.end(); it != ite; ++it) {
+			if (setVolume.find(*it) != setVolume.end()) {
+				areaOfComputation.insert(*it);
+			}
+		}
+	}
+	return areaOfComputation;
+}
+
 template <typename WeightedPointCount>
 WeightedPointCount candidate(const set<WeightedPointCount*>& accumulator, const Z3i::Point& point) {
 	double valMax = (*max_element(accumulator.begin(), accumulator.end(), [&](const WeightedPointCount* a, const WeightedPointCount* b) {
@@ -136,6 +172,15 @@ int main( int  argc, char**  argv )
 	typedef DGtal::ConstImageAdapter<Image,Z2i::Domain,DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain>, Image::Value, DGtal::functors::Identity> ImageAdapterExtractor;
 	typedef WeightedPoint<Z3i::Point> WeightedPoint;
 	typedef WeightedPointCount<Z3i::Point> WeightedPointCount;
+	typedef Z3i::KSpace KSpace;
+	typedef functors::NotPointPredicate<Z3i::DigitalSet> NotPointPredicate;
+	typedef functors::IntervalForegroundPredicate<Image> ThresholdedImage;
+	typedef DGtal::functors::NotPointPredicate<ThresholdedImage> BackgroundPredicate;
+	typedef ImplicitDigitalSurface< KSpace, BackgroundPredicate > DigitalSurfaceContainer;
+	
+	typedef DGtal::DistanceTransformation<Space, ThresholdedImage, Z3i::L2Metric> DTL2;
+	typedef VoronoiCovarianceMeasureOnDigitalSurface< DigitalSurfaceContainer, Metric, KernelFunction, DTL2 > VCMOnSurface;
+	typedef KSpace::Surfel Surfel;
 	
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
@@ -147,6 +192,7 @@ int main( int  argc, char**  argv )
 		("output,o", po::value<std::string>(), "output skeleton filename")
 		("thresholdMin,m", po::value<int>()->default_value(0), "minimum threshold for binarization")
 		("thresholdMax,M", po::value<int>()->default_value(255), "maximum threshold for binarization")
+		("thresholdFeature,T",po::value<double>()->default_value(0.1), "threshold feature")
 		; 
 
 	bool parseOK=true;
@@ -177,7 +223,7 @@ int main( int  argc, char**  argv )
 	int R = vm["radius"].as<int>();
 	int delta = vm["delta"].as<int>();
 	string volumeFilename = vm["volume"].as<std::string>();
-
+	double thresholdFeature = vm["thresholdFeature"].as<double>();
 	Image skeleton = VolReader<Image>::importVol(inputFilename);
 	Image volume = VolReader<Image>::importVol(volumeFilename);
 	Z3i::DigitalSet setVolume(volume.domain());
@@ -197,15 +243,12 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet skeletonPoints(domainVolume);
 	SetFromImage<Z3i::DigitalSet>::append<Image>(skeletonPoints, skeleton,
 												 thresholdMin-1, thresholdMax);
-	
-  
-   
-	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer; 
-	Binarizer binarizer(volume, thresholdMin-1, thresholdMax);
-	typedef DGtal::DistanceTransformation<Space, Binarizer, Z3i::L2Metric> DTL2;
-	
-	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
 		
+   
+
+	ThresholdedImage binarizer(volume, thresholdMin-1, thresholdMax);
+	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
+	BackgroundPredicate backgroundPredicate(binarizer);
 
 	DTL2::Domain domainDT = dt.domain();
 	for (auto it = domainDT.begin(), ite = domainDT.end(); it != ite; ++it) {
@@ -214,12 +257,47 @@ int main( int  argc, char**  argv )
 			setVolumeWeighted.insert(new WeightedPointCount(*it, value));
 		}		
 	}
-
+	KSpace ks;
+	Metric l2;
+	
+	ks.init( volume.domain().lowerBound(),
+			 volume.domain().upperBound(), true );
+	SurfelAdjacency<KSpace::dimension> surfAdj( true ); // interior in all directions.
+	Surfel bel = Surfaces<KSpace>::findABel( ks, backgroundPredicate, 1000000 );
+	DigitalSurfaceContainer* container =
+		new DigitalSurfaceContainer( ks, backgroundPredicate, surfAdj, bel, false  );
+	DigitalSurface< DigitalSurfaceContainer > surface( container ); //acquired
+	
+	//! [DVCM3D-instantiation]
+	Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel;
+	KernelFunction chiSurface( 1.0, R );             // hat function with support of radius r
+	VCMOnSurface* vcm_surface = new VCMOnSurface( surface, embType, R, R, chiSurface, dt, R, l2, true);
+	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, thresholdFeature);
+	Z3i::Object26_6 obj(Z3i::dt26_6, branchingPoints);
+	vector<Z3i::Object26_6> objectsBranching;
+	back_insert_iterator< std::vector<Z3i::Object26_6> > inserterBranching( objectsBranching );
+	obj.writeComponents(inserterBranching);
+	Z3i::DigitalSet maxCurvaturePoints(domainVolume);
+	for (auto it = objectsBranching.begin(), ite = objectsBranching.end(); it != ite; ++it) {
+		double ratioMax = 0;
+		Point maximizingCurvaturePoint;
+		for (auto itPoint = it->pointSet().begin(), itPointE = it->pointSet().end(); itPoint != itPointE; ++itPoint) {
+			auto lambda = (vcm_surface->mapPoint2ChiVCM()).at(*itPoint).values;
+			double ratio = lambda[0] / (lambda[0] + lambda[1] + lambda[2]); 
+			if (ratio > ratioMax) {
+				ratioMax = ratio;
+				maximizingCurvaturePoint = *itPoint;
+			}
+		}
+   
+ 		maxCurvaturePoints.insert(maximizingCurvaturePoint);
+	}
+	delete vcm_surface;
+	
 	for (auto it = skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {
 		viewer << CustomColors3D(Color::Red, Color::Red) << *it;
 	}
 	
-	Metric l2;
 	VCM vcm( R, R, l2, true );
 	vcm.init( setVolume.begin(), setVolume.end() );
 	Domain domain = vcm.domain();
@@ -253,65 +331,88 @@ int main( int  argc, char**  argv )
 	trace.beginBlock("Connecting disconnected components");
 	while (objects.size() > 0) {
 		trace.progressBar(nbConnectedComponents-objects.size(), nbConnectedComponents);
-		vector<ObjectType>::iterator minimizingObjectToReference;
+		vector<ObjectType>::iterator minimizingObjectToReference = objects.end();
 		double distanceMin = numeric_limits<int>::max();
+		vector<Z3i::Point> points;
 		Z3i::Point belongingToCurrentObject, belongingToReference;
-		for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
-			ObjectType currentObject = *it;
-			for (auto itCurrentObject = currentObject.pointSet().begin(),
-					 itCurrentObjectE = currentObject.pointSet().end(); itCurrentObject != itCurrentObjectE; ++itCurrentObject) {				
-				for (auto itReference = reference.pointSet().begin(), itReferenceE = reference.pointSet().end(); itReference != itReferenceE; ++itReference) {
-					Z3i::RealPoint vectorDifference = *itReference - *itCurrentObject;
-					double distance = Z3i::l2Metric(*itCurrentObject, *itReference);
-					if (distance < distanceMin) {
-						minimizingObjectToReference = it;
-						distanceMin = distance;
-						belongingToCurrentObject = *itCurrentObject;
-						belongingToReference = *itReference;
+//		for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
+		ObjectType currentObject = *(objects.begin());
+		for (auto itCurrentObject = currentObject.pointSet().begin(),
+				 itCurrentObjectE = currentObject.pointSet().end(); itCurrentObject != itCurrentObjectE; ++itCurrentObject) {
 
+			for (auto itReference = reference.pointSet().begin(), itReferenceE = reference.pointSet().end(); itReference != itReferenceE; ++itReference) {
+				Point closestBranchingPoint = *min_element(maxCurvaturePoints.begin(), maxCurvaturePoints.end(), [&](const Point& one, const Point& two) {
+						return Z3i::l2Metric(one, *itCurrentObject) < Z3i::l2Metric(two, *itCurrentObject);
+					});
+				vector<Point> points = PointUtil::linkTwoPoints(*itReference, *itCurrentObject);
+				bool add = true;
+				double distanceDT = min(dt(*itCurrentObject), dt(*itReference));
+				for (auto itP = points.begin(), itPe = points.end(); itP != itPe; ++itP) {						
+					if (Z3i::l2Metric(*itP, closestBranchingPoint)+1 <= distanceDT ||
+						dt(*itP) == 0) {
+						add = false;
+						break;
 					}
+				}
+					
+				double distance = Z3i::l2Metric(*itCurrentObject, *itReference);
+				if (distance < distanceMin && add) {
+					minimizingObjectToReference = objects.begin();
+					distanceMin = distance;
+					belongingToCurrentObject = *itCurrentObject;
+					belongingToReference = *itReference;
 				}
 			}
 		}
+		//}
+		if (minimizingObjectToReference == objects.end()) {
+			minimizingObjectToReference = objects.begin();
+			objects.erase(minimizingObjectToReference);
+		} else {
+			for (auto it = minimizingObjectToReference->pointSet().begin(), ite = minimizingObjectToReference->pointSet().end();
+				 it != ite; ++it) {
+				reference.pointSet().insert(*it);
+			}
+			// double radius = dt(belongingToCurrentObject) + delta;
+			// vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
+			// chi = KernelFunction( 1.0, radius );
 
-		double radius = dt(belongingToCurrentObject) + delta;
-		vcm.updateProximityStructure(radius, setVolume.begin(), setVolume.end());
-		chi = KernelFunction( 1.0, radius );
+			// Z3i::RealPoint normal = VCMUtil::computeNormalFromVCM(belongingToCurrentObject, vcm, chi, 0);
 
-		Z3i::RealPoint normal = VCMUtil::computeNormalFromVCM(belongingToCurrentObject, vcm, chi, 0);
-
-		Z3i::DigitalSet traversedNormal = computeTraversedPoints(reference, setVolume, belongingToCurrentObject, normal);
-		Z3i::DigitalSet traversedAntiNormal = computeTraversedPoints(reference, setVolume, belongingToCurrentObject, -normal);
-		Z3i::DigitalSet nearestNormal = computeNearestPoints(traversedNormal, reference);
-		Z3i::DigitalSet nearestAntiNormal = computeNearestPoints(traversedAntiNormal, reference);
-		set<WeightedPointCount*> accumulatorNormal = computeAccumulator<WeightedPointCount>(traversedNormal, nearestNormal);
-		set<WeightedPointCount*> accumulatorAntiNormal = computeAccumulator<WeightedPointCount>(traversedAntiNormal, nearestAntiNormal);
-		WeightedPointCount candidateNormal = candidate(accumulatorNormal, belongingToCurrentObject);
-		WeightedPointCount candidateAntiNormal = candidate(accumulatorAntiNormal, belongingToCurrentObject);
+			// Z3i::DigitalSet traversedNormal = computeTraversedPoints(reference, setVolume, belongingToCurrentObject, normal);
+			// Z3i::DigitalSet traversedAntiNormal = computeTraversedPoints(reference, setVolume, belongingToCurrentObject, -normal);
+			// Z3i::DigitalSet nearestNormal = computeNearestPoints(traversedNormal, reference);
+			// Z3i::DigitalSet nearestAntiNormal = computeNearestPoints(traversedAntiNormal, reference);
+			// set<WeightedPointCount*> accumulatorNormal = computeAccumulator<WeightedPointCount>(traversedNormal, nearestNormal);
+			// set<WeightedPointCount*> accumulatorAntiNormal = computeAccumulator<WeightedPointCount>(traversedAntiNormal, nearestAntiNormal);
+			// WeightedPointCount candidateNormal = candidate(accumulatorNormal, belongingToCurrentObject);
+			// WeightedPointCount candidateAntiNormal = candidate(accumulatorAntiNormal, belongingToCurrentObject);
 
 	  
-		if (candidateNormal.myWeight < candidateAntiNormal.myWeight) {
-			belongingToReference = candidateNormal.myPoint;
-		} else  {
-			belongingToReference = candidateAntiNormal.myPoint;
-		}
-		for (auto it = minimizingObjectToReference->pointSet().begin(),
-				 ite = minimizingObjectToReference->pointSet().end();
-			 it != ite; ++it) {
-			reference.pointSet().insert(*it);
-		}
+			// if (candidateNormal.myWeight < candidateAntiNormal.myWeight) {
+			// 	belongingToReference = candidateNormal.myPoint;
+			// } else  {
+			// 	belongingToReference = candidateAntiNormal.myPoint;
+			// }
+			// for (auto it = minimizingObjectToReference->pointSet().begin(),
+			// 		 ite = minimizingObjectToReference->pointSet().end();
+			// 	 it != ite; ++it) {
+			// 	reference.pointSet().insert(*it);
+			// }
 		
 		
-		vector<Z3i::Point> points = PointUtil::linkTwoPoints(belongingToCurrentObject, belongingToReference);
-		for (auto it = points.begin(), ite = points.end(); it!=ite; ++it) {
-			viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
-			viewer << Viewer3D<>::updateDisplay;
-			qApp->processEvents();
-			skeletonPoints.insert(*it);
-			pointsToProcess.insert(*it);
-			reference.pointSet().insert(*it);
+			// vector<Z3i::Point> points = PointUtil::linkTwoPoints(belongingToCurrentObject, belongingToReference);
+			points = PointUtil::linkTwoPoints(belongingToCurrentObject, belongingToReference);
+			for (auto it = points.begin(), ite = points.end(); it!=ite; ++it) {
+				viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
+				viewer << Viewer3D<>::updateDisplay;
+				qApp->processEvents();
+				skeletonPoints.insert(*it);
+				pointsToProcess.insert(*it);
+				//reference.pointSet().insert(*it);
+			}
+			objects.erase(minimizingObjectToReference);
 		}
-		objects.erase(minimizingObjectToReference);
 	}
 
 	
@@ -345,8 +446,9 @@ int main( int  argc, char**  argv )
 	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
 		viewer << CustomColors3D(Color(0,0,255,30), Color(0,0,255,30)) << *it;
 	}
-
+	
 	Image outImage(volume.domain());
+	
 	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
 	VolWriter<Image>::exportVol(outFilename, outImage);
 

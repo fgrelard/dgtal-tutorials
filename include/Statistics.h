@@ -35,6 +35,9 @@ namespace Statistics {
 	template <typename Vector, typename Matrix>
 	Vector extractEigenVector(const Matrix& m, int colNumber);
 
+	template <typename Vector, typename Matrix>
+	Vector extractEigenValue(const Matrix& m, int colNumber);
+
 	template <typename Matrix, typename Image2D>
 	Matrix computeCovarianceMatrix(const Image2D& image);
 	
@@ -202,12 +205,23 @@ Matrix Statistics::computeCovarianceMatrix(const Image2D& image) {
 template <typename Vector, typename Matrix>
 Vector Statistics::extractEigenVector(const Matrix& m, int colNumber) {
 	Eigen::SelfAdjointEigenSolver<Matrix> eig(m);
-	Vector normal;
-	auto veigen = eig.eigenvectors().col(colNumber);
-	normal[0] = veigen[0];
-	normal[1] = veigen[1];
-	normal[2] = veigen[2];
-	return normal;
+	Vector vector;
+	auto veigen = eig.eigenvectors().col(colNumber);	
+	for (typename Vector::Dimension i = 0; i < Vector::dimension; i++) {
+		vector[i] = veigen[i];
+	}
+	return vector;
+}
+
+template <typename Vector, typename Matrix>
+Vector Statistics::extractEigenValue(const Matrix& m, int colNumber) {
+	Eigen::SelfAdjointEigenSolver<Matrix> eig(m);
+	Vector vector;
+	auto veigen = eig.eigenvalues().col(colNumber);	
+	for (typename Vector::Dimension i = 0; i < Vector::dimension; i++) {
+		vector[i] = veigen[i];
+	}
+	return vector;
 }
 
 
