@@ -38,6 +38,9 @@ namespace Statistics {
 	template <typename Vector, typename Matrix>
 	Vector extractEigenValue(const Matrix& m, int colNumber);
 
+	template <typename Matrix>
+	Matrix computeCovarianceMatrix(const DGtal::Z2i::DigitalSet& aSet);
+
 	template <typename Matrix, typename Image2D>
 	Matrix computeCovarianceMatrix(const Image2D& image);
 	
@@ -173,33 +176,45 @@ Vector Statistics::computeNormalFromCovarianceMatrix(const std::vector<Point> & 
 	return normal;
 }
 
+template <typename Matrix>
+Matrix Statistics::computeCovarianceMatrix(const DGtal::Z2i::DigitalSet& aSet) {
+	typedef typename DGtal::Z2i::DigitalSet::ConstIterator ConstIterator;
+	typedef typename DGtal::Z2i::DigitalSet::Domain Domain;
+	typedef typename Domain::Point Point;
+		
+	int size = aSet.size();
+	Matrix A(size, 2);
+	if (size == 0) return A;
+	
+	int i = 0;
+	for (ConstIterator it = aSet.begin(), ite = aSet.end();
+		 it != ite; ++it) {
+		Point point = *it;
+		A(i, 0) = (double) point[0] * 1.0;
+		A(i, 1) = (double) point[1] * 1.0;
+		i++;
+	}
+	Matrix centered = A.rowwise() - A.colwise().mean();
+	Matrix cov = (centered.adjoint() * centered) / double(A.rows() - 1);
+    return cov;
+}
+
+
 template <typename Matrix, typename Image2D>
 Matrix Statistics::computeCovarianceMatrix(const Image2D& image) {
 	typedef typename Image2D::Domain Domain;
 	typedef typename Domain::Point Point;
 	int size = 0;
+	DGtal::Z2i::DigitalSet aSet(image.domain());
 	for (typename Domain::ConstIterator it = image.domain().begin(), ite = image.domain().end();
 		 it != ite; ++it) {
 		Point point = *it;
 		if (image(*it) > 0) {
 			size++;
+			aSet.insert(*it);
 		}
 	}
-	
-	Matrix A(size, 2);
-	int i = 0;
-	for (typename Domain::ConstIterator it = image.domain().begin(), ite = image.domain().end();
-		 it != ite; ++it) {
-		Point point = *it;
-		if (image(*it) > 0) {
-			A(i, 0) = (double) point[0] * 1.0;
-			A(i, 1) = (double) point[1] * 1.0;
-			i++;
-		}
-	}
-	Matrix centered = A.rowwise() - A.colwise().mean();
-	Matrix cov = (centered.adjoint() * centered) / double(A.rows() - 1);
-    return cov;
+	return computeCovarianceMatrix<Matrix>(aSet);
 }
 
 template <typename Vector, typename Matrix>

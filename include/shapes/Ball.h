@@ -13,6 +13,10 @@ public:
 	bool contains(const Point& point) const {return euclideanDistance(point, myCenter) <= myRadius;}
 	std::vector<Point> pointsInBall() const;
 	std::vector<Point> pointsInHalfBall() const;
+
+	template <typename RealPoint>
+	std::vector<Point> pointsInHalfBall(const RealPoint& normal) const;
+	
 	std::set<Point> pointsSurfaceBall() const;
 	bool operator!=(const Ball & other) const {return (myCenter != other.myCenter || myRadius != other.myRadius);}
 	Point getCenter()  {return myCenter;}
@@ -45,6 +49,25 @@ std::vector<Point> Ball<Point>::pointsInHalfBall() const {
 			for (typename Point::Scalar k = -myRadius + myCenter[2], kend = myRadius + myCenter[2] + 1; k < kend; k++) {
 				Point p(i, j, k);
 				if (contains(p)) {
+					points.push_back(p);
+				}
+			}
+		}
+	}
+	return points;	
+}
+
+template <typename Point>
+template <typename RealPoint>
+std::vector<Point> Ball<Point>::pointsInHalfBall(const RealPoint& normal) const {
+	std::vector<Point> points;
+	double d = myCenter[0] * normal[0] + myCenter[1] * normal[1] + myCenter[2] * normal[2];
+	for (typename Point::Scalar i = -myRadius + myCenter[0], iend = myRadius + myCenter[0] + 1; i < iend; i++) {
+		for (typename Point::Scalar j = -myRadius + myCenter[1], jend = myRadius + myCenter[1] + 1; j < jend; j++) {
+			for (typename Point::Scalar k = -myRadius + myCenter[2], kend = myRadius + myCenter[2] + 1; k < kend; k++) {
+				Point p(i, j, k);				
+				double eq = p[0] * normal[0] + p[1] * normal[1] + p[2] * normal[2] - d;
+   				if (contains(p) && eq > 0) {
 					points.push_back(p);
 				}
 			}
