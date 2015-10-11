@@ -4,6 +4,8 @@
 #include <vector>
 #include <set>
 #include <iostream>
+#include "DGtal/base/Common.h"
+#include "DGtal/helpers/StdDefs.h"
 
 template <typename Point>
 class Ball {
@@ -13,10 +15,11 @@ public:
 	bool contains(const Point& point) const {return euclideanDistance(point, myCenter) <= myRadius;}
 	std::vector<Point> pointsInBall() const;
 	std::vector<Point> pointsInHalfBall() const;
-
+	DGtal::Z3i::DigitalSet pointsInBallSet() const;
+	
 	template <typename RealPoint>
 	std::vector<Point> pointsInHalfBall(const RealPoint& normal) const;
-	
+
 	std::set<Point> pointsSurfaceBall() const;
 	bool operator!=(const Ball & other) const {return (myCenter != other.myCenter || myRadius != other.myRadius);}
 	Point getCenter()  {return myCenter;}
@@ -24,6 +27,25 @@ private:
 	Point myCenter;
 	double myRadius;
 };
+
+template <typename Point>
+DGtal::Z3i::DigitalSet Ball<Point>::pointsInBallSet() const {
+    Point lower(-myRadius + myCenter[0], -myRadius + myCenter[1], -myRadius + myCenter[2]);
+	Point upper(myRadius + myCenter[0] + 1, myRadius + myCenter[1] + 1, myRadius + myCenter[2] + 1);
+	DGtal::Z3i::DigitalSet::Domain domain(lower, upper);
+	DGtal::Z3i::DigitalSet points(domain);
+	for (typename Point::Scalar i = -myRadius + myCenter[0], iend = myRadius + myCenter[0] + 1; i < iend; i++) {
+		for (typename Point::Scalar j = -myRadius + myCenter[1], jend = myRadius + myCenter[1] + 1; j < jend; j++) {
+			for (typename Point::Scalar k = -myRadius + myCenter[2], kend = myRadius + myCenter[2] + 1; k < kend; k++) {
+				Point p(i, j, k);
+				if (contains(p)) {
+					points.insert(p);
+				}
+			}
+		}
+	}
+	return points;
+}
 
 template <typename Point>
 std::vector<Point> Ball<Point>::pointsInBall() const {	
@@ -67,7 +89,7 @@ std::vector<Point> Ball<Point>::pointsInHalfBall(const RealPoint& normal) const 
 			for (typename Point::Scalar k = -myRadius + myCenter[2], kend = myRadius + myCenter[2] + 1; k < kend; k++) {
 				Point p(i, j, k);				
 				double eq = p[0] * normal[0] + p[1] * normal[1] + p[2] * normal[2] - d;
-   				if (contains(p) && eq > 0) {
+				if (contains(p) && eq > 0) {
 					points.push_back(p);
 				}
 			}

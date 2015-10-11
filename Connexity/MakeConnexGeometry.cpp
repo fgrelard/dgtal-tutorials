@@ -475,7 +475,7 @@ int main( int  argc, char**  argv )
 						}));
 				currentPoint->myProcessed = true;
 				double radius = dt(currentPoint->myPoint);
-				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted, currentPoint->myPoint, normalSub, 0, normalCurrentObject, radius);
+				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted, currentPoint->myPoint, normalSub, 0,  radius);
 				realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 				Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 				viewer << CustomColors3D(Color::Blue, Color::Blue) << centerOfMass;

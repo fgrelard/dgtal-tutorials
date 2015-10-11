@@ -89,6 +89,44 @@ class LabelledPoint : public WeightedPoint<Z3i::Point> {
 };
 
 
+Z3i::DigitalSet computeShell(const Z3i::Point& center,  double radiusInnerBall, double radiusOuterBall) {
+	Ball<Z3i::Point> ballInnerBall(center, radiusInnerBall);
+	Ball<Z3i::Point> ballOuterBall(center, radiusOuterBall);
+
+	Z3i::DigitalSet pointsInOuterBall = ballOuterBall.pointsInBallSet();
+
+	Z3i::DigitalSet shell(pointsInOuterBall.domain());
+	for (auto it = pointsInOuterBall.begin(), ite = pointsInOuterBall.end();
+		 it != ite; ++it) {
+		if (!ballInnerBall.contains(*it)) {
+			shell.insert(*it);
+		}
+	}
+	
+	return shell;
+}
+
+template <typename Domain, typename DTL2>
+Z3i::DigitalSet computeDegree(const Domain& domain, const vector<Z3i::Point>& medialAxis,
+				   const DTL2& dt, double delta) {
+	typedef Z3i::Object26_6 ObjectType;
+	Z3i::DigitalSet branches(domain);
+	int i  = 0;
+	for (auto it = medialAxis.begin(), ite = medialAxis.end(); it != ite; ++it) {
+		double radius = dt(*it); 
+		Z3i::DigitalSet shell = computeShell(*it, radius*2, radius*4);
+		ObjectType objectImage(Z3i::dt26_6, shell);
+		vector<ObjectType> objects;
+		back_insert_iterator< std::vector<ObjectType> > inserter( objects );
+		unsigned int nbConnectedComponents = objectImage.writeComponents(inserter);
+		if (nbConnectedComponents != 2)
+			branches.insert(*it);
+		i++;
+		trace.info() << i << endl;
+	}
+	return branches;
+}
+
 template <typename VCM, typename Domain>
 Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const Domain& domain, double threshold) {
 	typedef typename VCM::Point2EigenStructure::const_iterator P2EConstIterator;
@@ -225,12 +263,14 @@ Z3i::DigitalSet detectBranchingPointsInNeighborhood(const Z3i::DigitalSet& branc
 	}
 
 	if (toMark) {
+		double ballRadius = Z3i::l2Metric(branchingPoint, current) + 1;
+		Ball<Z3i::Point> ballBranching(current, ballRadius);
 		Z3i::RealPoint dirVector = ((Z3i::RealPoint) branchingPoint - (Z3i::RealPoint)current).getNormalized();
 		std::vector<Z3i::Point> pointsInBall;
 		if (branchingPoint != current)
-			 pointsInBall = ball.pointsInHalfBall(dirVector);
+			 pointsInBall = ballBranching.pointsInHalfBall(dirVector);
 		else
-			pointsInBall = ball.pointsInBall();
+			pointsInBall = ballBranching.pointsInBall();
 		aSet.insert(pointsInBall.begin(), pointsInBall.end());
 	}
 	return aSet;
@@ -463,6 +503,7 @@ int main( int  argc, char**  argv )
 	double r = vm["radiusNeighbour"].as<double>();
 	int delta = vm["delta"].as<int>();
 	double thresholdFeature = vm["thresholdFeature"].as<double>();
+	bool isDT = vm["skeleton"].as<bool>();
 
 	Viewer3D<> viewer;
 	viewer.show();
@@ -486,8 +527,17 @@ int main( int  argc, char**  argv )
 	ThresholdedImage binarizer(volume, thresholdMin-1, thresholdMax);
 	BackgroundPredicate backgroundPredicate(binarizer);
 	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
+	DTL2::Domain domainDT = dt.domain();
+	for (auto it = domainDT.begin(), ite = domainDT.end(); it != ite; ++it) {
+		double value = dt(*it);
+		if (value > 0) {
+			setVolumeWeighted.insert(new WeightedPointCount(*it, value));
+			checkPointForMedialAxis(dt, vPoints, *it);
+		}		
+	}
 
 
+   
 	//Construct VCM surface
 	 Metric l2;
 	KSpace ks;
@@ -507,14 +557,6 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, thresholdFeature);
 	
 	
-	DTL2::Domain domainDT = dt.domain();
-	for (auto it = domainDT.begin(), ite = domainDT.end(); it != ite; ++it) {
-		double value = dt(*it);
-		if (value > 0) {
-			setVolumeWeighted.insert(new WeightedPointCount(*it, value));
-			checkPointForMedialAxis(dt, vPoints, *it);
-		}		
-	}
 	
 	NotPointPredicate notBranching(branchingPoints);
 	Z3i::Object26_6 obj(Z3i::dt26_6, branchingPoints);
@@ -581,12 +623,12 @@ int main( int  argc, char**  argv )
 	//Main loop to compute skeleton (stop when no vol points left to process)
 	while (numberLeft > 0)
 	{
-		trace.progressBar((setVolume.size() - numberLeft), setVolume.size());		
+		trace.progressBar((setVolumeWeighted.size() - numberLeft), setVolumeWeighted.size());		
 		currentPoint->myProcessed = true;
 		double radius = r;
 
 		//Distance transform value for VCM radius
-		if (vm.count("skeleton")) {
+		if (isDT) {
 			Point closestPointToCurrent = *min_element(vPoints.begin(), vPoints.end(), [&](const Point& one, const Point& two) {
 					return Z3i::l2Metric(one, currentPoint->myPoint) < Z3i::l2Metric(two, currentPoint->myPoint);
 				});
@@ -601,17 +643,15 @@ int main( int  argc, char**  argv )
 			}
 		}
 
-
 		
 		// Compute discrete plane
-		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted, currentPoint->myPoint, normal,
-																	0, previousNormal, radius);
+		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted, currentPoint->myPoint, normal,	0, radius);
+		
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 
 		int imageSize = 100;
 		double radis = computeRadiusFromIntersection<ImageAdapterExtractor, MatrixXd>(volume, currentPoint->myPoint, normal, imageSize);
-
-		// //Branching detection
+		// Branching detection
 		Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, setVolume, realCenter, radis);
 		branches.insert(branch.begin(), branch.end());
 			
@@ -620,16 +660,19 @@ int main( int  argc, char**  argv )
 		//Center of mass computation
 		if (realCenter != Z3i::RealPoint()) {
 			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
-			auto pointInBranch = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-						return (connectedComponent3D.find(wpc->myPoint) != connectedComponent3D.end() && wpc->myCount == 1);
-					});
-			
-			VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
-			if (pointInBranch == setVolumeWeighted.end()) {
-				if (previousNormal != Z3i::RealPoint()) {
-					markDifferenceBetweenPlanes(setVolumeWeighted, previousNormal, previousCenter,
-												normal, currentPoint->myPoint, radius);
+			int label = (*find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+						return (wpc->myPoint == centerOfMass);
+					}))->myCount;
+			bool processed = false;
+			for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
+				for (auto itS = skeletonPoints.begin(), itSe = skeletonPoints.end(); itS != itSe; ++itS)  {
+					if (*itS == *it)
+						processed = true;
 				}
+			}
+					 
+			VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
+			if (label != 1 && !processed) {
 				previousNormal = normal;
 				previousCenter = centerOfMass;
 				skeletonPoints.insert(centerOfMass);
@@ -707,9 +750,9 @@ int main( int  argc, char**  argv )
 			skeletonPoints.erase(it);
 	}
 
-	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
-		viewer << CustomColors3D(Color::Green, Color::Green) << *it;
-	}
+	// for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
+	// 	viewer << CustomColors3D(Color::Green, Color::Green) << *it;
+	// }
 	
 	//second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
