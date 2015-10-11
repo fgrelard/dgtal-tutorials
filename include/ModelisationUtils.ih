@@ -156,9 +156,13 @@ void drawDeformedCylinder(vector<Point>& vectorPoints, int length, int radius, f
 	int b = radius;
 	for (int i = 0; i < length; i++) {
 		drawEllipse(vectorPoints, a, b, 0, 0, i, increment);
-		
-		a -= rand() % 3 - 1;
-		b += rand() % 3 - 1;
+
+		if (i % 3 == 0) {
+			a -= rand() % 3 - 1;
+			if (a <= 1) a = 2;
+			b += rand() % 3 - 1;
+			if (b<=1) b = 2;
+		}
 	}
 }
 

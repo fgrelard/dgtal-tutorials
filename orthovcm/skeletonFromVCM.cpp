@@ -89,7 +89,7 @@ class LabelledPoint : public WeightedPoint<Z3i::Point> {
 };
 
 
-Z3i::DigitalSet computeShell(const Z3i::Point& center,  double radiusInnerBall, double radiusOuterBall) {
+Z3i::DigitalSet computeShell(const Z3i::Point& center, const Z3i::DigitalSet& setVolume, double radiusInnerBall, double radiusOuterBall) {
 	Ball<Z3i::Point> ballInnerBall(center, radiusInnerBall);
 	Ball<Z3i::Point> ballOuterBall(center, radiusOuterBall);
 
@@ -98,7 +98,7 @@ Z3i::DigitalSet computeShell(const Z3i::Point& center,  double radiusInnerBall, 
 	Z3i::DigitalSet shell(pointsInOuterBall.domain());
 	for (auto it = pointsInOuterBall.begin(), ite = pointsInOuterBall.end();
 		 it != ite; ++it) {
-		if (!ballInnerBall.contains(*it)) {
+		if (!(ballInnerBall.contains(*it)) && setVolume.find(*it) != setVolume.end()) {
 			shell.insert(*it);
 		}
 	}
@@ -106,25 +106,16 @@ Z3i::DigitalSet computeShell(const Z3i::Point& center,  double radiusInnerBall, 
 	return shell;
 }
 
-template <typename Domain, typename DTL2>
-Z3i::DigitalSet computeDegree(const Domain& domain, const vector<Z3i::Point>& medialAxis,
-				   const DTL2& dt, double delta) {
+
+unsigned int computeDegree(const Z3i::DigitalSet& shell) {
 	typedef Z3i::Object26_6 ObjectType;
-	Z3i::DigitalSet branches(domain);
-	int i  = 0;
-	for (auto it = medialAxis.begin(), ite = medialAxis.end(); it != ite; ++it) {
-		double radius = dt(*it); 
-		Z3i::DigitalSet shell = computeShell(*it, radius*2, radius*4);
-		ObjectType objectImage(Z3i::dt26_6, shell);
-		vector<ObjectType> objects;
-		back_insert_iterator< std::vector<ObjectType> > inserter( objects );
-		unsigned int nbConnectedComponents = objectImage.writeComponents(inserter);
-		if (nbConnectedComponents != 2)
-			branches.insert(*it);
-		i++;
-		trace.info() << i << endl;
-	}
-	return branches;
+
+	ObjectType objectImage(Z3i::dt26_6, shell);
+	vector<ObjectType> objects;
+	back_insert_iterator< std::vector<ObjectType> > inserter( objects );
+	unsigned int nbConnectedComponents = objectImage.writeComponents(inserter);
+
+	return nbConnectedComponents;
 }
 
 template <typename VCM, typename Domain>
@@ -646,7 +637,7 @@ int main( int  argc, char**  argv )
 		
 		// Compute discrete plane
 		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted, currentPoint->myPoint, normal,	0, radius);
-		
+
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 
 		int imageSize = 100;

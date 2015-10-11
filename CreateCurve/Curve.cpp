@@ -25,7 +25,6 @@
 #include "DGtal/io/boards/Board2D.h"
 #include "geometry/Pencil.h"
 #include "geometry/MSTTangent.h"
-
 using namespace std;
 using namespace DGtal;
 
@@ -102,11 +101,11 @@ int main( int argc, char** argv )
 //	createContinuousLogarithmicCurve(curve, 50, increment);
 	createStraightLine(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
-	set<PointVector<3,double>> vectorPoints;
-	createVolumeFromCurve(curve, vectorPoints, 10);
+	vector<PointVector<3,double>> vectorPoints;
+//	createVolumeFromCurve(curve, vectorPoints, 10);
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	thinVolume<Pencil>(curve, vectorPoints, 20.0);
-//	drawDeformedCylinder(vectorPoints, 50, 5, increment);
+	drawDeformedCylinder(vectorPoints, 50, 5, increment);
 //  createStraightLine(curve, 50);
 	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 300, 300));
 
