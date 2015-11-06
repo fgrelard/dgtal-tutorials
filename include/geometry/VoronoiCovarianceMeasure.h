@@ -165,6 +165,8 @@ namespace DGtal
 		 */
 		template <typename PointInputIterator>
 		void updateProximityStructure(double r, PointInputIterator itb, PointInputIterator ite);
+
+		void setMySmallR(double r) {mySmallR = r;}
 		/**
 		   Computes the Voronoi Covariance Measure for the set of points given by range [itb,ite)
        

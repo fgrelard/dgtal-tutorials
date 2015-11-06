@@ -105,14 +105,14 @@ int main( int argc, char** argv )
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	thinVolume<Pencil>(curve, vectorPoints, 20.0);
-	drawDeformedCylinder(vectorPoints, 50, 5, increment);
+//	drawDeformedCylinder(vectorPoints, 50, 5, increment);
 //  createStraightLine(curve, 50);
 	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 300, 300));
 
 
 	//createHelixCurve(vectorPoints, range, radius, pitch, increment);
 //	drawCircle(vectorPoints, 50.0, 0., 0., 0., increment);
-//	createSyntheticAirwayTree(vectorPoints, 5, 100, 0, 0, {0,0,0}, increment);
+	createSyntheticAirwayTree(vectorPoints, 4, 100, 0, 0, {0,0,0}, increment);
 	Image3D anImage3D(domain);
 
 //	create2DNaive();

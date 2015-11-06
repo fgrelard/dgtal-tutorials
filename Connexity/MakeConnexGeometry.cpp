@@ -100,7 +100,7 @@ Z3i::DigitalSet computeSubVolume(const Z3i::DigitalSet& setVolume,
 	
 	Z3i::Point newPoint = point;
 	while (setVolume.find(newPoint) != setVolume.end()) {
-		Ball<Z3i::Point> ball(newPoint, dt(newPoint));
+		Ball<Z3i::Point> ball(newPoint, dt(newPoint)+1);
 		newPoint = point + theNormal * scalar;
 		std::vector<Z3i::Point> pointsInBall = ball.pointsInBall();
 		for (auto it = pointsInBall.begin(), ite = pointsInBall.end(); it !=ite; ++it) {
@@ -325,7 +325,7 @@ int main( int  argc, char**  argv )
 	//! [DVCM3D-instantiation]
 	Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel;
 	KernelFunction chiSurface( 1.0, R );             // hat function with support of radius r
-	VCMOnSurface* vcm_surface = new VCMOnSurface( surface, embType, R, delta, chiSurface, dt, R, l2, true);
+	VCMOnSurface* vcm_surface = new VCMOnSurface( surface, embType, R, 3, chiSurface, dt, delta, l2, true);
 	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, thresholdFeature);
 	Z3i::Object26_6 obj(Z3i::dt26_6, branchingPoints);
 	vector<Z3i::Object26_6> objectsBranching;
@@ -475,7 +475,7 @@ int main( int  argc, char**  argv )
 						}));
 				currentPoint->myProcessed = true;
 				double radius = dt(currentPoint->myPoint);
-				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted, currentPoint->myPoint, normalSub, 0,  radius);
+				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted, currentPoint->myPoint, normalSub, 0,  radius, 100, false);
 				realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 				Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 				viewer << CustomColors3D(Color::Blue, Color::Blue) << centerOfMass;

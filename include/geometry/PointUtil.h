@@ -27,6 +27,9 @@ namespace PointUtil {
 	Container containerFromDepthTraversal(const Image& image, const Point& point, int thresholdMin,
 		int thresholdMax);
 
+	template <typename Container, typename OtherContainer, typename Point>
+	Container containerFromDepthTraversal(const OtherContainer& image, const Point& point);
+
 	template <typename Point>
 	std::vector<Point> linkTwoPoints(const Point& first, const Point& second);
 }
@@ -94,6 +97,28 @@ Container PointUtil::containerFromDepthTraversal(const Image& image, const Point
 	return container;
 }
 
+template <typename Container, typename OtherContainer, typename Point>
+Container PointUtil::containerFromDepthTraversal(const OtherContainer& image, const Point& point) {
+	using namespace DGtal;
+
+	
+	typedef DGtal::Z3i::Object26_6 Graph;
+	typedef DepthFirstVisitor<Graph, std::set<Point> > Visitor;
+	typedef typename Visitor::Node MyNode;
+  
+	Graph graph(DGtal::Z3i::dt26_6, image);
+	Visitor visitor( graph, point );
+	MyNode node;
+	Container container;
+    
+	while ( !visitor.finished() ) 
+	{
+		node = visitor.current();
+		container.push_back(node.first);
+		visitor.expand();
+	}
+	return container;
+}
 
 template <typename Point>
 std::vector<Point> PointUtil::linkTwoPoints(const Point& first, const Point& second) {
@@ -102,7 +127,6 @@ std::vector<Point> PointUtil::linkTwoPoints(const Point& first, const Point& sec
 	
 	std::vector<Point> pointsBetween;
 	DGtal::Z3i::RealPoint slope = second - first;
-	
 	std::set<int> coordinates = {0,1,2};
 	double maxValue = 0;
 	int indexForMaxValue = 0;

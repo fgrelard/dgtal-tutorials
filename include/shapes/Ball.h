@@ -6,6 +6,7 @@
 #include <iostream>
 #include "DGtal/base/Common.h"
 #include "DGtal/helpers/StdDefs.h"
+#include "geometry/Distance.h"
 
 template <typename Point>
 class Ball {
@@ -13,6 +14,7 @@ public:
 	Ball() : myRadius(0.0), myCenter({0,0,0}) {}
 	Ball(const Point& center, double radius) : myCenter(center), myRadius(radius) {}
 	bool contains(const Point& point) const {return euclideanDistance(point, myCenter) <= myRadius;}
+	std::vector<Point> surfaceIntersection(const DGtal::Z3i::DigitalSet& setSurface);
 	std::vector<Point> pointsInBall() const;
 	std::vector<Point> pointsInHalfBall() const;
 	DGtal::Z3i::DigitalSet pointsInBallSet() const;
@@ -27,6 +29,18 @@ private:
 	Point myCenter;
 	double myRadius;
 };
+
+template <typename Point>
+std::vector<Point> Ball<Point>::surfaceIntersection(const DGtal::Z3i::DigitalSet& setSurface) {
+	std::vector<Point> intersection;
+	for (auto it = setSurface.begin(), ite = setSurface.end(); it != ite; ++it) {
+		double distance = euclideanDistance(*it, myCenter);
+		if (distance >= myRadius-1 && distance <= myRadius) {
+			intersection.push_back(*it);
+		}
+	}
+	return intersection;
+}
 
 template <typename Point>
 DGtal::Z3i::DigitalSet Ball<Point>::pointsInBallSet() const {

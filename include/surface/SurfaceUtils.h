@@ -16,6 +16,9 @@ namespace SurfaceUtils {
 
 	template <typename Image>
 	DGtal::Z3i::DigitalSet extractSurfaceVoxels(const Image& volume, int thresholdMin, int thresholdMax);
+
+	template <typename KSpace>
+	std::vector<DGtal::Z3i::RealPoint> normalsToSurfel(const typename KSpace::SCell&  surfel);
 }
 
 template <typename SurfacePoint, typename KSpace, typename Surfel, typename Point, typename DigitalSet>
@@ -65,6 +68,17 @@ DGtal::Z3i::DigitalSet SurfaceUtils::extractSurfaceVoxels(const Image& volume, i
 			surfacePoints.insert(*it);
 	}
 	return surfacePoints;
+}
+
+template <typename KSpace>
+std::vector<DGtal::Z3i::RealPoint> normalsToSurfel(const KSpace ks, const typename KSpace::SCell&  surfel) {
+	std::vector<DGtal::Z3i::RealPoint> normals;
+	for (auto it = ks.sDirs(surfel); it != 0; ++it) {
+		DGtal::Z3i::RealPoint p(0, 0, 0);
+		p[*it] = 1;
+		normals.push_back(p);
+	}
+	return normals;
 }
 
 

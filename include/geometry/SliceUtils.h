@@ -34,13 +34,6 @@ namespace SliceUtils {
 	void slicesFromPlanes(Viewer3D<>&, const std::vector<Pencil> &, const Image&, std::string);
 
 
-	/**
-	 * DO NOT USE
-	 * Does not work, doesnt take into account the actual pixel values
-	 */
-	template <typename ImageAdapter, typename Vector, typename Point, typename Image>
-	ImageAdapter sliceFromPlane(const Vector& normal, const Point& origin, const Image& image, const int patch_width);
-	
 	template <typename ImageAdapter>
 	double computeRadiusFromImage(const ImageAdapter& image, int thresholdMin, int thresholdMax);
 
@@ -103,22 +96,6 @@ std::vector<Vector> SliceUtils::computePlaneFromNormalVector(Vector normal, Poin
 }
 
 
-
-/**
- * Constructs the intersection of a given object image with a plane (defined by normal and origin)
- * Returns the corresponding 2D intersection
- */
-template <typename ImageAdapter, typename Vector, typename Point, typename Image>
-ImageAdapter SliceUtils::sliceFromPlane(const Vector& normal, const Point& origin, const Image& image, const int patch_width) {
-	const Z3i::Domain domain3Dyup(image.domain().lowerBound() + Z3i::Point(-patch_width, -patch_width, -patch_width), image.domain().upperBound() + Z3i::Point(patch_width, patch_width, patch_width));
-	const DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
-											DGtal::Z2i::Point(patch_width, patch_width));
-	DGtal::functors::Identity idV;
-	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(domain3Dyup, origin, normal, patch_width);
-
-	ImageAdapter extractedImage(image, domainImage2D, embedder, idV);
-	return extractedImage;
-}
 
 /**
  * Constructs a distance transform from a 2D image

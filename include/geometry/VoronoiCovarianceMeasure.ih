@@ -29,6 +29,7 @@
 
 //////////////////////////////////////////////////////////////////////////////
 #include <cstdlib>
+#include "shapes/Ball.h"
 //////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -268,11 +269,11 @@ DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
 measure( Point2ScalarFunction chi_r, Point p ) const
 {
   ASSERT( myProximityStructure != 0 );
-  std::vector<Point> neighbors;
-  Point b = myProximityStructure->bin( p ); 
-  myProximityStructure->getPoints( neighbors, 
-                                   b - Point::diagonal(1),
-                                   b + Point::diagonal(1) );
+ 
+  Point b = myProximityStructure->bin( p );
+  Ball<Point> ball(p,mySmallR);
+  std::vector<Point> neighbors = ball.pointsInBall();
+
   MatrixNN vcm;
   // std::cout << *it << " has " << neighbors.size() << " neighbors." << std::endl;
   for ( typename std::vector<Point>::const_iterator it_neighbors = neighbors.begin(),

@@ -117,6 +117,7 @@ int main( int  argc, char**  argv )
 	}
 	string skeletonFilename = vm["skeleton"].as<std::string>();
 	string inputFilename = vm["input"].as<std::string>();
+	string outFilename = vm["output"].as<std::string>();
 	int thresholdMin = vm["thresholdMin"].as<int>();
 	int thresholdMax = vm["thresholdMax"].as<int>();
 	double R = vm["radiusInside"].as<double>();
@@ -198,7 +199,7 @@ int main( int  argc, char**  argv )
 	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
 									  DGtal::Z2i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH));
 	DGtal::functors::Identity idV;
-	
+	int i = 0;
 	for ( auto it = ++tangents.begin(), itE = tangents.end();
 		  it != itE; ++it )
 	{
@@ -210,7 +211,7 @@ int main( int  argc, char**  argv )
 		viewer.setFillColor(Color::Gray);
 		viewer.setFillTransparency(255);
 		
-		viewer << it->getPoint();
+		//viewer << it->getPoint();
 		/*if (radius > 0) {
 			vcm.updateProximityStructure(radius, vPoints.begin(), vPoints.end());
 			chi = KernelFunction( 1.0, radius);
@@ -227,10 +228,16 @@ int main( int  argc, char**  argv )
 		n2*=size;
 
 		//if(sliceNumber > 2280 && sliceNumber < 2420 && sliceNumber % 10 ==0) {
+		if(sliceNumber % 1000 == 400) {
 			viewer.setLineColor(Color::Blue);
 			viewer.setFillColor(Color::Blue);
 			viewer.setFillTransparency(150);
 			viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
+			std::string outName;
+			outName += outFilename + "_" + std::to_string(i) + ".pgm";
+			PGMWriter<ImageAdapterExtractor>::exportPGM(outName, extractedImage);
+			i++;
+		}
 			//}
 		sliceNumber++;
 	}

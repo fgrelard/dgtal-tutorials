@@ -12,7 +12,7 @@ using namespace DGtal;
 namespace TangentUtils {
 	double triangle(double x);
 	double lambda(double x);
-
+	
 	template <typename Pencil, typename Iterator, typename Segmentation>
 	std::vector<Pencil> computeTangentialCover(Iterator itB, Iterator itE,
 											   const Segmentation& s);
@@ -36,10 +36,9 @@ std::vector<Pencil> TangentUtils::orthogonalPlanesWithTangents(Iterator itb, Ite
 {
 	typedef StandardDSS6Computer<Iterator,int,8> SegmentComputer;  
 	typedef SaturatedSegmentation<SegmentComputer> Segmentation;
-
-	SegmentComputer algo;
-	Segmentation s(itb, ite, algo);
-	s.setMode("MostCentered++");
+    SegmentComputer algo;
+    Segmentation s(itb, ite, algo);
+    s.setMode("MostCentered++");
 	typename Segmentation::SegmentComputerIterator i = s.begin();
 	typename Segmentation::SegmentComputerIterator end = s.end();
 

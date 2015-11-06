@@ -1,5 +1,5 @@
 #ifndef __STATISTICS__
-#define __STATISTICS
+#define __STATISTICS__
 #include <vector>
 #include <algorithm>
 

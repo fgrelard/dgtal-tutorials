@@ -120,7 +120,7 @@ namespace DGtal
 		};
 		typedef std::map<Point,EigenStructure> Point2EigenStructure;  ///< the map Point -> EigenStructure
 		typedef std::map<Surfel,Normals>           Surfel2Normals;    ///< the map Surfel -> Normals
-
+		typedef std::map<Point, double> Point2Radius;
 		// ----------------------- Standard services ------------------------------
 	public:
 
@@ -196,7 +196,7 @@ namespace DGtal
 		/// EigenStructure of the chi_r VCM (eigenvalues and
 		/// eigenvectors).
 		const Point2EigenStructure& mapPoint2ChiVCM() const;
-
+		const Point2Radius& mapPoint2Radius() const;
 
 		/**
 		   Gets the eigenvalues of the chi_r VCM at surfel \a s sorted from lowest to highest.
@@ -247,6 +247,8 @@ namespace DGtal
 		Scalar myRadiusTrivial;
 		/// Stores for each point p its convolved VCM, i.e. VCM( chi_r( p ) )
 		Point2EigenStructure myPt2EigenStructure;
+		/// Stores for each point p its VCM radius
+		Point2Radius myPt2Radius;
 		/// Stores for each surfel its vcm normal and its trivial normal.
 		Surfel2Normals mySurfel2Normals;
 		/// DT for adaptative radius

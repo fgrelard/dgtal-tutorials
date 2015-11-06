@@ -34,6 +34,8 @@
 #include "DGtal/geometry/surfaces/estimation/LocalEstimatorFromSurfelFunctorAdapter.h"
 #include "DGtal/geometry/surfaces/estimation/estimationFunctors/ElementaryConvolutionNormalVectorEstimator.h"
 #include "MedialAxis.h"
+#include "geometry/VCMUtil.h"
+
 //////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -56,16 +58,17 @@ inline
 DGtal::VoronoiCovarianceMeasureOnDigitalSurface<TDigitalSurfaceContainer, TSeparableMetric, TKernelFunction, DTL2>::
 VoronoiCovarianceMeasureOnDigitalSurface( ConstAlias< Surface > _surface, 
 										  Surfel2PointEmbedding _surfelEmbedding,
-										  Scalar _R, Scalar delta, 
+										  Scalar _R, Scalar _r, 
 										  KernelFunction chi_r, DTL2 dtl2,
-										  Scalar t, Metric aMetric, bool verbose )
+										  Scalar delta, Metric aMetric, bool verbose )
 	: mySurface( _surface ), mySurfelEmbedding( _surfelEmbedding ), myChi( chi_r ),
-	  myVCM( _R, delta, aMetric, verbose ), myRadiusTrivial( t ), myDT(dtl2)
+	  myVCM( _R, _r, aMetric, verbose ), myRadiusTrivial( delta ), myDT(dtl2)
 {
 	if ( verbose ) trace.beginBlock( "Computing VCM on digital surface." );
 	const KSpace & ks = mySurface->container().space();
 	std::vector<Point> vectPoints;
-
+	DGtal::Z3i::DigitalSet::Domain domain(ks.lowerBound(), ks.upperBound());
+	DGtal::Z3i::DigitalSet setSurface(domain);
 
 //Use DT
     DTDomain domainDT = myDT.domain();
@@ -85,6 +88,7 @@ VoronoiCovarianceMeasureOnDigitalSurface( ConstAlias< Surface > _surface,
 		getPoints( std::inserter( pointSet, pointSet.begin() ), *it );
 	vectPoints.resize( pointSet.size() );
 	std::copy( pointSet.begin(), pointSet.end(), vectPoints.begin() );
+	setSurface.insert(pointSet.begin(), pointSet.end());
 	pointSet.clear();
 	if ( verbose ) trace.endBlock();
 
@@ -102,13 +106,15 @@ VoronoiCovarianceMeasureOnDigitalSurface( ConstAlias< Surface > _surface,
 		Point closestPointToCurrent = *min_element(dtPoints.begin(), dtPoints.end(), [&](const Point& one, const Point& two) {
 				return DGtal::Z3i::l2Metric(one, *it) < DGtal::Z3i::l2Metric(two, *it);
 			});
-	
+//		std::vector<DGtal::Z3i::RealPoint> normalsToPoint{DGtal::Z3i::RealPoint(0,0,1), DGtal::Z3i::RealPoint(0,1,0), DGtal::Z3i::RealPoint(1,0,0)};
+//		double radius = VCMUtil::radiusForVCMSurface(setSurface, *it, normalsToPoint);
 		double radius = myDT(closestPointToCurrent) + delta;
 		myChi = KernelFunction( 1.0, radius);
+		myVCM.setMySmallR(radius);
 
-		
 		Point p = *it;
-
+		myPt2Radius[p] = radius;
+		
 		MatrixNN measure = myVCM.measure( myChi, p );
 // On diagonalise le résultat.
 		EigenStructure & evcm = myPt2EigenStructure[ p ];
@@ -222,6 +228,15 @@ DGtal::VoronoiCovarianceMeasureOnDigitalSurface<TDigitalSurfaceContainer, TSepar
 mapPoint2ChiVCM() const
 {
 	return myPt2EigenStructure;
+}
+
+//-----------------------------------------------------------------------------
+template <typename TDigitalSurfaceContainer, typename TSeparableMetric, typename TKernelFunction, typename DTL2>
+inline
+const typename DGtal::VoronoiCovarianceMeasureOnDigitalSurface<TDigitalSurfaceContainer, TSeparableMetric, TKernelFunction, DTL2>::Point2Radius&
+DGtal::VoronoiCovarianceMeasureOnDigitalSurface<TDigitalSurfaceContainer, TSeparableMetric, TKernelFunction, DTL2>::
+mapPoint2Radius() const {
+	return myPt2Radius;
 }
 
 //-----------------------------------------------------------------------------
