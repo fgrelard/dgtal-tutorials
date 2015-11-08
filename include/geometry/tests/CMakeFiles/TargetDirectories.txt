@@ -1,0 +1,3 @@
+/home/florent/Documents/DGtal/tutorials-copy/include/geometry/tests/CMakeFiles/TestGeodesicMetric.dir
+/home/florent/Documents/DGtal/tutorials-copy/include/geometry/tests/CMakeFiles/TestPointUtil.dir
+/home/florent/Documents/DGtal/tutorials-copy/include/geometry/tests/CMakeFiles/TestSliceUtils.dir

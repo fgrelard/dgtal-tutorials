@@ -1,0 +1,52 @@
+#include "DGtal/base/Common.h"
+#include "DGtal/io/readers/GenericReader.h"
+#include "DGtal/io/writers/GenericWriter.h"
+#include "DGtal/kernel/BasicPointFunctors.h"
+#include "DGtal/images/ImageSelector.h"
+#include "../SliceUtils.h"
+
+using namespace DGtal;
+using namespace std;
+
+void testSliceFromPlane() {
+	typedef ImageSelector<Z3i::Domain, unsigned char>::Type Image;
+	typedef DGtal::ConstImageAdapter<Image,Z2i::Domain,DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain>, Image::Value, DGtal::functors::Identity> ImageAdapterExtractor;
+
+	Image image = GenericReader<Image>::import("/home/florent/test_img/cylinder.vol");
+
+	Z3i::Point origin(0,0,1);
+	Z3i::RealPoint normal(0,0,1);
+
+	ImageAdapterExtractor extractedImage = SliceUtils::sliceFromPlane<ImageAdapterExtractor>(normal, origin, image, 100);
+	GenericWriter<ImageAdapterExtractor>::exportFile("slice.pgm", extractedImage);	 
+}
+
+void testCenterOfMass() {
+	typedef ImageSelector<Z2i::Domain, unsigned char>::Type Image;
+
+	Image image = GenericReader<Image>::import("/home/florent/test_img/slices/boudin/slice_1.pgm");
+	
+	Z2i::Point point = SliceUtils::centerOfMass(image);
+	trace.info() << point << endl;
+}
+
+void testComputeCovarianceMatrix() {
+	typedef Eigen::MatrixXd MatrixXd;
+	typedef ImageSelector<Z2i::Domain, unsigned char>::Type Image;
+	typedef DGtal::Z2i::RealPoint RealPoint;
+	
+	Image image = GenericReader<Image>::import("/home/florent/trash/slice_250.pgm");
+	MatrixXd matrixCovariance = SliceUtils::computeCovarianceMatrix<MatrixXd>(image);
+	RealPoint vectorZero = SliceUtils::extractEigenVector<RealPoint>(matrixCovariance, 0);
+	RealPoint vectorOne = SliceUtils::extractEigenVector<RealPoint>(matrixCovariance, 1);
+	trace.info() << vectorZero << " " << vectorOne << endl;
+}
+
+
+int main() {
+//	testSliceFromPlane();
+//	testCenterOfMass();
+//	testComputeCovarianceMatrix();
+	testComputeProjectionOnSet();
+	return 0;
+}

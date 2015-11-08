@@ -1,0 +1,27 @@
+#ifndef __DIANA__
+#define __DIANA__
+#include <vector>
+using namespace std;
+
+namespace Agnes {
+	template <typename Point>
+	double distanceEuclidienne(double, double);
+
+	template <typename Point>
+	int* diameter(const vector<vector<Point> >&);
+
+	template <typename Point>
+	void clusterBelonging(int*, vector<vector<Point> >&);
+
+	template <typename Point>
+	void bouclePrincipale(vector<vector<Point > >&);
+}
+
+
+
+
+
+
+
+
+#endif
