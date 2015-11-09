@@ -66,7 +66,7 @@
 #include "geometry/WeightedPoint.h"
 #include "geometry/MedialAxis.h"
 #include "geometry/ImageUtil.h"
-#include "surface/SurfaceUtils.h"
+//#include "surface/SurfaceUtils.h"
 #include "surface/Morphomaths.h"
 #include "clustering/diana.hpp"
 #include "geometry/WeightedPointCount.h"
@@ -135,7 +135,7 @@ Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const Domain
     {
 		auto lambda = it->second.values;
 		double ratio = computeCurvature(lambda);
-		if (ratio >= threshold)
+		if (ratio > threshold)
 			aSet.insert(it->first);
 	}
 	return aSet; 
@@ -613,6 +613,7 @@ int main( int  argc, char**  argv )
 	vector<double> curvaturePoints = extractCurvatureOnPoints(*vcm_surface);
 	double threshold = otsuThreshold(curvaturePoints);
 	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, threshold);
+	trace.info() << threshold << endl;
 	NotPointPredicate notBranching(branchingPoints);
 	Z3i::Object26_6 obj(Z3i::dt26_6, branchingPoints);
 	vector<Z3i::Object26_6> objects;
@@ -660,19 +661,14 @@ int main( int  argc, char**  argv )
 	Domain domain = vcm.domain();
 	KernelFunction chi( 1.0, r );
 
-	
-	Matrix vcm_r, evec;
-	RealVector eval;
-
-
  
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 
 	int i = 0;
 	int numberLeft = setVolumeWeighted.size();
 	
-	Z3i::RealPoint normal;
-	Z3i::RealPoint previousNormal;
+	Z3i::RealPoint normal(0,0,1);
+	Z3i::RealPoint previousNormal=normal;
 
 	Z3i::DigitalSet connectedComponent3D(domainVolume);
 	Z3i::DigitalSet branchingParts(domainVolume);
@@ -683,7 +679,7 @@ int main( int  argc, char**  argv )
 	
 	trace.beginBlock("Computing skeleton");
 	//Main loop to compute skeleton (stop when no vol points left to process)
-	while (numberLeft > (0.02 * setVolume.size()))
+	while (numberLeft > 0)
 	{
 		trace.progressBar((setVolumeWeighted.size() - numberLeft), setVolumeWeighted.size());		
 		currentPoint->myProcessed = true;
@@ -703,22 +699,23 @@ int main( int  argc, char**  argv )
 				chi = KernelFunction( 1.0, radius);
 			}
 		}
+		
 
 		// Compute discrete plane
 		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 															 currentPoint->myPoint, normal,
 															 0, radius, distanceMax, true);
 
-		
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
+		
 		int imageSize = 100;
 		double radiusIntersection = computeRadiusFromIntersection<ImageAdapterExtractor, MatrixXd>(volume, currentPoint->myPoint, normal, imageSize);
 		//Center of mass computation
 		if (realCenter != Z3i::RealPoint()) {
 			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
-			// Z3i::DigitalSet shell = computeShell(currentPoint->myPoint, setVolume, radius, radius*2);
-			// int degree = computeDegree(shell);
-			int degree = 2;
+			Z3i::DigitalSet shell = computeShell(currentPoint->myPoint, setVolume, radius*1.5, radius*3);
+			int degree = computeDegree(shell);
+			//int degree = 2;
 			int label = (*find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
 						return (wpc->myPoint == centerOfMass);
 					}))->myCount;

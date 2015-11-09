@@ -2,17 +2,17 @@
 #define VCM_UTIL_H
 
 #include "DGtal/base/Common.h"
-#include "DGtal/io/writers/VolWriter.h"
+//#include "DGtal/io/writers/VolWriter.h"
 #include "DGtal/helpers/StdDefs.h"
 #include "DGtal/math/linalg/EigenDecomposition.h"
 #include "WeightedPointCountComparator.h"
-#include "PointUtil.h"
-#include "Statistics.h"
-#include "DSSUtil.h"
+//#include "PointUtil.h"
+//#include "Statistics.h"
+//#include "DSSUtil.h"
 #include "DGtal/images/ImageSelector.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
-#include "DGtal/geometry/curves/StandardDSS6Computer.h"
-#include "DGtal/geometry/curves/SaturatedSegmentation.h"
+//#include "DGtal/geometry/curves/StandardDSS6Computer.h"
+//#include "DGtal/geometry/curves/SaturatedSegmentation.h"
 #include <set>
 #include <vector>
 
@@ -75,42 +75,42 @@ DGtal::Z3i::RealPoint VCMUtil::computeEigenValuesFromVCM(const DGtal::Z3i::Point
 }
 
 
-double VCMUtil::radiusForVCMSurface(const DGtal::Z3i::DigitalSet& setSurface, const DGtal::Z3i::Point& pointel, const std::vector<DGtal::Z3i::RealPoint>& normals) {
-	typedef std::vector<DGtal::Z3i::Point> Container;
-	typedef Container::iterator Iterator;
-	typedef DGtal::StandardDSS6Computer<Iterator,int,8> SegmentComputer;  
-	typedef DGtal::SaturatedSegmentation<SegmentComputer> Segmentation;
-	typedef DGtal::ImageSelector<DGtal::Z3i::Domain, unsigned char>::Type Image;
+// double VCMUtil::radiusForVCMSurface(const DGtal::Z3i::DigitalSet& setSurface, const DGtal::Z3i::Point& pointel, const std::vector<DGtal::Z3i::RealPoint>& normals) {
+// 	typedef std::vector<DGtal::Z3i::Point> Container;
+// 	typedef Container::iterator Iterator;
+// 	typedef DGtal::StandardDSS6Computer<Iterator,int,8> SegmentComputer;  
+// 	typedef DGtal::SaturatedSegmentation<SegmentComputer> Segmentation;
+// 	typedef DGtal::ImageSelector<DGtal::Z3i::Domain, unsigned char>::Type Image;
 	
-	double radiusVCM = std::numeric_limits<double>::max();
-	std::vector<double> lengths;
-	for (auto it = normals.begin(), ite = normals.end(); it != ite; ++it) {
-		DGtal::Z3i::RealPoint normal = *it;
-		double d = -(-normal[0] * pointel[0] - normal[1] * pointel[1] - normal[2] * pointel[2]);
-		//Naive plane (26 connexity)
-		double omega = std::max(abs(normal[0]), std::max(abs(normal[1]), abs(normal[2])));
+// 	double radiusVCM = std::numeric_limits<double>::max();
+// 	std::vector<double> lengths;
+// 	for (auto it = normals.begin(), ite = normals.end(); it != ite; ++it) {
+// 		DGtal::Z3i::RealPoint normal = *it;
+// 		double d = -(-normal[0] * pointel[0] - normal[1] * pointel[1] - normal[2] * pointel[2]);
+// 		//Naive plane (26 connexity)
+// 		double omega = std::max(abs(normal[0]), std::max(abs(normal[1]), abs(normal[2])));
 		
-		DGtal::Z3i::DigitalSet slice_i = extractConnectedComponent3D(setSurface.domain(), setSurface, normal, pointel, d, omega);
-		// if (slice_i.size() > 0) {
-		// Image image = DGtal::ImageFromSet<Image>::create(slice_i, 1);
-		// std::string outputFile  = "/home/florent/test_img/slices/trash/" + std::to_string(pointel[0])
-		// 	+ std::to_string(pointel[1]) + std::to_string(pointel[2]) + std::to_string(normal[0]) + std::to_string(normal[0]) + std::to_string(normal[0]) +".vol";
-		// DGtal::VolWriter<Image>::exportVol(outputFile, image);
-		// }
-		Container vSlice_i = PointUtil::containerFromDepthTraversal<Container>(slice_i, pointel);
-		SegmentComputer algo;
-		Iterator i = vSlice_i.begin(), end = vSlice_i.end();
-		Segmentation s(i, end, algo);
-		s.setMode("MostCentered++");
-		std::vector<SegmentComputer> vDSS= DSSUtil::computeDSSPassingThrough(pointel, s);
-		std::vector<double> lengthsDSS = DSSUtil::extractLengths(vDSS);
-		double meanLength = Statistics::mean(lengthsDSS);
-		if (meanLength < radiusVCM) {
-		    radiusVCM = meanLength;
-		}		
-	}
-	return radiusVCM;
-}
+// 		DGtal::Z3i::DigitalSet slice_i = extractConnectedComponent3D(setSurface.domain(), setSurface, normal, pointel, d, omega);
+// 		// if (slice_i.size() > 0) {
+// 		// Image image = DGtal::ImageFromSet<Image>::create(slice_i, 1);
+// 		// std::string outputFile  = "/home/florent/test_img/slices/trash/" + std::to_string(pointel[0])
+// 		// 	+ std::to_string(pointel[1]) + std::to_string(pointel[2]) + std::to_string(normal[0]) + std::to_string(normal[0]) + std::to_string(normal[0]) +".vol";
+// 		// DGtal::VolWriter<Image>::exportVol(outputFile, image);
+// 		// }
+// 		Container vSlice_i = PointUtil::containerFromDepthTraversal<Container>(slice_i, pointel);
+// 		SegmentComputer algo;
+// 		Iterator i = vSlice_i.begin(), end = vSlice_i.end();
+// 		Segmentation s(i, end, algo);
+// 		s.setMode("MostCentered++");
+// 		std::vector<SegmentComputer> vDSS= DSSUtil::computeDSSPassingThrough(pointel, s);
+// 		std::vector<double> lengthsDSS = DSSUtil::extractLengths(vDSS);
+// 		double meanLength = Statistics::mean(lengthsDSS);
+// 		if (meanLength < radiusVCM) {
+// 		    radiusVCM = meanLength;
+// 		}		
+// 	}
+// 	return radiusVCM;
+// }
 
 template <typename Domain>
 DGtal::Z3i::DigitalSet VCMUtil::extractConnectedComponent3D(const Domain & domain, const DGtal::Z3i::DigitalSet& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double distanceMax = std::numeric_limits<double>::max()) {
