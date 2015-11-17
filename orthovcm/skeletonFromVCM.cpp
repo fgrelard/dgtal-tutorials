@@ -323,7 +323,7 @@ Z3i::DigitalSet detectBranchingPointsInNeighborhood(const Z3i::DigitalSet& branc
 
 	if (toMark) {
 		double ballRadius = Z3i::l2Metric(branchingPoint, current) + 1;
-//		ballRadius = radius;
+		ballRadius = radius;
 		Ball<Z3i::Point> ballBranching(current, ballRadius);
 		Z3i::RealPoint dirVector = ((Z3i::RealPoint) branchingPoint - (Z3i::RealPoint)current).getNormalized();
 		std::vector<Z3i::Point> pointsInBall;
@@ -362,7 +362,7 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 	Z3i::Point toReturn;
 	for (auto it = aSet.begin(), ite = aSet.end(); it != ite; ++it) {
 		double distanceToPoint = sqrt(pow(((*it)[0] - aPoint[0]), 2) + pow(((*it)[1] - aPoint[1]), 2) + pow(((*it)[2] - aPoint[2]), 2));
-		if (distanceToPoint < distanceMin) {
+		if (distanceToPoint < distanceMin || (distanceMin == distanceToPoint && aPoint > *it)) {
 			distanceMin = distanceToPoint;
 			toReturn = *it;
 		}
@@ -688,6 +688,7 @@ int main( int  argc, char**  argv )
 	Z3i::Point centerOfMass;
 	Z3i::Point previousCenter;
 	Z3i::DigitalSet branches(setVolume.domain());
+
 	
 	trace.beginBlock("Computing skeleton");
 	//Main loop to compute skeleton (stop when no vol points left to process)
@@ -712,16 +713,13 @@ int main( int  argc, char**  argv )
 			}
 		}
 		
-
 		// Compute discrete plane
 		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 															 currentPoint->myPoint, normal,
 															 0, radius, distanceMax, true);
 
-	
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-
-			
+		
 		double radiusIntersection = computeRadiusFromIntersection3D<MatrixXd>(connectedComponent3D);		
 		double radiusJunction = radiusForJunction(branchingPoints, *vcm_surface, realCenter, radiusIntersection);
 		//Center of mass computation
@@ -742,12 +740,13 @@ int main( int  argc, char**  argv )
 			}
 			
 			VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
-			if (label != 1 && !processed && degree > 1) {			   
+			if (label != 1 && !processed && degree > 1 && Z3i::l2Metric(currentPoint->myPoint, centerOfMass) <= sqrt(3)) {			   
 				//detectBranchingPointsInNeighborhood(junctionPointToRadius, maxCurvaturePoints, *vcm_surface, 
 				//								    normal, centerOfMass, radius);
 				Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, setVolume, realCenter, radiusJunction);
-				branches.insert(branch.begin(), branch.end()); 
-				VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 1);
+				branches.insert(branch.begin(), branch.end());
+				
+				// VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 1);
 				
 				// Branching detection	
 				previousNormal = normal;
