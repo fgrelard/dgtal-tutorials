@@ -13,6 +13,7 @@
 #include "shapes/Ball.h"
 #include "geometry/Distance.h"
 #include "geometry/TangentUtils.h"
+#include "DGtal/kernel/sets/DigitalSetInserter.h"
 
 using namespace std;
 using namespace DGtal;
@@ -330,9 +331,20 @@ template <typename DigitalSet>
 DigitalSet addNoise(const DigitalSet& set, float noise) {
 	typedef DigitalSet Predicate;
 	typedef KanungoNoise<Predicate, Z3i::Domain, DigitalSet> KanungoNoise;
+	typedef typename DigitalSet::Space Space;
+	typedef typename DigitalSet::Point Point;
+	typedef ExactPredicateLpSeparableMetric<Space, Point::dimension> L2Metric;
+	typedef MetricAdjacency<Space, 3> MetricAdjacency;
+	L2Metric l2Metric;
 	KanungoNoise kanungo(set, set.domain(), noise);
 	DigitalSet set2(set.domain());
-    for (auto it = set.domain().begin(), itE = set.domain().end(); it != itE; ++it) {
+
+	DigitalSet neighbors(set.domain());
+	DigitalSetInserter<DigitalSet> inserter(neighbors);
+	for (auto it = set.begin(), ite = set.end(); it != ite; ++it) {
+		MetricAdjacency::writeNeighbors(inserter, *it);
+	}
+    for (auto it = neighbors.begin(), itE = neighbors.end(); it != itE; ++it) {
 		if (kanungo(*it)) {
 			set2.insertNew(*it);
 		}
@@ -340,17 +352,17 @@ DigitalSet addNoise(const DigitalSet& set, float noise) {
 	return set2;
 }
 
-template <typename DigitalSet>
-void create2DCurve(DigitalSet & digitalSet) {
-	digitalSet.insertNew({1,3});
-	digitalSet.insertNew({2,3});
-	digitalSet.insertNew({3,4});
-	digitalSet.insertNew({4,4});
-	digitalSet.insertNew({5,5});
-	digitalSet.insertNew({6,5});
-	digitalSet.insertNew({7,6});
-	digitalSet.insertNew({8,6});
-	digitalSet.insertNew({9,6});
+template <typename Point>
+void create2DCurve(std::vector<Point> & digitalSet) {
+	digitalSet.push_back({1,3});
+	digitalSet.push_back({2,3});
+	digitalSet.push_back({3,4});
+	digitalSet.push_back({4,4});
+	digitalSet.push_back({5,5});
+	digitalSet.push_back({6,5});
+	digitalSet.push_back({7,6});
+	digitalSet.push_back({8,6});
+	digitalSet.push_back({9,6});
 }
 
 template <typename DigitalSet, typename Board>

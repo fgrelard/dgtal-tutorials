@@ -228,7 +228,7 @@ int main( int  argc, char**  argv )
 		n2*=size;
 
 		//if(sliceNumber > 2280 && sliceNumber < 2420 && sliceNumber % 10 ==0) {
-		if(sliceNumber % 1000 == 400) {
+		if(sliceNumber % 10 ==0) {
 			viewer.setLineColor(Color::Blue);
 			viewer.setFillColor(Color::Blue);
 			viewer.setFillTransparency(150);
@@ -244,7 +244,7 @@ int main( int  argc, char**  argv )
 
 	for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
 		if (volume(*it) >= thresholdMin)
-			viewer << CustomColors3D(Color(255,0,0,20), Color(255,0,0,20))<<*it;
+			viewer << CustomColors3D(Color(0,0,255,20), Color(0,0,255,20))<<*it;
 	}
   
 	viewer << Viewer3D<>::updateDisplay;

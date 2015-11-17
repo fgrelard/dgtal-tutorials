@@ -50,12 +50,12 @@ typedef vector<Point>::const_iterator PointIterator;
 
 void create2DNaive() {
 	Z2i::Domain domain({0,0}, {10,10});
-	Z2i::DigitalSet dSet(domain);
+    vector<Z2i::Point> dSet;
 	Board2D board;
  	create2DCurve(dSet);
 	//create2DNaiveTangentsForVisu(dSet, board);
 
-	typedef Z2i::DigitalSet::Iterator Iterator;
+	typedef vector<Z2i::Point>::iterator Iterator;
 	typedef typename IteratorCirculatorTraits<Iterator>::Value::Coordinate Coordinate; 
 	typedef ArithmeticalDSSComputer<Iterator,Coordinate,8> RecognitionAlgorithm;
 	typedef SaturatedSegmentation<RecognitionAlgorithm> Segmentation;
@@ -98,11 +98,11 @@ int main( int argc, char** argv )
 	int radius = 10;
 	
 	vector<PointVector<3, double>> curve;
-//	createContinuousLogarithmicCurve(curve, 50, increment);
-	createStraightLine(curve, 50, increment);
+	createContinuousLogarithmicCurve(curve, 50, increment);
+//	createStraightLine(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
-	vector<PointVector<3,double>> vectorPoints;
-//	createVolumeFromCurve(curve, vectorPoints, 10);
+    set<PointVector<3,double>> vectorPoints;
+	createVolumeFromCurve(curve, vectorPoints, 10);
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	thinVolume<Pencil>(curve, vectorPoints, 20.0);
 //	drawDeformedCylinder(vectorPoints, 50, 5, increment);
@@ -112,17 +112,19 @@ int main( int argc, char** argv )
 
 	//createHelixCurve(vectorPoints, range, radius, pitch, increment);
 //	drawCircle(vectorPoints, 50.0, 0., 0., 0., increment);
-	createSyntheticAirwayTree(vectorPoints, 4, 100, 0, 0, {0,0,0}, increment);
-	Image3D anImage3D(domain);
+//	createSyntheticAirwayTree(vectorPoints, 4, 100, 0, 0, {0,0,0}, increment);
+//	Image3D anImage3D(domain);
 
 //	create2DNaive();
 
-/*	DigitalSet set(domain);
+	DigitalSet set(domain);
 	for (auto it = vectorPoints.begin(), itE = vectorPoints.end(); it != itE; ++it) {
 		set.insert(*it);
 	}
-	DigitalSet set2 = addNoise(set, noise);*/
-	imageFromRangeAndValue(vectorPoints.begin(), vectorPoints.end(), anImage3D, 150);
+	DigitalSet set2 = addNoise(set, noise);
+//	imageFromRangeAndValue(vectorPoints.begin(), vectorPoints.end(), anImage3D, 150);
+	
+	Image3D anImage3D = ImageFromSet<Image3D>::create(set2, 1);
     VolWriter<Image3D>::exportVol(examplesPath + filename, anImage3D);
 	const Color CURVE3D_COLOR( 100, 100, 140, 128 );
 

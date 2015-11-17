@@ -38,11 +38,11 @@ namespace Statistics {
 	template <typename Vector, typename Matrix>
 	Vector extractEigenValue(const Matrix& m, int colNumber);
 
-	template <typename Matrix>
-	Matrix computeCovarianceMatrix(const DGtal::Z2i::DigitalSet& aSet);
+	template <typename Matrix, typename Container>
+	Matrix computeCovarianceMatrix(const Container& aSet);
 
 	template <typename Matrix, typename Image2D>
-	Matrix computeCovarianceMatrix(const Image2D& image);
+	Matrix computeCovarianceMatrixImage(const Image2D& image);
 	
 }
 
@@ -176,22 +176,22 @@ Vector Statistics::computeNormalFromCovarianceMatrix(const std::vector<Point> & 
 	return normal;
 }
 
-template <typename Matrix>
-Matrix Statistics::computeCovarianceMatrix(const DGtal::Z2i::DigitalSet& aSet) {
-	typedef typename DGtal::Z2i::DigitalSet::ConstIterator ConstIterator;
-	typedef typename DGtal::Z2i::DigitalSet::Domain Domain;
+template <typename Matrix, typename Container>
+Matrix Statistics::computeCovarianceMatrix(const Container& aSet) {
+	typedef typename Container::ConstIterator ConstIterator;
+	typedef typename Container::Domain Domain;
 	typedef typename Domain::Point Point;
-		
+	
 	int size = aSet.size();
-	Matrix A(size, 2);
+	Matrix A(size, Point::dimension);
 	if (size == 0) return A;
 	
 	int i = 0;
 	for (ConstIterator it = aSet.begin(), ite = aSet.end();
 		 it != ite; ++it) {
 		Point point = *it;
-		A(i, 0) = (double) point[0] * 1.0;
-		A(i, 1) = (double) point[1] * 1.0;
+		for (int j = 0; j < Point::dimension; j++)
+			A(i, j) = (double) point[j] * 1.0;
 		i++;
 	}
 	Matrix centered = A.rowwise() - A.colwise().mean();
@@ -201,7 +201,7 @@ Matrix Statistics::computeCovarianceMatrix(const DGtal::Z2i::DigitalSet& aSet) {
 
 
 template <typename Matrix, typename Image2D>
-Matrix Statistics::computeCovarianceMatrix(const Image2D& image) {
+Matrix Statistics::computeCovarianceMatrixImage(const Image2D& image) {
 	typedef typename Image2D::Domain Domain;
 	typedef typename Domain::Point Point;
 	int size = 0;

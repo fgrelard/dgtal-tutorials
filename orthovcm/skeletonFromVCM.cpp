@@ -247,6 +247,17 @@ double computeRadiusFromIntersection(const Image& volume, const Z3i::Point& poin
 		return 0;
 }
 
+template <typename Matrix>
+double computeRadiusFromIntersection3D(const Z3i::DigitalSet& aSet) {
+	Matrix covmatrix = Statistics::computeCovarianceMatrix<Matrix>(aSet);
+	if (covmatrix.size() == 0) return 0;
+	double eigenvalue = Statistics::extractEigenValue<Z3i::RealPoint>(covmatrix, 0)[2];
+	if (eigenvalue >= 0)
+		return sqrt(eigenvalue);
+	else
+		return 0;
+}
+
 template <typename WeightedPoint>
 set<WeightedPoint*> computePointsBelowPlane(set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint>>& volume, const Z3i::RealPoint& normal, const Z3i::Point& center, double distanceMax = numeric_limits<double>::max()) {
 	set<WeightedPoint*> inferiorPoints;
@@ -312,6 +323,7 @@ Z3i::DigitalSet detectBranchingPointsInNeighborhood(const Z3i::DigitalSet& branc
 
 	if (toMark) {
 		double ballRadius = Z3i::l2Metric(branchingPoint, current) + 1;
+//		ballRadius = radius;
 		Ball<Z3i::Point> ballBranching(current, ballRadius);
 		Z3i::RealPoint dirVector = ((Z3i::RealPoint) branchingPoint - (Z3i::RealPoint)current).getNormalized();
 		std::vector<Z3i::Point> pointsInBall;
@@ -325,12 +337,12 @@ Z3i::DigitalSet detectBranchingPointsInNeighborhood(const Z3i::DigitalSet& branc
 }
 
 template <typename VCM>
-Z3i::DigitalSet detectBranchingPointsInNeighborhood(map<Z3i::Point, double>& aMap, const Z3i::DigitalSet& branchingPoints, const VCM& vcm, 
-													const Z3i::RealPoint& normal, const Z3i::RealPoint& current, double radius) {
+double radiusForJunction(const Z3i::DigitalSet& branchingPoints, const VCM& vcm, 
+													const Z3i::RealPoint& current, double radius) {
 	Z3i::Point nearestPointBranch;
 	Z3i::DigitalSet aSet(branchingPoints.domain());
 	for (auto it = branchingPoints.begin(), ite = branchingPoints.end(); it != ite; ++it) {
-		if (VCMUtil::planeContains(*it, normal, current) && Z3i::l2Metric(*it, current) <= radius) {
+		if (Z3i::l2Metric(*it, current) <= radius) {
 			nearestPointBranch = *it;
 		}
 	}
@@ -339,11 +351,9 @@ Z3i::DigitalSet detectBranchingPointsInNeighborhood(map<Z3i::Point, double>& aMa
 		double ratio = computeCurvature(lambda);
 		
 		double r = radius * (1/(1 - ratio * 3));
-		if (r < aMap.at(nearestPointBranch)) {
-			aMap[nearestPointBranch] = r;
-		}	  
+		return r;
 	}
-	return aSet;
+	return 0;
 	
 }
 
@@ -636,12 +646,14 @@ int main( int  argc, char**  argv )
    
  		maxCurvaturePoints.insert(maximizingCurvaturePoint);
 	}
+
+	
 	// map<Point, double> junctionPointToRadius;
 	// for (auto it = maxCurvaturePoints.begin(), ite = maxCurvaturePoints.end(); it != ite; ++it) {
 	// 	junctionPointToRadius[*it] = numeric_limits<double>::max();
 	// }
 	
-	delete vcm_surface;
+//	delete vcm_surface;
 	
 	 //  for (auto it = maxCurvaturePoints.begin(), ite = maxCurvaturePoints.end(); it != ite; ++it) {
 	 // 	viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
@@ -706,14 +718,16 @@ int main( int  argc, char**  argv )
 															 currentPoint->myPoint, normal,
 															 0, radius, distanceMax, true);
 
+	
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-		
-		int imageSize = 100;
-		double radiusIntersection = computeRadiusFromIntersection<ImageAdapterExtractor, MatrixXd>(volume, currentPoint->myPoint, normal, imageSize);
+
+			
+		double radiusIntersection = computeRadiusFromIntersection3D<MatrixXd>(connectedComponent3D);		
+		double radiusJunction = radiusForJunction(branchingPoints, *vcm_surface, realCenter, radiusIntersection);
 		//Center of mass computation
 		if (realCenter != Z3i::RealPoint()) {
 			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
-			Z3i::DigitalSet shell = computeShell(currentPoint->myPoint, setVolume, radius*1.5, radius*3);
+			Z3i::DigitalSet shell = computeShell(currentPoint->myPoint, setVolume, radiusIntersection*3, radiusIntersection*5);
 			int degree = computeDegree(shell);
 			//int degree = 2;
 			int label = (*find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
@@ -731,10 +745,10 @@ int main( int  argc, char**  argv )
 			if (label != 1 && !processed && degree > 1) {			   
 				//detectBranchingPointsInNeighborhood(junctionPointToRadius, maxCurvaturePoints, *vcm_surface, 
 				//								    normal, centerOfMass, radius);
-				Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, setVolume, realCenter, radius);
- 				 branches.insert(branch.begin(), branch.end()); 
+				Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, setVolume, realCenter, radiusJunction);
+				branches.insert(branch.begin(), branch.end()); 
 				VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 1);
-		
+				
 				// Branching detection	
 				previousNormal = normal;
 				previousCenter = centerOfMass;
@@ -803,7 +817,7 @@ int main( int  argc, char**  argv )
   		i++;
 	}
 	trace.endBlock();
-	//delete vcm_surface;
+	delete vcm_surface;
 	
 	//Discarding points being in branching parts
 	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
@@ -846,9 +860,9 @@ int main( int  argc, char**  argv )
 	// 	}
 	// }
 	
-	// for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
-	// 	viewer << CustomColors3D(Color(0,50,0,50), Color(0,50,0,50)) <<*it;
-	// }
+	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
+	 	viewer << CustomColors3D(Color(0,50,0,50), Color(0,50,0,50)) <<*it;
+	 }
 	//second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
 		(*it)->myProcessed = false;
