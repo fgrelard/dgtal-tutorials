@@ -71,16 +71,14 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 }
 
 
-Z3i::DigitalSet computeTraversedPoints(const Z3i::Object26_6& reference,
-									   const Z3i::DigitalSet& setVolume,
+Z3i::DigitalSet computeTraversedPoints(const Z3i::DigitalSet& setVolume,
 									   const Z3i::Point& point,
 									   const Z3i::RealPoint& normal ) {
 	int scalar = 1;
 	Z3i::DigitalSet traversed(setVolume.domain());
 	
 	Z3i::Point projection = point;
-	while (reference.pointSet().find(projection) == reference.pointSet().end() &&
-		   setVolume.find(projection) != setVolume.end()) {
+	while (setVolume.find(projection) != setVolume.end()) {
 		projection = point + normal * scalar;
 		traversed.insert(projection);
 		scalar++;	
@@ -94,9 +92,7 @@ Z3i::DigitalSet computeSubVolume(const Z3i::DigitalSet& setVolume,
 								 double radius) {
 	Z3i::DigitalSet subVolume(setVolume.domain());
 	int scalar = 1;
-
 	Z3i::RealPoint theNormal = normal;
-	
 	Z3i::Point newPoint = point;
 	while (setVolume.find(newPoint) != setVolume.end()) {
 		Ball<Z3i::Point> ball(newPoint, radius);
@@ -166,6 +162,15 @@ Z3i::DigitalSet computeBallAroundVector(const std::vector<Z3i::Point>& points, c
 	return areaOfComputation;
 }
 
+int minCoordinate(const Z3i::RealPoint& point) {
+	int minCoordinate = 0;
+	for (unsigned int i = 1; i < Z3i::RealPoint::dimension; i++) {
+		if (std::abs(point[i]) < std::abs(point[minCoordinate]))
+			minCoordinate = i;
+	}
+	return minCoordinate;
+}
+
 template <typename WeightedPointCount>
 WeightedPointCount candidate(const set<WeightedPointCount*>& accumulator, const Z3i::Point& point) {
 	double valMax = (*max_element(accumulator.begin(), accumulator.end(), [&](const WeightedPointCount* a, const WeightedPointCount* b) {
@@ -220,6 +225,7 @@ int main( int  argc, char**  argv )
 	typedef DGtal::DistanceTransformation<Space, ThresholdedImage, Z3i::L2Metric> DTL2;
 	typedef VoronoiCovarianceMeasureOnDigitalSurface< DigitalSurfaceContainer, Metric, KernelFunction, DTL2 > VCMOnSurface;
 	typedef KSpace::Surfel Surfel;
+	typedef Eigen::MatrixXd MatrixXd;
 	
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
@@ -370,7 +376,7 @@ int main( int  argc, char**  argv )
 	ObjectType reference = *(objects.begin());
 	objects.erase(objects.begin());
 
-	Point closestBranchingPoint;
+	Point closestBranchingCurrent;
 	trace.beginBlock("Connecting disconnected components");
 	while (objects.size() > 0) {
 		trace.progressBar(nbConnectedComponents-objects.size(), nbConnectedComponents);
@@ -384,7 +390,7 @@ int main( int  argc, char**  argv )
 				 itCurrentObjectE = currentObject.pointSet().end(); itCurrentObject != itCurrentObjectE; ++itCurrentObject) {
 
 			for (auto itReference = reference.pointSet().begin(), itReferenceE = reference.pointSet().end(); itReference != itReferenceE; ++itReference) {
-				closestBranchingPoint = *min_element(maxCurvaturePoints.begin(), maxCurvaturePoints.end(), [&](const Point& one, const Point& two) {
+				Point closestBranchingPoint = *min_element(maxCurvaturePoints.begin(), maxCurvaturePoints.end(), [&](const Point& one, const Point& two) {
 						return Z3i::l2Metric(one, *itCurrentObject) < Z3i::l2Metric(two, *itCurrentObject);
 					});
 				vector<Point> points = PointUtil::linkTwoPoints(*itReference, *itCurrentObject);
@@ -404,6 +410,7 @@ int main( int  argc, char**  argv )
 					distanceMin = distance;
 					belongingToCurrentObject = *itCurrentObject;
 					belongingToReference = *itReference;
+					closestBranchingCurrent = closestBranchingPoint;
 				}
 			}
 		}
@@ -427,7 +434,7 @@ int main( int  argc, char**  argv )
 			if (normalCurrentObject.dot(dirVectorCurrent) < 0)
 				normalCurrentObject = -normalCurrentObject;
 			Z3i::DigitalSet subVolumeCurrentObject = computeSubVolume(setVolume, belongingToCurrentObject, normalCurrentObject, radius);
-			
+
 			radius = dt(belongingToReference);
 			chi = KernelFunction( 1.0, radius );
 			vcm.setMySmallR(radius);
@@ -438,31 +445,47 @@ int main( int  argc, char**  argv )
 			Z3i::RealPoint dirVectorReference = (belongingToCurrentObject - belongingToReference).getNormalized();
 			if (normalReference.dot(dirVectorReference) < 0)
 				normalReference = -normalReference;
-			Z3i::DigitalSet subVolumeReference = computeSubVolume(setVolume, belongingToReference, normalReference, radius);
+			Z3i::DigitalSet subVolumeReference = computeSubVolume(setVolume, belongingToReference, normalReference, radius);		
+			Z3i::DigitalSet computationVolume=subVolumeCurrentObject;
+			MatrixXd covmatrix = Statistics::computeCovarianceMatrix<MatrixXd>(subVolumeCurrentObject);
+			Z3i::RealPoint n1 = Statistics::extractEigenVector<Z3i::RealPoint>(covmatrix, 0);
+			Z3i::RealPoint n2 = Statistics::extractEigenVector<Z3i::RealPoint>(covmatrix, 1);
+			
+			int minCoord = minCoordinate(normalCurrentObject);
+			Z3i::RealPoint normalDelineatingPlane;
+			if (std::abs(n1[minCoord]) > std::abs(n2[minCoord]))
+				normalDelineatingPlane = n2;
+			else
+				normalDelineatingPlane = n1;
 
-			Z3i::DigitalSet computationVolume(setVolume.domain());
+			if (normalDelineatingPlane.dot(normalCurrentObject) > 0)
+				normalDelineatingPlane = -normalDelineatingPlane;
+			viewer.addLine(belongingToCurrentObject, belongingToCurrentObject+normalDelineatingPlane*5);
+			viewer.addLine(belongingToReference, belongingToReference+normalReference*5);
 
-			set_intersection(subVolumeReference.begin(), subVolumeReference.end(),
-		    				 subVolumeCurrentObject.begin(), subVolumeCurrentObject.end(),
-		     				 DigitalSetInserter<Z3i::DigitalSet>(computationVolume));
-			for (auto it = subVolumeReference.begin(), ite = subVolumeReference.end(); it != ite; ++it) {
-				for (auto itC = subVolumeCurrentObject.begin(), itCe = subVolumeCurrentObject.end(); itC != itCe; ++itC) {
-					if (*itC == *it)
-						computationVolume.insert(*it);
-				}
+			for (auto it = subVolumeCurrentObject.begin(), ite = subVolumeCurrentObject.end();
+				 it != ite; ++it) {
+				if (VCMUtil::abovePlane(*it, -normalReference, closestBranchingCurrent))
+					computationVolume.insert(*it);
 			}
+			for (auto it = subVolumeReference.begin(), ite = subVolumeReference.end();
+				 it != ite; ++it) {
+				if (VCMUtil::abovePlane(*it, normalDelineatingPlane, closestBranchingCurrent))
+					computationVolume.insert(*it);
+			}
+			//DigitalSetInserter<Z3i::DigitalSet> inserter(computationVolume);
+
+			// set_intersection(subVolumeReference.begin(), subVolumeReference.end(),
+		    //  				 subVolumeCurrentObject.begin(), subVolumeCurrentObject.end(),
+		    //  				 inserter);
+			
 			int r = rand() % 255, g = rand() % 255, b = rand() % 255;
-			viewer.setLineColor(Color::Green);
-			if (belongingToReference == Z3i::Point(0,0,106)) {
-				viewer.addLine(belongingToCurrentObject, belongingToCurrentObject+normalCurrentObject*5);
-				
-				viewer.addLine(belongingToReference, belongingToReference+normalReference*5);
-				for (auto it = computationVolume.begin(), ite = computationVolume.end(); it != ite; ++it) {
-					viewer << CustomColors3D( Color(r, g, b, 125), Color(r, g, b, 125)) << *it;
-				}
+			for (auto it = computationVolume.begin(), ite = computationVolume.end(); it != ite; ++it) {
+				viewer << CustomColors3D( Color(r, g, b, 125), Color(r, g, b, 125)) << *it;
 			}
 			viewer << Viewer3D<>::updateDisplay;
 			qApp->processEvents();
+			
 			//Compute new points with VCM
 			vector<Z3i::Point> points = PointUtil::linkTwoPoints(belongingToCurrentObject, belongingToReference);
 //			Z3i::DigitalSet computationVolume = computeBallAroundVector(points, setVolume, dt);
@@ -472,29 +495,35 @@ int main( int  argc, char**  argv )
 						return (wpc->myPoint == *it);
 					});
 				if (itW != setVolumeWeighted.end()) {
-					subVolumeWeighted.insert(*itW);
+					subVolumeWeighted.insert(new WeightedPointCount(*(*itW)));
 				}
 			}
 
 			Z3i::DigitalSet connectedComponent3D(setVolume.domain());
 			Z3i::RealPoint realCenter, normalSub;
-			for (auto it = points.begin(), ite = points.end(); it != ite; ++it) {
-				auto currentPoint = find_if(subVolumeWeighted.begin(), subVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-							return wpc->myPoint == *it;
-						});
-				if (currentPoint != subVolumeWeighted.end()) {
-					(*currentPoint)->myProcessed = true;
-					double radius = dt((*currentPoint)->myPoint);
-					connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted, (*currentPoint)->myPoint, normalSub, 0,  radius, 100, false);
-					realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-					Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
-					viewer << CustomColors3D(Color::Blue, Color::Blue) << centerOfMass;
-					viewer << Viewer3D<>::updateDisplay;
-					qApp->processEvents();
+			auto currentPoint = find_if(subVolumeWeighted.begin(), subVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+					return wpc->myPoint == belongingToCurrentObject;
+				});
+			WeightedPointCount* currentWPC = *currentPoint;
+			int numberLeft = setVolumeWeighted.size();
+			while (numberLeft > 0 && !currentWPC->myProcessed) {
+				trace.info() << currentWPC->myPoint << " " << numberLeft << endl;
+				currentWPC->myProcessed = true;
+				double radius = dt(currentWPC->myPoint);
+				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted, currentWPC->myPoint, normalSub, 0,  radius, 100, true);
+				realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
+				Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
+				viewer << CustomColors3D(Color::Blue, Color::Blue) << centerOfMass;
+				viewer << Viewer3D<>::updateDisplay;
+				qApp->processEvents();
 				
-					skeletonPoints.insert(centerOfMass);
-					VCMUtil::markConnectedComponent3D(subVolumeWeighted, connectedComponent3D, 0);
-				}
+				skeletonPoints.insert(centerOfMass);
+				VCMUtil::markConnectedComponent3D(subVolumeWeighted, connectedComponent3D, 0);
+				VCMUtil::trackNextPoint(currentWPC, dt, subVolumeWeighted, connectedComponent3D, centerOfMass, normalSub);
+				numberLeft = count_if(subVolumeWeighted.begin(), subVolumeWeighted.end(),
+									  [&](WeightedPointCount* wpc) {
+										  return (!wpc->myProcessed);
+									  });
 
 			}
 		    		

@@ -13,6 +13,7 @@ class Ball {
 public:
 	Ball() : myRadius(0.0), myCenter({0,0,0}) {}
 	Ball(const Point& center, double radius) : myCenter(center), myRadius(radius) {}
+	Ball(const Ball& other) : myCenter(other.myCenter), myRadius(other.myRadius) {}
 	bool contains(const Point& point) const {return euclideanDistance(point, myCenter) <= myRadius;}
 	std::vector<Point> surfaceIntersection(const DGtal::Z3i::DigitalSet& setSurface);
 	std::vector<Point> pointsInBall() const;

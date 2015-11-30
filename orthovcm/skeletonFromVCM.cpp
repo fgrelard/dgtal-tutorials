@@ -120,10 +120,6 @@ unsigned int computeDegree(const Z3i::DigitalSet& shell) {
 	return nbConnectedComponents;
 }
 
-double computeCurvature(const Z3i::RealPoint& lambda) {
-	double ratio = lambda[0] / (lambda[0] + lambda[1] + lambda[2]);
-	return ratio;
-}
 
 template <typename VCM, typename Domain>
 Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const Domain& domain, double threshold) {
@@ -134,7 +130,7 @@ Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const Domain
 			  itE = vcm.mapPoint2ChiVCM().end(); it != itE; ++it )
     {
 		auto lambda = it->second.values;
-		double ratio = computeCurvature(lambda);
+		double ratio = VCMUtil::computeCurvatureJunction(lambda);
 		if (ratio > threshold)
 			aSet.insert(it->first);
 	}
@@ -150,7 +146,7 @@ vector<double> extractCurvatureOnPoints(const VCM& vcm) {
 			  itE = vcm.mapPoint2ChiVCM().end(); it != itE; ++it )
     {
 		auto lambda = it->second.values;
-		double ratio = computeCurvature(lambda);
+		double ratio = VCMUtil::computeCurvatureJunction(lambda);
 	    curvatureValues.push_back(ratio);
 	}
 	return curvatureValues; 
@@ -340,18 +336,16 @@ template <typename VCM>
 double radiusForJunction(const Z3i::DigitalSet& branchingPoints, const VCM& vcm, 
 													const Z3i::RealPoint& current, double radius) {
 	Z3i::Point nearestPointBranch;
+	double minDistance = numeric_limits<double>::max();
 	Z3i::DigitalSet aSet(branchingPoints.domain());
 	for (auto it = branchingPoints.begin(), ite = branchingPoints.end(); it != ite; ++it) {
-		if (Z3i::l2Metric(*it, current) <= radius) {
+		if (Z3i::l2Metric(*it, current) <= minDistance) {
 			nearestPointBranch = *it;
+			minDistance = Z3i::l2Metric(*it, current);
 		}
 	}
 	if (nearestPointBranch != Z3i::Point()) {
-		auto lambda = ((vcm.mapPoint2ChiVCM()).at(nearestPointBranch)).values;
-		double ratio = computeCurvature(lambda);
-		
-		double r = radius * (1/(1 - ratio * 3));
-		return r;
+		return VCMUtil::radiusAtJunction(vcm, nearestPointBranch, radius);
 	}
 	return 0;
 	
@@ -443,7 +437,7 @@ double computeCurvature(const Z3i::DigitalSet& junctions, const Z3i::Point& bran
 	vcm.init( junctions.begin(), junctions.end() );
 	KernelFunction chi( 1.0, radius );
 	Z3i::RealPoint lambda = VCMUtil::computeEigenValuesFromVCM(branchPoint, vcm, chi);
-	return computeCurvature(lambda);
+	return VCMUtil::computeCurvatureJunction(lambda);
 }
 
 
@@ -476,7 +470,7 @@ Z3i::DigitalSet connectDisconnectedComponents(const Z3i::Object26_6& volume, con
 			double curvature = computeCurvature<VCM, KernelFunction>(line, pointInLine);
 			//Change with vcm surface
 			auto lambda = (vcmSurface.mapPoint2ChiVCM()).at(nearestBranchP).values;
-			double curvatureAtPoint = computeCurvature(lambda);
+			double curvatureAtPoint = VCMUtil::computeCurvatureJunction(lambda);
 			trace.info() << curvature << " " << curvatureAtPoint << endl;
 			lineSet.insert(line.begin(), line.end());
 		}
@@ -637,7 +631,7 @@ int main( int  argc, char**  argv )
 		Point maximizingCurvaturePoint;
 		for (auto itPoint = it->pointSet().begin(), itPointE = it->pointSet().end(); itPoint != itPointE; ++itPoint) {
 			auto lambda = (vcm_surface->mapPoint2ChiVCM()).at(*itPoint).values;
-			double ratio = computeCurvature(lambda); 
+			double ratio = VCMUtil::computeCurvatureJunction(lambda); 
 			if (ratio > ratioMax) {
 				ratioMax = ratio;
 				maximizingCurvaturePoint = *itPoint;
@@ -759,56 +753,7 @@ int main( int  argc, char**  argv )
 		}
 		
 		//Go to next point according to normal OR to max value in DT
-		auto pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-				return (wpc->myPoint == centerOfMass);
-			});
-		int scalar = 1;
-		Point current = centerOfMass;
-	    auto newPoint = setVolumeWeighted.begin();
-		if (pointInWeightedSet != setVolumeWeighted.end()) {
-			while (current == centerOfMass ||
-				   connectedComponent3D.find(current) != connectedComponent3D.end()) {
-				current = centerOfMass + normal * scalar;
-				scalar++;
-			}
-			newPoint = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-					return (wpc->myPoint == current);
-				});
-			if (newPoint == setVolumeWeighted.end() || (*newPoint)->myProcessed) {
-				scalar = 1;
-				current = centerOfMass;
-				if (pointInWeightedSet != setVolumeWeighted.end()) {
-					while (current == centerOfMass ||
-						connectedComponent3D.find(current) != connectedComponent3D.end()) {
-						current = centerOfMass - normal * scalar;
-						scalar++;
-					}
-					newPoint = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-							return (wpc->myPoint == current);
-						});
-					if (newPoint == setVolumeWeighted.end() || (*newPoint)->myProcessed) {
-						previousNormal = Z3i::RealPoint();
-						pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-								return (!wpc->myProcessed);
-							});
-						if (pointInWeightedSet != setVolumeWeighted.end()) {
-							newPoint = pointInWeightedSet;
-						}
-					}
-				}
-			}
-		} else {
-			previousNormal = Z3i::RealPoint();
-			pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-					return (!wpc->myProcessed);
-				});
-			if (pointInWeightedSet != setVolumeWeighted.end()) {
-				newPoint = pointInWeightedSet;
-			}
-		}		
-
-		currentPoint = (*newPoint);
-		
+		VCMUtil::trackNextPoint(currentPoint, dt, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
 		numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
 							  [&](WeightedPointCount* wpc) {
 								  return (!wpc->myProcessed);
