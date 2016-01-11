@@ -227,7 +227,7 @@ void createSyntheticAirwayTree(vector<Point> & v, int branchNumber, int lengthTr
 	//Filling the vector with points from matrix
 	for (int i = 0; i < matrix.innerSize(); i++) {
 		if (matrix(i, 0) != 0 || matrix(i, 1) != 0 || matrix(i, 2) != 0) {
-			int posx = matrix(i, 0);
+			int posx = matrix(i, 0)+firstPoint[0];
 			//Translation after rotation
 			int posy = matrix(i, 1)+firstPoint[1];
 			int posz = matrix(i, 2)+firstPoint[2];
@@ -238,8 +238,8 @@ void createSyntheticAirwayTree(vector<Point> & v, int branchNumber, int lengthTr
 	//Determining initial starting point for new branches
 	firstPoint += Point(0, lengthTrachea * sin(rotationAngle), lengthTrachea * cos(rotationAngle));
 	matrix.resize(0,0);
-	createSyntheticAirwayTree(v, branchNumber - 1, lengthTrachea * 0.6, z, rotationAngle + 0.2 * M_PI, firstPoint, increment);
-	createSyntheticAirwayTree(v, branchNumber - 1, lengthTrachea * 0.6, z, rotationAngle - 0.2 * M_PI, firstPoint, increment);
+	createSyntheticAirwayTree(v, branchNumber - 1, lengthTrachea * 0.7, z, rotationAngle + 0.2 * M_PI, firstPoint, increment);
+	createSyntheticAirwayTree(v, branchNumber - 1, lengthTrachea * 0.7, z, rotationAngle - 0.2 * M_PI, firstPoint, increment);
 }
 
 template <typename Point>
@@ -290,17 +290,15 @@ void createHalfVolumeFromCurve(const vector<CurvePoint> & curve, set<Point> & vo
 }
 
 
-template <typename Pencil, typename CurvePoint, typename Point>
-void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & volume, int ballRadius) {
+template <typename CurvePoint, typename Point>
+void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & volume, int ballRadius, double angle) {
     typedef Ball<CurvePoint> Ball;
-	//the last value corresponds to the log multiplier in createLogarithmicCurve()
-	vector<Pencil> tangents = TangentUtils::theoreticalTangentsOnBoudin<Pencil>(curve.begin(), curve.end(), 20);
-	Ball ball({0,0,0}, 20.0);
+	Ball ball({0,0,0}, ballRadius);
 	Eigen::Matrix<double, Eigen::Dynamic, 4> matrix(1, 4);
 	long int row = 0;
 		
 	//drawDisk(matrix, 20.0, 0, 0, 0, row, 0.5);
-	for (const CurvePoint& point : ball.pointsInBall()) {
+	for (const CurvePoint& point : curve) {
 		matrix(row, 0) = point[0];
 		matrix(row, 1) = point[1];
 		matrix(row, 2) = point[2];
@@ -308,23 +306,26 @@ void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & 
 		row++;
 		matrix.conservativeResize(row+1, 4);
 	}
-		
-	for (const auto& tangent : tangents) {
-	    
-		double angle = atan2(tangent.getTangent()[1], tangent.getTangent()[2]);
-		Eigen::Affine3d rot(Eigen::AngleAxisd(angle, Eigen::Vector3d::UnitX()));
-		CurvePoint ballCenter = tangent.getPoint();
-	
-	    Eigen::Matrix<double, Eigen::Dynamic, 4> m = matrix * rot.matrix();
-		for (int i = 0; i < m.innerSize(); i++) {
-			if (m(i, 0) != 0 || m(i, 1) != 0 || m(i, 2) != 0) {
-				int posx = m(i, 0) + ballCenter[0];
-				int posy = m(i, 1) + ballCenter[1];
-				int posz = m(i, 2) + ballCenter[2];
-				volume.insert({posx, posy, posz});
-			}
+
+	set<Point> rotatedCurves;
+	Eigen::Affine3d rot(Eigen::AngleAxisd(angle, Eigen::Vector3d::UnitX()));	
+	Eigen::Matrix<double, Eigen::Dynamic, 4> m = matrix * rot.matrix();
+	for (int i = 0; i < m.innerSize(); i++) {
+		if (m(i, 0) != 0 || m(i, 1) != 0 || m(i, 2) != 0) {
+			int posx = m(i, 0);
+			int posy = m(i, 1);
+			int posz = m(i, 2);
+		    rotatedCurves.insert({posx, posy, posz});
 		}
 	}
+
+	for (auto it = rotatedCurves.begin(), ite = rotatedCurves.end();
+		 it != ite; ++it) {
+		Ball ball(*it, ballRadius);
+		vector<Point> pointsInBall = ball.pointsInBall();
+		volume.insert(pointsInBall.begin(), pointsInBall.end());
+	}
+   
 }
 
 template <typename DigitalSet>

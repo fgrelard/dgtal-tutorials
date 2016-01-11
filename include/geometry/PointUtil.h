@@ -32,6 +32,9 @@ namespace PointUtil {
 
 	template <typename Point>
 	std::vector<Point> linkTwoPoints(const Point& first, const Point& second);
+
+	template <typename Point, typename Container, typename Vector>
+	Point trackPoint(const Point& initial, const Container& container, const Vector& vector);
 }
 
 template <typename Point>
@@ -190,4 +193,11 @@ std::vector<Point> PointUtil::linkTwoPoints(const Point& first, const Point& sec
 	return pointsBetween;
 }
 
+template <typename Point, typename Container, typename Vector>
+Point PointUtil::trackPoint(const Point& initial, const Container& container, const Vector& vector) {
+	Point point(initial);
+	while (container.find(point) != container.end())
+		point += vector;
+	return point;
+}
 #endif

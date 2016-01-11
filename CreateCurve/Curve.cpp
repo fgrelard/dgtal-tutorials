@@ -98,25 +98,31 @@ int main( int argc, char** argv )
 	int radius = 10;
 	
 	vector<PointVector<3, double>> curve;
-	createContinuousLogarithmicCurve(curve, 50, increment);
-//	createStraightLine(curve, 50, increment);
+//	createContinuousLogarithmicCurve(curve, 50, increment);
+	createStraightLine(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
     set<PointVector<3,double>> vectorPoints;
-	createVolumeFromCurve(curve, vectorPoints, 10);
+//	createVolumeFromCurve(curve, vectorPoints, 10);
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	thinVolume<Pencil>(curve, vectorPoints, 20.0);
 //	drawDeformedCylinder(vectorPoints, 50, 5, increment);
-//  createStraightLine(curve, 50);
+	createRotatedVolumeFromCurve(curve, vectorPoints, 5, M_PI/3);
+	createRotatedVolumeFromCurve(curve, vectorPoints, 5, -M_PI/3);
+	createRotatedVolumeFromCurve(curve, vectorPoints, 5, -2*M_PI/3);
+	createRotatedVolumeFromCurve(curve, vectorPoints, 5, 2*M_PI/3);
+
+		
+	Ball<PointVector<3, double>> ball(Point(0,0,0), 10); 
 	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 300, 300));
-
-
+	//domain = Z3i::Domain(Z3i::Point(-20,-20,-20), Z3i::Point(20,20,20));
+   
 	//createHelixCurve(vectorPoints, range, radius, pitch, increment);
 //	drawCircle(vectorPoints, 50.0, 0., 0., 0., increment);
-//	createSyntheticAirwayTree(vectorPoints, 4, 100, 0, 0, {0,0,0}, increment);
+//	createSyntheticAirwayTree(vectorPoints, 4, 40, 0, 0, {10,50,0}, increment);
 //	Image3D anImage3D(domain);
 
 //	create2DNaive();
-
+//	vectorPoints = ball.pointsInBall();
 	DigitalSet set(domain);
 	for (auto it = vectorPoints.begin(), itE = vectorPoints.end(); it != itE; ++it) {
 		set.insert(*it);
@@ -124,7 +130,14 @@ int main( int argc, char** argv )
 	DigitalSet set2 = addNoise(set, noise);
 //	imageFromRangeAndValue(vectorPoints.begin(), vectorPoints.end(), anImage3D, 150);
 	
-	Image3D anImage3D = ImageFromSet<Image3D>::create(set2, 1);
+	Image3D anImage3D(domain);
+	for (auto it = domain.begin(), ite = domain.end();
+		 it != ite; ++it) {
+		if (set.find(*it) != set.end())
+			anImage3D.setValue(*it, 255);
+	}
+//	anImage3D = ImageFromSet<Image3D>::create(set, 1);
+    
     VolWriter<Image3D>::exportVol(examplesPath + filename, anImage3D);
 	const Color CURVE3D_COLOR( 100, 100, 140, 128 );
 

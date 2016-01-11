@@ -207,6 +207,9 @@ namespace DGtal
 		template <typename Point2ScalarFunction>
 		MatrixNN measure( Point2ScalarFunction chi_r, Point p ) const;
 
+		template <typename Point2ScalarFunction>
+		MatrixNN measure( const std::vector<Point>& neighbors, Point2ScalarFunction chi_r, Point p ) const;
+
 		// ----------------------- Interface --------------------------------------
 	public:
 

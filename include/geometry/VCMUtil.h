@@ -9,6 +9,7 @@
 #include "DGtal/images/ImageSelector.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 #include "geometry/WeightedPointCount.h"
+#include "geometry/PointUtil.h"
 
 #include <set>
 #include <vector>
@@ -61,7 +62,6 @@ DGtal::Z3i::RealPoint VCMUtil::computeNormalFromVCM(const DGtal::Z3i::Point& cur
 // Compute VCM and diagonalize it.
 	vcm_r = vcm.measure( chi, currentPoint);
 	LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
-	
 	// // Display normal
 	DGtal::Z3i::RealVector normal = evec.column(coordinate);
 	return normal;
@@ -272,6 +272,7 @@ void VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const DTL2& dt, 
 					   connectedComponent3D.find(current) != connectedComponent3D.end()) {
 					current = centerOfMass - normal * scalar;
 					scalar++;
+					
 				}
 				newPoint = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
 						return (wpc->myPoint == current);
@@ -299,15 +300,15 @@ void VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const DTL2& dt, 
 }
 
 double VCMUtil::computeCurvatureJunction(const DGtal::Z3i::RealPoint& lambda) {
-	double ratio = lambda[0] / (lambda[0] + lambda[1] + lambda[2]);
+	double ratio = (lambda[0]) / (lambda[0] + lambda[1] + lambda[2]);
 	return ratio;
 }
 
 template <typename VCM>
 double VCMUtil::radiusAtJunction(const VCM& vcm, const DGtal::Z3i::RealPoint& branchPoint, double radius) {
 	auto lambda = ((vcm.mapPoint2ChiVCM()).at(branchPoint)).values;
-	double ratio = computeCurvatureJunction(lambda);		
-	double r = radius * (1/(1 - ratio * 3));
+	double ratio = computeCurvatureJunction(lambda);
+	double r = radius * (1/(1-ratio*3));
 	return r;
 }
 

@@ -1,5 +1,6 @@
-#ifndef __STATISTICS__
-#define __STATISTICS__
+#ifndef STATISTICS_H
+#define STATISTICS_H
+
 #include <vector>
 #include <algorithm>
 
@@ -75,8 +76,7 @@ DGtal::Z2i::RealPoint Statistics::centerOfMass(const Image2D& image) {
 	}
 	if (m00 != 0) 
 		return DGtal::Z2i::RealPoint(m10/m00, m01/m00);
-	else
-		return DGtal::Z2i::RealPoint();
+	return DGtal::Z2i::RealPoint();
 }
 
 template <typename Image3D>
@@ -95,8 +95,7 @@ DGtal::Z3i::RealPoint Statistics::centerOfMass3D(const Image3D& image) {
 	}
 	if (m000 != 0) 
 		return DGtal::Z3i::RealPoint(m100/m000, m010/m000, m001/m000);
-	else
-		return DGtal::Z3i::RealPoint();
+	return DGtal::Z3i::RealPoint();
 }
 
 	
@@ -107,8 +106,7 @@ DGtal::Z2i::RealPoint Statistics::extractCenterOfMass(const DGtal::Z2i::DigitalS
 		DGtal::Z2i::RealPoint centerOfMass = Statistics::centerOfMass(image2D);
 		return centerOfMass;
 	}
-	else
-		return DGtal::Z2i::RealPoint();
+	return DGtal::Z2i::RealPoint();
 }
 
 DGtal::Z3i::RealPoint Statistics::extractCenterOfMass3D(const DGtal::Z3i::DigitalSet& set) {
@@ -118,8 +116,7 @@ DGtal::Z3i::RealPoint Statistics::extractCenterOfMass3D(const DGtal::Z3i::Digita
 		DGtal::Z3i::RealPoint centerOfMass = centerOfMass3D(image3D);
 		return centerOfMass;
 	}
-	else
-		return DGtal::Z3i::RealPoint();
+	return DGtal::Z3i::RealPoint();
 }
 
 /**
@@ -182,15 +179,16 @@ Matrix Statistics::computeCovarianceMatrix(const Container& aSet) {
 	typedef typename Container::Domain Domain;
 	typedef typename Domain::Point Point;
 	
+	int dimens = Point::dimension;
 	int size = aSet.size();
-	Matrix A(size, Point::dimension);
+	Matrix A(size, dimens);
 	if (size == 0) return A;
 	
 	int i = 0;
 	for (ConstIterator it = aSet.begin(), ite = aSet.end();
 		 it != ite; ++it) {
 		Point point = *it;
-		for (int j = 0; j < Point::dimension; j++)
+		for (int j = 0; j < dimens; j++)
 			A(i, j) = (double) point[j] * 1.0;
 		i++;
 	}
