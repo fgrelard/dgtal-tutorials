@@ -106,16 +106,15 @@ int main( int argc, char** argv )
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	thinVolume<Pencil>(curve, vectorPoints, 20.0);
 //	drawDeformedCylinder(vectorPoints, 50, 5, increment);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 5, M_PI/3);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 5, -M_PI/3);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 5, -2*M_PI/3);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 5, 2*M_PI/3);
-
+//	createRotatedVolumeFromCurve(curve, vectorPoints, 5, M_PI/3);
+//	createRotatedVolumeFromCurve(curve, vectorPoints, 5, -M_PI/3);
+//	createRotatedVolumeFromCurve(curve, vectorPoints, 5, -2*M_PI/3);
+//	createRotatedVolumeFromCurve(curve, vectorPoints, 5, 2*M_PI/3);
 		
 	Ball<PointVector<3, double>> ball(Point(0,0,0), 10); 
 	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 300, 300));
-	//domain = Z3i::Domain(Z3i::Point(-20,-20,-20), Z3i::Point(20,20,20));
-   
+	domain = Z3i::Domain(Z3i::Point(-20,-20,-20), Z3i::Point(20,20,60));
+	createVolumeFromCurve(curve, vectorPoints, 10);
 	//createHelixCurve(vectorPoints, range, radius, pitch, increment);
 //	drawCircle(vectorPoints, 50.0, 0., 0., 0., increment);
 //	createSyntheticAirwayTree(vectorPoints, 4, 40, 0, 0, {10,50,0}, increment);

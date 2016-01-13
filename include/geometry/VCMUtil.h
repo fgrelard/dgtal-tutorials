@@ -294,8 +294,7 @@ void VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const DTL2& dt, 
 		if (pointInWeightedSet != setVolumeWeighted.end()) {
 			newPoint = pointInWeightedSet;
 		}
-	}		
-
+	}
 	currentPoint = (*newPoint);
 }
 

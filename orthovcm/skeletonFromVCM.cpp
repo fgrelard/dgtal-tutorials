@@ -584,7 +584,7 @@ int main( int  argc, char**  argv )
 
 	Point lower, upper;
 	setVolume.computeBoundingBox(lower, upper);
-	Domain domainComplement(lower, upper);
+	Domain domainComplement(lower-Point::diagonal(1), upper+Point::diagonal(1));
 	Z3i::DigitalSet complementSetVolume(domainComplement);
 	for (auto it = domainComplement.begin(), ite = domainComplement.end();
 		 it != ite; ++it) {
@@ -595,8 +595,10 @@ int main( int  argc, char**  argv )
 	WeightedPointCount* currentPoint = *setVolumeWeighted.begin();
 	double distanceMax = currentPoint->myWeight+delta;
 //	complementSetVolume.insert(setSurface.begin(), setSurface.end());
-	VCM vcmJunction(distanceMax-1, ceil(r), l2, false);
+	VCM vcmJunction(R, ceil(r), l2, false, true);
 	vcmJunction.init(complementSetVolume.begin(), complementSetVolume.end());
+
+	trace.info() << vcmJunction.domain() << endl;
 	typedef DGtal::EigenDecomposition<3,double> LinearAlgebraTool;
 	LinearAlgebraTool::Matrix vcm_r, evec;
 	DGtal::Z3i::RealVector eval;
@@ -619,19 +621,21 @@ int main( int  argc, char**  argv )
 			if (radius < distance) {
 				radius = distance;				
 			}
-		}
-		KernelFunctionJunction chiJunction(1.0, radius);
-		vcmJunction.setMySmallR(radius);
-		vector<Point> junctionArea;
-		std::copy(objectPointSet.begin(), objectPointSet.end(), std::back_inserter(junctionArea) );
-		vcm_r = vcmJunction.measure( junctionArea, chiJunction, maximizingCurvaturePoint );
-		LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
-		// // Display normal
-		DGtal::Z3i::RealVector normalJunction = evec.column(2);
+			KernelFunctionJunction chiJunction(1.0, r);
+			vcmJunction.setMySmallR(r);
+			vector<Point> junctionArea;
+			std::copy(objectPointSet.begin(), objectPointSet.end(), std::back_inserter(junctionArea) );
+			vcm_r = vcmJunction.measure( junctionArea, chiJunction, *itP );
+			LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
+			// // Display normal
+			DGtal::Z3i::RealVector normalJunction = evec.column(2);
 //		RealVector normalJunction = VCMUtil::computeNormalFromVCM(maximizingCurvaturePoint, vcmJunction, chiJunction, 2);
-		viewer.addLine(maximizingCurvaturePoint, maximizingCurvaturePoint+(normalJunction*10));
+			viewer.addLine(*itP, *itP+(normalJunction*10));
+		
+		}
 		viewer << CustomColors3D(Color::Red, Color::Red) << *it;
  		maxCurvaturePoints.insert(maximizingCurvaturePoint);
+	
 	}
 	
 

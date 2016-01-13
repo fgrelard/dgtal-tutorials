@@ -1,0 +1,50 @@
+#ifndef GEODESIC_BALL_H
+#define GEODESIC_BALL_H
+
+#include <vector>
+#include "DGtal/base/Common.h"
+#include "DGtal/helpers/StdDefs.h"
+#include "DGtal/graph/DistanceBreadthFirstVisitor.h"
+
+template <typename Distance, typename Point>
+class GeodesicBall {
+public:
+	GeodesicBall() : myCenter(), myRadius(0) {}
+		GeodesicBall(const Distance& distance,
+					 const Point& center,
+					 double radius) : myDistance(distance),
+								  myCenter(center),
+								  myRadius(radius) {}
+
+			template <typename Graph>
+		std::vector<Point> surfaceIntersection(const Graph& setSurface);
+
+private:
+	Distance myDistance;
+	Point myCenter;
+	double myRadius;
+};
+
+template <typename Distance, typename Point>
+template <typename Graph>
+std::vector<Point> surfaceIntersection(const Graph& setSurface) {
+typedef DistanceToPointFunctor<Distance> Distance;
+typedef DGtal::DistanceBreadthFirstVisitor<Graph, Distance, std::set<Point>> Visitor;
+typedef typename Visitor::Node MyNode;
+Distance distance(myDistance, myCenter);
+Visitor visitor(setSurface, myDistance, myCenter);
+
+
+	
+	MyNode node;
+	std::vector<Point> intersection;
+	while (!visitor.finished()) {
+		node = visitor.current();
+if (node.second >= myRadius) break;
+
+		
+		visitor.expand();
+	}
+}
+
+#endif

@@ -140,7 +140,7 @@ namespace DGtal
 		 * @param aMetric an instance of the metric.
 		 * @param verbose if 'true' displays information on ongoing computation.
 		 */
-		VoronoiCovarianceMeasure( double _R, double _r, Metric aMetric = Metric(), bool verbose = false );
+		VoronoiCovarianceMeasure( double _R, double _r, Metric aMetric = Metric(), bool verbose = false, bool inDomain = false );
 
 		/**
 		 * Destructor.
@@ -239,6 +239,8 @@ namespace DGtal
 		Metric myMetric;
 		/// Tells if it is verbose mode.
 		bool myVerbose;
+		/// Sets whether points inside the domain should be taken into account
+		bool myIsInDomain;
 		/// The domain in which all computations are done.
 		Domain myDomain;
 		/// A binary image that defines the characteristic set of K.

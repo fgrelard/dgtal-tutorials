@@ -314,7 +314,7 @@ void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & 
 		if (m(i, 0) != 0 || m(i, 1) != 0 || m(i, 2) != 0) {
 			int posx = m(i, 0);
 			int posy = m(i, 1);
-			int posz = m(i, 2);
+			int posz = m(i, 2) + 25;
 		    rotatedCurves.insert({posx, posy, posz});
 		}
 	}

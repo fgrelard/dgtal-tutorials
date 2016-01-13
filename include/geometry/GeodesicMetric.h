@@ -130,8 +130,9 @@ namespace DGtal
      * Copy constructor.
      * UNUSED_PARAM other the object to clone.
      */
-    GeodesicMetric ( const Self & UNUSED(other) )
+    GeodesicMetric ( const Self & other )
     {
+		boost::ignore_unused_variable_warning( other );
     }
 
     /**
@@ -139,8 +140,9 @@ namespace DGtal
      * UNUSED_PARAM other the object to copy.
      * @return a reference on 'this'.
      */
-    Self & operator= ( const Self & UNUSED(other) )
+    Self & operator= ( const Self & other )
     {
+		boost::ignore_unused_variable_warning( other );
       return *this;
     }
 

@@ -51,8 +51,8 @@ DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
 template <typename TSpace, typename TSeparableMetric>
 inline
 DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
-VoronoiCovarianceMeasure( double _R, double _r, Metric aMetric, bool verbose )
-  : myBigR( _R ), myMetric( aMetric ), myVerbose( verbose ),
+VoronoiCovarianceMeasure( double _R, double _r, Metric aMetric, bool verbose, bool isInDomain )
+	: myBigR( _R ), myMetric( aMetric ), myVerbose( verbose ), myIsInDomain(isInDomain),
     myDomain( Point(0,0), Point(0,0) ), // dummy domain
     myCharSet( 0 ), 
     myVoronoi( 0 ),
@@ -66,7 +66,7 @@ inline
 DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
 VoronoiCovarianceMeasure( const VoronoiCovarianceMeasure& other )
   : myBigR( other.myBigR ), mySmallR( other.mySmallR ),
-    myMetric( other.myMetric ), myVerbose( other.myVerbose ),
+    myMetric( other.myMetric ), myVerbose( other.myVerbose ), myIsInDomain(other.myIsInDomain),
     myDomain( other.myDomain )
 {
   if ( other.myCharSet ) myCharSet = new CharacteristicSet( *other.myCharSet );
@@ -237,21 +237,33 @@ init( PointInputIterator itb, PointInputIterator ite )
   MatrixNN m;
   for ( typename Domain::ConstIterator itDomain = myDomain.begin(), itDomainEnd = myDomain.end();
         itDomain != itDomainEnd; ++itDomain )
-    {
+  {
       if ( myVerbose ) trace.progressBar(++di,domain_size);
       Point p = *itDomain;
       Point q = (*myVoronoi)( p );   // closest site to p
       if ( q != p )
-        {
+	  {
           double d = myMetric( q, p );
           if ( d <= myBigR ) // We restrict computation to the R offset of K.
-            { 
-              VectorN v( p[ 0 ] - q[ 0 ], p[ 1 ] - q[ 1 ], p[ 2 ] - q[ 2 ] );
-              // Computes tensor product V^t x V
-              for ( Dimension i = 0; i < 3; ++i ) 
-                for ( Dimension j = 0; j < 3; ++j )
-                  m.setComponent( i, j, v[ i ] * v[ j ] ); 
-              myVCM[ q ] += m;
+		  {
+			  bool process = true;
+			  VectorN v( p[ 0 ] - q[ 0 ], p[ 1 ] - q[ 1 ], p[ 2 ] - q[ 2 ] );
+			  if (myIsInDomain) {
+				  VectorN vNorm = v.getNormalized();
+				  while (vNorm.norm() < v.norm()) {
+					  Point qprime = q + vNorm;
+					  if (!inCharSet(q+vNorm) )
+						  process = false;
+					  vNorm += v.getNormalized();
+				  }
+			  }
+			  if (process) {
+				  // Computes tensor product V^t x V
+				  for ( Dimension i = 0; i < 3; ++i ) 
+					  for ( Dimension j = 0; j < 3; ++j )
+						  m.setComponent( i, j, v[ i ] * v[ j ] ); 
+				  myVCM[ q ] += m;
+			  }
             }
         }
     }

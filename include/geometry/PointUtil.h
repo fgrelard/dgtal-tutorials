@@ -33,6 +33,12 @@ namespace PointUtil {
 	template <typename Point>
 	std::vector<Point> linkTwoPoints(const Point& first, const Point& second);
 
+	template <typename Point>
+	std::vector<Point> bezierCurve(const Point& source,
+								   const Point& destination,
+								   const Point& controlPoint1,
+								   const Point& controlPoint2);
+	
 	template <typename Point, typename Container, typename Vector>
 	Point trackPoint(const Point& initial, const Container& container, const Vector& vector);
 }
@@ -193,6 +199,26 @@ std::vector<Point> PointUtil::linkTwoPoints(const Point& first, const Point& sec
 	return pointsBetween;
 }
 
+template <typename Point>
+std::vector<Point> PointUtil::bezierCurve(const Point& source,
+							   const Point& destination,
+							   const Point& controlPoint1,
+							   const Point& controlPoint2) {
+	std::vector<Point> bezier;
+	for (double t =0; t < 1; t+=0.01) {
+		Point current;
+		for (int k = 0; k < Point::dimension; k++) {
+			double coordinateAtK = pow((1-t), 3) * source[k] +
+				3 * pow((1-t), 2) * t * controlPoint1[k] +
+				3 * (1-t) * pow(t, 2) * controlPoint2[k] +
+				pow(t, 3) * destination[k];
+			current[k] = coordinateAtK;
+		}
+		bezier.push_back(current);
+	}
+	return bezier;
+}
+
 template <typename Point, typename Container, typename Vector>
 Point PointUtil::trackPoint(const Point& initial, const Container& container, const Vector& vector) {
 	Point point(initial);
@@ -200,4 +226,5 @@ Point PointUtil::trackPoint(const Point& initial, const Container& container, co
 		point += vector;
 	return point;
 }
+
 #endif
