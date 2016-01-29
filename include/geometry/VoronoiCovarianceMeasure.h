@@ -85,12 +85,13 @@ namespace DGtal
 		typedef TSpace Space;                         ///< the type of digital space
 		typedef TSeparableMetric Metric;              ///< the type of metric
 		typedef typename Space::Point Point;          ///< the type of digital point
+		typedef typename Space::RealVector Vector;
 		typedef typename Space::Size Size;            ///< the type for counting elements
 		typedef typename Space::Integer Integer;      ///< the type of each digital point coordinate, some integral type
 		typedef DGtal::HyperRectDomain<Space> Domain; ///< the type of rectangular domain of the VCM.
 		typedef DGtal::ImageContainerBySTLVector<Domain,bool> CharacteristicSet; ///< the type of a binary image that is the characteristic function of K.
 		typedef DGtal::SpatialCubicalSubdivision<Space> ProximityStructure; ///< the structure used for proximity queries.
-
+		
 		/**
 		   A predicate that returns 'true' whenever the given binary image contains 'true'.
 		   Model of concepts::CPointPredicate.
@@ -209,6 +210,10 @@ namespace DGtal
 
 		template <typename Point2ScalarFunction>
 		MatrixNN measure( const std::vector<Point>& neighbors, Point2ScalarFunction chi_r, Point p ) const;
+
+		template <typename Point2ScalarFunction>
+		MatrixNN measureJunction( const Vector& dirVector, Point2ScalarFunction chi_r, Point p ) const;
+
 
 		// ----------------------- Interface --------------------------------------
 	public:

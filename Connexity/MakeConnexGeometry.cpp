@@ -369,9 +369,7 @@ int main( int  argc, char**  argv )
 	}
 	
 	
-	for (auto it = skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {
-		viewer << CustomColors3D(Color::Red, Color::Red) << *it;
-	}
+
 	
 	VCM vcm( R, 1, l2, true );
 	vcm.init( setVolume.begin(), setVolume.end() );
@@ -473,7 +471,7 @@ int main( int  argc, char**  argv )
 				normalCurrentObject = -normalCurrentObject;
 			Z3i::DigitalSet subVolumeCurrentObject = computeSubVolume(setVolume, belongingToCurrentObject, normalCurrentObject, radiusCurrentObject);
 			Z3i::RealPoint dirVectorReference = (belongingToCurrentObject - belongingToReference).getNormalized();
-			if (normalReference.dot(dirVectorReference) > 0)
+			if (normalReference.dot(dirVectorReference) < 0)
 				normalReference = -normalReference;
 
 			Z3i::DigitalSet traversedCurrent = computeTraversedPoints(setVolume, belongingToCurrentObject, normalCurrentObject);
@@ -491,64 +489,73 @@ int main( int  argc, char**  argv )
 			}
 			
 //			Z3i::DigitalSet newPoints = linkTwoPointsWithTangents(belongingToCurrentObject, belongingToReference, normalCurrentObject, (normalReference+normalCurrentObject)/2, setVolume.domain());
-			vector<Point> newPoints = PointUtil::bezierCurve(belongingToCurrentObject, belongingToReference, controlCurrent, controlReference);
+			vector<Point> newPoints;
+			if (Z3i::l2Metric(belongingToReference, belongingToCurrentObject) <= 2 * sqrt(3))
+				newPoints = PointUtil::linkTwoPoints(belongingToCurrentObject, belongingToReference);
+			else	
+				newPoints = PointUtil::bezierCurve(belongingToCurrentObject, belongingToReference, controlCurrent, controlReference);
+			// viewer << CustomColors3D(Color::Green, Color::Green) << controlCurrent << controlReference;
+			// viewer << CustomColors3D(Color::Blue, Color::Blue) << belongingToReference << belongingToCurrentObject;
+			// viewer.addLine(belongingToCurrentObject, belongingToCurrentObject+(normalCurrentObject)*10);
+			// viewer.addLine(belongingToReference, belongingToReference+(normalReference)*10);
 			Z3i::DigitalSet newPointsSet(setVolume.domain());
 			newPointsSet.insert(newPoints.begin(), newPoints.end());
-			// for (auto it = newPoints.begin(), ite = newPoints.end(); it != ite; ++it) {
-			// 	viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
-			// }
-			// viewer << Viewer3D<>::updateDisplay;
-			// qApp->processEvents();
+			for (auto it = newPoints.begin(), ite = newPoints.end(); it != ite; ++it) {
+				skeletonPoints.insert(*it);
+				viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
+			}
+			viewer << Viewer3D<>::updateDisplay;
+			qApp->processEvents();
 
 
 			
-// 				//Compute new points with VCM
-// 				vector<Z3i::Point> points = PointUtil::linkTwoPoints(belongingToCurrentObject, belongingToReference);
-			Z3i::DigitalSet computationVolume = computeBallAroundVector(newPoints, setVolume, dt);
-				set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount> > subVolumeWeighted;
-				for (auto it = computationVolume.begin(), ite = computationVolume.end(); it != ite; ++it) {
-					auto itW = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-							return (wpc->myPoint == *it);
-						});
-					if (itW != setVolumeWeighted.end()) {
-						subVolumeWeighted.insert(new WeightedPointCount(*(*itW)));
-					}
-				}
-				Z3i::DigitalSet connectedComponent3D(setVolume.domain());
-				Z3i::RealPoint realCenter, normalSub;
-				auto currentPoint = find_if(subVolumeWeighted.begin(), subVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-						return wpc->myPoint == belongingToCurrentObject;
-					});				
-				WeightedPointCount* currentWPC;
-				int numberLeft = subVolumeWeighted.size();
+// // 				//Compute new points with VCM
+// // 				vector<Z3i::Point> points = PointUtil::linkTwoPoints(belongingToCurrentObject, belongingToReference);
+// 			Z3i::DigitalSet computationVolume = computeBallAroundVector(newPoints, setVolume, dt);
+// 				set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount> > subVolumeWeighted;
+// 				for (auto it = computationVolume.begin(), ite = computationVolume.end(); it != ite; ++it) {
+// 					auto itW = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+// 							return (wpc->myPoint == *it);
+// 						});
+// 					if (itW != setVolumeWeighted.end()) {
+// 						subVolumeWeighted.insert(new WeightedPointCount(*(*itW)));
+// 					}
+// 				}
+// 				Z3i::DigitalSet connectedComponent3D(setVolume.domain());
+// 				Z3i::RealPoint realCenter, normalSub;
+// 				auto currentPoint = find_if(subVolumeWeighted.begin(), subVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+// 						return wpc->myPoint == belongingToCurrentObject;
+// 					});				
+// 				WeightedPointCount* currentWPC;
+// 				int numberLeft = subVolumeWeighted.size();
 				
-				//while (numberLeft > 0 && !currentWPC->myProcessed) {
-				for (auto it = newPointsSet.begin(), ite = newPointsSet.end(); it != ite; ++it) {
-					auto currentPoint = find_if(subVolumeWeighted.begin(), subVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
-						return wpc->myPoint == *it;
-					});
-					if (currentPoint == subVolumeWeighted.end()) continue;
-					currentWPC = *currentPoint;
-					currentWPC->myProcessed = true;
-					double radius = dt(currentWPC->myPoint);
-					connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted, currentWPC->myPoint, normalSub, 0,  radius, 100, true);
-					realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-					Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
-					viewer << CustomColors3D(Color::Blue, Color::Blue) << centerOfMass;
-					viewer << Viewer3D<>::updateDisplay;
-					qApp->processEvents();
+// 				//while (numberLeft > 0 && !currentWPC->myProcessed) {
+// 				for (auto it = newPointsSet.begin(), ite = newPointsSet.end(); it != ite; ++it) {
+// 					auto currentPoint = find_if(subVolumeWeighted.begin(), subVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+// 						return wpc->myPoint == *it;
+// 					});
+// 					if (currentPoint == subVolumeWeighted.end()) continue;
+// 					currentWPC = *currentPoint;
+// 					currentWPC->myProcessed = true;
+// 					double radius = dt(currentWPC->myPoint);
+// 					connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted, currentWPC->myPoint, normalSub, 0,  radius, 100, true);
+// 					realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
+// 					Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
+// 					viewer << CustomColors3D(Color::Blue, Color::Blue) << centerOfMass;
+// 					viewer << Viewer3D<>::updateDisplay;
+// 					qApp->processEvents();
 				
-					skeletonPoints.insert(centerOfMass);
+// 					skeletonPoints.insert(centerOfMass);
 					
-					VCMUtil::markConnectedComponent3D(subVolumeWeighted, connectedComponent3D, 0);
-//					VCMUtil::trackNextPoint(currentWPC, dt, subVolumeWeighted, connectedComponent3D, centerOfMass, normalSub);
-					numberLeft = count_if(subVolumeWeighted.begin(), subVolumeWeighted.end(),
-										  [&](WeightedPointCount* wpc) {
-											  return (!wpc->myProcessed);
-										  });
+// 					VCMUtil::markConnectedComponent3D(subVolumeWeighted, connectedComponent3D, 0);
+// //					VCMUtil::trackNextPoint(currentWPC, dt, subVolumeWeighted, connectedComponent3D, centerOfMass, normalSub);
+// 					numberLeft = count_if(subVolumeWeighted.begin(), subVolumeWeighted.end(),
+// 										  [&](WeightedPointCount* wpc) {
+// 											  return (!wpc->myProcessed);
+// 										  });
 					
 
-				}
+// 				}
 // 			}
 			objects.erase(minimizingObjectToReference);			
 		}
@@ -556,7 +563,9 @@ int main( int  argc, char**  argv )
 	trace.endBlock();
 
 	delete vcm_surface;
-
+	for (auto it = skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {
+		viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+	}
 	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
 		viewer << CustomColors3D(Color(0,0,255,30), Color(0,0,255,30)) << *it;
 	}

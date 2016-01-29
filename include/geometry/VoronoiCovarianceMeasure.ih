@@ -338,6 +338,44 @@ measure( const std::vector<Point>& neighbors, Point2ScalarFunction chi_r, Point 
   return vcm;
 }
 
+
+template <typename TSpace, typename TSeparableMetric>
+template <typename Point2ScalarFunction>
+inline
+typename DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::MatrixNN
+DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
+measureJunction( const Vector& dirVector, Point2ScalarFunction chi_r, Point p ) const
+{
+  ASSERT( myProximityStructure != 0 );
+  typedef DGtal::EigenDecomposition<3,double> LinearAlgebraTool;
+  typedef typename TSpace::RealVector Vector;
+  
+  Ball<Point> ball(p,mySmallR);
+  std::vector<Point> neighbors = ball.pointsInHalfBall(dirVector);
+
+  MatrixNN vcm, evec, null;
+
+  Vector eval;
+  std::map<Point, Vector> mapPoint2Normal;
+  // std::cout << *it << " has " << neighbors.size() << " neighbors." << std::endl;
+  for ( typename std::vector<Point>::const_iterator it_neighbors = neighbors.begin(),
+          it_neighbors_end = neighbors.end(); it_neighbors != it_neighbors_end; ++it_neighbors )
+    {
+      Point q = *it_neighbors;
+      Scalar coef = chi_r( q - p );
+      if ( coef > 0.0 ) 
+        {
+          typename std::map<Point,MatrixNN>::const_iterator it = myVCM.find( q );
+          if ( it != myVCM.end() ) {
+			  MatrixNN vcm_q = it->second;
+			  vcm_q *= coef;			  
+			  vcm += vcm_q;
+		  }
+        }
+    }
+  return vcm;
+}
+
 //-----------------------------------------------------------------------------
 template <typename TSpace, typename TSeparableMetric>
 inline

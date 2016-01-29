@@ -98,8 +98,8 @@ int main( int argc, char** argv )
 	int radius = 10;
 	
 	vector<PointVector<3, double>> curve;
-//	createContinuousLogarithmicCurve(curve, 50, increment);
-	createStraightLine(curve, 50, increment);
+	createContinuousLogarithmicCurve(curve, 50, increment);
+//	createStraightLine(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
     set<PointVector<3,double>> vectorPoints;
 //	createVolumeFromCurve(curve, vectorPoints, 10);
@@ -113,7 +113,7 @@ int main( int argc, char** argv )
 		
 	Ball<PointVector<3, double>> ball(Point(0,0,0), 10); 
 	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 300, 300));
-	domain = Z3i::Domain(Z3i::Point(-20,-20,-20), Z3i::Point(20,20,60));
+	//domain = Z3i::Domain(Z3i::Point(-20,-20,-20), Z3i::Point(20,20,60));
 	createVolumeFromCurve(curve, vectorPoints, 10);
 	//createHelixCurve(vectorPoints, range, radius, pitch, increment);
 //	drawCircle(vectorPoints, 50.0, 0., 0., 0., increment);
@@ -132,7 +132,7 @@ int main( int argc, char** argv )
 	Image3D anImage3D(domain);
 	for (auto it = domain.begin(), ite = domain.end();
 		 it != ite; ++it) {
-		if (set.find(*it) != set.end())
+		if (set2.find(*it) != set2.end())
 			anImage3D.setValue(*it, 255);
 	}
 //	anImage3D = ImageFromSet<Image3D>::create(set, 1);
