@@ -466,6 +466,11 @@ double computeImportance(const VCM& vcm, const KernelFunction& chi, const Z3i::P
 	}	
 }
 
+Z3i::RealVector computeOrthogonalProjection(const Z3i::RealVector& vectorToProject,
+											const Z3i::RealVector& dirVector) {
+	//Assumes direction vector is unit vector
+	return ((vectorToProject.dot(dirVector)) * dirVector);
+}
 
 Z3i::RealVector closestVectorToReference(const Z3i::RealVector& reference,
 										 const std::vector<Z3i::RealVector>& vectors) {
@@ -482,12 +487,27 @@ Z3i::RealVector closestVectorToReference(const Z3i::RealVector& reference,
 	return closest;
 }
 
+Z3i::RealVector farthestVectorToReference(const Z3i::RealVector& reference,
+										 const std::vector<Z3i::RealVector>& vectors) {
+	double maxDotProduct = 1.0;
+	Z3i::RealVector farthest;
+	for (auto it = vectors.begin(), ite = vectors.end(); it != ite; ++it) {
+		Z3i::RealVector current = *it;
+		double currentDotProduct = reference.dot(current);
+		if (currentDotProduct < maxDotProduct && currentDotProduct >= 0.0) {
+			maxDotProduct = currentDotProduct;
+			farthest = current;
+		}
+	}
+	return farthest;
+}
+
 void newParametersInJunction(Z3i::DigitalSet& plane, Z3i::Point& junctionCenter, Z3i::Point& junctionPoint, Z3i::RealVector& normal, double& junctionRadius,
-							 const Z3i::DigitalSet& planeToAssign, const Z3i::Point& junctionPointToAssign, const Z3i::RealVector& junctionNormalToAssign, double radiusToAssign) {
+							 const Z3i::DigitalSet& planeToAssign, const Z3i::DigitalSet& junctionSet, const Z3i::Point& junctionPointToAssign, const Z3i::RealVector& junctionNormalToAssign, double radiusToAssign) {
 	junctionCenter = Statistics::extractCenterOfMass3D(planeToAssign);
     junctionPoint = junctionCenter;
 	int scalar = 1;
-	while (junctionPoint == junctionCenter) {
+	while (junctionPoint == junctionCenter || junctionSet.find(junctionPoint) != junctionSet.end()) {
 		junctionPoint = junctionCenter+junctionNormalToAssign*scalar;
 		scalar++;
 	}
@@ -502,13 +522,15 @@ Z3i::DigitalSet computeSkeletonInJunction(VCM& vcm, KernelFunction& chi, const D
 										  const Z3i::Point& currentPoint, const Z3i::RealVector& normal, Z3i::RealVector& dirVector, double initialRadius,
 										  double importance, double distanceMax, Viewer3D& viewer) {
 
+	trace.info() << "new" << endl;
 	Z3i::Point junctionPoint = currentPoint;
 	int i = 0;
-	Z3i::RealVector minusDirVector, junctionNormalPrime = normal, junctionNormal2 = normal;
-	double junctionRadius = distanceMax;
+	Z3i::RealVector minusDirVector, initialDirVector = dirVector, junctionNormalPrime = normal, junctionNormal2 = normal;
+	double junctionRadius = initialRadius*2;
 	Z3i::DigitalSet skeletonInJunction(domainVolume);
 	double currentImportance = importance;
-	while (dt(junctionPoint + minusDirVector) >= 1 && i < 100) {
+	while (// dt(junctionPoint + minusDirVector) >= 1 &&
+		   i < 100) {
 		if (dirVector == Z3i::RealVector())
 			break;
 		// Z3i::Point p1 = junctionPoint;
@@ -517,7 +539,8 @@ Z3i::DigitalSet computeSkeletonInJunction(VCM& vcm, KernelFunction& chi, const D
 		// 	p1 = junctionPoint+dirVector*scalar;
 		// 	scalar++;
 		// }
-		double radius = initialRadius;
+		double radius = junctionRadius/2;		
+		junctionPoint += dirVector;
 		Z3i::DigitalSet planePrime = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 																   junctionPoint, junctionNormalPrime,
 																   0, radius, junctionRadius, true, dirVector );
@@ -534,20 +557,30 @@ Z3i::DigitalSet computeSkeletonInJunction(VCM& vcm, KernelFunction& chi, const D
 		// if (junctionNormal2.dot(junctionNormalPrime) < junctionNormalPrime.dot(normal))
 		// 	newParametersInJunction(plane, junctionCenter, junctionPoint, normal, junctionRadius, plane2, junctionPoint, junctionNormal2, radius); 
 		//  else
-		newParametersInJunction(plane, junctionCenter, junctionPoint, junctionNormalPrime, junctionRadius, planePrime, junctionPoint, junctionNormalPrime, radius); 
-		
+		branch.insert(planePrime.begin(), planePrime.end());
+
+		newParametersInJunction(plane, junctionCenter, junctionPoint, junctionNormalPrime, junctionRadius, planePrime, branch, junctionPoint, junctionNormalPrime, radius); 
+		std::vector<Z3i::RealVector> displayPlane = SliceUtils::computePlaneFromNormalVector(junctionNormalPrime, junctionCenter);
+		viewer.addQuad(junctionCenter+(displayPlane[0]-junctionCenter)*20,
+					   junctionCenter+(displayPlane[1]-junctionCenter)*20,
+					   junctionCenter+(displayPlane[2]-junctionCenter)*20,
+					   junctionCenter+(displayPlane[3]-junctionCenter)*20)
 //		viewer << plane;
-		branch.insert(plane.begin(), plane.end());
-		radius++;
-		//radius = dt(junctionCenter)+1;
-		vcm.setMySmallR(radius);
-		chi = KernelFunction(1.0, radius);
-		std::pair<Z3i::RealVector, Z3i::RealVector> pairImportance;
-		currentImportance = computeImportance(vcm, chi, junctionPoint, pairImportance);
-//		trace.info() << dirVector << " " << pairImportance.first;
-		dirVector = closestVectorToReference(dirVector, {pairImportance.first, pairImportance.second});
+
+//		radius++;
+		// vcm.setMySmallR(radius);
+		// chi = KernelFunction(1.0, radius);
+		std::pair<Z3i::RealVector, Z3i::RealVector> pairImportance, pairDirVectorImportance;
+		currentImportance = computeImportance(vcm, chi, junctionPoint, pairImportance);		
+		double dirVectorImportance = computeImportance(vcm, chi, junctionPoint+dirVector, pairDirVectorImportance);
+		Z3i::RealVector previousDirVector = dirVector * radius;		
+		dirVector = farthestVectorToReference(dirVector, {pairImportance.first, pairImportance.second,
+					pairDirVectorImportance.first, pairDirVectorImportance.second});
+		Z3i::RealVector newOrthogonal = computeOrthogonalProjection(previousDirVector, dirVector);
+		junctionRadius = newOrthogonal.norm();
+		trace.info() << previousDirVector.norm() << " " << junctionRadius << endl;
 		minusDirVector = -dirVector * radius;
-//		viewer.addLine(junctionCenter, junctionCenter+minusDirVector);
+		viewer.addLine(junctionCenter, junctionCenter+dirVector*10);
 		skeletonInJunction.insert(junctionCenter);
 		i++;
 
@@ -676,106 +709,107 @@ int main( int  argc, char**  argv )
 		}		
 	}
 
-
-   
-	//Construct VCM surface
-	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
-	Z3i::DigitalSet setVolumeMinusSurface(setVolume.domain());
-    for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
-		if (setSurface.find(*it) == setSurface.end())
-			setVolumeMinusSurface.insert(*it);
-										 
-	}
-	Z3i::Object26_6 objectMinusSurface(Z3i::dt26_6, setVolumeMinusSurface);
 	Metric l2;
-	KSpace ks;
-	ks.init( volume.domain().lowerBound(),
-			 volume.domain().upperBound(), true );
-	SurfelAdjacency<KSpace::dimension> surfAdj( true ); // interior in all directions.
-	Surfel bel = Surfaces<KSpace>::findABel( ks, backgroundPredicate, 1000000 );
-	DigitalSurfaceContainer* container =
-		new DigitalSurfaceContainer( ks, backgroundPredicate, surfAdj, bel, false  );
-	DigitalSurface< DigitalSurfaceContainer > surface( container ); //acquired
+   	WeightedPointCount* currentPoint = *setVolumeWeighted.begin();
+ 	double distanceMax = currentPoint->myWeight+delta;
+	//Construct VCM surface
+// 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
+// 	Z3i::DigitalSet setVolumeMinusSurface(setVolume.domain());
+//     for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
+// 		if (setSurface.find(*it) == setSurface.end())
+// 			setVolumeMinusSurface.insert(*it);
+										 
+// 	}
+// 	Z3i::Object26_6 objectMinusSurface(Z3i::dt26_6, setVolumeMinusSurface);
+// 	Metric l2;
+// 	KSpace ks;
+// 	ks.init( volume.domain().lowerBound(),
+// 			 volume.domain().upperBound(), true );
+// 	SurfelAdjacency<KSpace::dimension> surfAdj( true ); // interior in all directions.
+// 	Surfel bel = Surfaces<KSpace>::findABel( ks, backgroundPredicate, 1000000 );
+// 	DigitalSurfaceContainer* container =
+// 		new DigitalSurfaceContainer( ks, backgroundPredicate, surfAdj, bel, false  );
+// 	DigitalSurface< DigitalSurfaceContainer > surface( container ); //acquired
 
-	//! [DVCM3D-instantiation]
-	Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel;
-	KernelFunction chiSurface( 1.0, r );             // hat function with support of radius r
-	VCMOnSurface* vcm_surface = new VCMOnSurface( surface, embType, R, r,
-					 chiSurface, dt, delta, l2, true);
+// 	//! [DVCM3D-instantiation]
+// 	Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel;
+// 	KernelFunction chiSurface( 1.0, r );             // hat function with support of radius r
+// 	VCMOnSurface* vcm_surface = new VCMOnSurface( surface, embType, R, r,
+// 					 chiSurface, dt, delta, l2, true);
 
 	
-	vector<double> curvaturePoints = extractCurvatureOnPoints(*vcm_surface);
-	double threshold = otsuThreshold(curvaturePoints);
-	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, threshold);
-	trace.info() << threshold << endl;
-	NotPointPredicate notBranching(branchingPoints);
-	Z3i::Object26_6 obj(Z3i::dt26_6, branchingPoints);
-	vector<Z3i::Object26_6> objects;
-	back_insert_iterator< std::vector<Z3i::Object26_6> > inserter( objects );
-	unsigned int nbConnectedComponents = obj.writeComponents(inserter);
-	Z3i::DigitalSet maxCurvaturePoints(domainVolume);
-	Matrix vcmrB, evecB;
-	Z3i::RealVector evalB;
+// 	vector<double> curvaturePoints = extractCurvatureOnPoints(*vcm_surface);
+// 	double threshold = otsuThreshold(curvaturePoints);
+// 	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, threshold);
+// 	trace.info() << threshold << endl;
+// 	NotPointPredicate notBranching(branchingPoints);
+// 	Z3i::Object26_6 obj(Z3i::dt26_6, branchingPoints);
+// 	vector<Z3i::Object26_6> objects;
+// 	back_insert_iterator< std::vector<Z3i::Object26_6> > inserter( objects );
+// 	unsigned int nbConnectedComponents = obj.writeComponents(inserter);
+// 	Z3i::DigitalSet maxCurvaturePoints(domainVolume);
+// 	Matrix vcmrB, evecB;
+// 	Z3i::RealVector evalB;
 
-	Point lower, upper;
-	setVolume.computeBoundingBox(lower, upper);
-	Domain domainComplement(lower-Point::diagonal(1), upper+Point::diagonal(1));
-	Z3i::DigitalSet complementSetVolume(domainComplement);
-	for (auto it = domainComplement.begin(), ite = domainComplement.end();
-		 it != ite; ++it) {
-		if (notSetVolume(*it))
-			complementSetVolume.insert(*it);
-	}
-	Z3i::DigitalSet branches(setVolume.domain());
-	WeightedPointCount* currentPoint = *setVolumeWeighted.begin();
-	double distanceMax = currentPoint->myWeight+delta;
-//	complementSetVolume.insert(setSurface.begin(), setSurface.end());
-	VCM vcmJunction(R, ceil(r), l2, false, true);
-	vcmJunction.init(complementSetVolume.begin(), complementSetVolume.end());
+// 	Point lower, upper;
+// 	setVolume.computeBoundingBox(lower, upper);
+// 	Domain domainComplement(lower-Point::diagonal(1), upper+Point::diagonal(1));
+// 	Z3i::DigitalSet complementSetVolume(domainComplement);
+// 	for (auto it = domainComplement.begin(), ite = domainComplement.end();
+// 		 it != ite; ++it) {
+// 		if (notSetVolume(*it))
+// 			complementSetVolume.insert(*it);
+// 	}
+// 	Z3i::DigitalSet branches(setVolume.domain());
+// 	WeightedPointCount* currentPoint = *setVolumeWeighted.begin();
+// 	double distanceMax = currentPoint->myWeight+delta;
+// //	complementSetVolume.insert(setSurface.begin(), setSurface.end());
+// 	VCM vcmJunction(R, ceil(r), l2, false, true);
+// 	vcmJunction.init(complementSetVolume.begin(), complementSetVolume.end());
 	
-	trace.info() << vcmJunction.domain() << endl;
-	typedef DGtal::EigenDecomposition<3,double> LinearAlgebraTool;
-	LinearAlgebraTool::Matrix vcm_r, evec;
-	DGtal::Z3i::RealVector eval;
-	for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
-		auto object = *it;
-		auto objectPointSet = object.pointSet();
-		vector<Point> junctionArea;
-		std::copy(objectPointSet.begin(), objectPointSet.end(), std::back_inserter(junctionArea) );
-		double ratioMax = 0;
-		Point maximizingCurvaturePoint;
-		for (auto itPoint = objectPointSet.begin(), itPointE = objectPointSet.end(); itPoint != itPointE; ++itPoint) {
-			auto lambda = (vcm_surface->mapPoint2ChiVCM()).at(*itPoint).values;
-			double ratio = VCMUtil::computeCurvatureJunction(lambda); 
-			if (ratio > ratioMax) {
-				ratioMax = ratio;
-				maximizingCurvaturePoint = *itPoint;
-			}
-		}
-		double radius = 0.0;
-		Z3i::RealVector meanVector;
-		for (auto itP = objectPointSet.begin(), itPe = objectPointSet.end(); itP != itPe; ++itP) {
-			// if (processedVertices.find(*itP) != processedVertices.end())
-			// 	continue;
+// 	trace.info() << vcmJunction.domain() << endl;
+// 	typedef DGtal::EigenDecomposition<3,double> LinearAlgebraTool;
+// 	LinearAlgebraTool::Matrix vcm_r, evec;
+// 	DGtal::Z3i::RealVector eval;
+// 	for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
+// 		auto object = *it;
+// 		auto objectPointSet = object.pointSet();
+// 		vector<Point> junctionArea;
+// 		std::copy(objectPointSet.begin(), objectPointSet.end(), std::back_inserter(junctionArea) );
+// 		double ratioMax = 0;
+// 		Point maximizingCurvaturePoint;
+// 		for (auto itPoint = objectPointSet.begin(), itPointE = objectPointSet.end(); itPoint != itPointE; ++itPoint) {
+// 			auto lambda = (vcm_surface->mapPoint2ChiVCM()).at(*itPoint).values;
+// 			double ratio = VCMUtil::computeCurvatureJunction(lambda); 
+// 			if (ratio > ratioMax) {
+// 				ratioMax = ratio;
+// 				maximizingCurvaturePoint = *itPoint;
+// 			}
+// 		}
+// 		double radius = 0.0;
+// 		Z3i::RealVector meanVector;
+// 		for (auto itP = objectPointSet.begin(), itPe = objectPointSet.end(); itP != itPe; ++itP) {
+// 			// if (processedVertices.find(*itP) != processedVertices.end())
+// 			// 	continue;
 
-			double distance = Z3i::l2Metric(*itP, maximizingCurvaturePoint);
-			if (radius < distance) {
-				radius = distance;				
-			}
-			vcmJunction.setMySmallR(radius);
-			KernelFunctionJunction chiJunction(1.0, radius);	
+// 			double distance = Z3i::l2Metric(*itP, maximizingCurvaturePoint);
+// 			if (radius < distance) {
+// 				radius = distance;				
+// 			}
+// 			vcmJunction.setMySmallR(radius);
+// 			KernelFunctionJunction chiJunction(1.0, radius);	
 		
-			vcm_r = vcmJunction.measure( junctionArea, chiJunction, *itP );
-			LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
-			// // Display normal
-			DGtal::Z3i::RealVector normalJunction = evec.column(2);
-			meanVector += normalJunction;
-		}
+// 			vcm_r = vcmJunction.measure( junctionArea, chiJunction, *itP );
+// 			LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
+// 			// // Display normal
+// 			DGtal::Z3i::RealVector normalJunction = evec.column(2);
+// 			meanVector += normalJunction;
+// 		}
 		
-		//viewer << CustomColors3D(Color::Red, Color::Red) << *it;
- 		maxCurvaturePoints.insert(maximizingCurvaturePoint);
+// 		//viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+//  		maxCurvaturePoints.insert(maximizingCurvaturePoint);
 	
-	}
+// 	}
 	
 //	delete vcm_surface;
 
@@ -810,7 +844,7 @@ int main( int  argc, char**  argv )
     
 	trace.beginBlock("Computing skeleton");
 	//Main loop to compute skeleton (stop when no vol points left to process)
-	while (numberLeft > 0)
+	while (numberLeft > 0.4 * setVolume.size())
 	{
 		trace.progressBar((setVolumeWeighted.size() - numberLeft), setVolumeWeighted.size());		
 		currentPoint->myProcessed = true;
@@ -861,20 +895,20 @@ int main( int  argc, char**  argv )
 			}
 
 			
-			VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
+
 
 			if (label != 1 && !processed && degree > 1 && Z3i::l2Metric(currentPoint->myPoint, centerOfMass) <= sqrt(3)) {			   
-				Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, setVolume, realCenter, radiusIntersection);
-				branches.insert(branch.begin(), branch.end());				
+				// Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, setVolume, realCenter, radiusIntersection);
+				// branches.insert(branch.begin(), branch.end());				
 				std::pair<Z3i::RealVector, Z3i::RealVector> pairImportance;
 				double dotproduct = computeImportance(vcm, chi, currentPoint->myPoint, pairImportance);
 				Color color = hueColorMap(dotproduct);
 				viewer << CustomColors3D(color, color);
 				Z3i::DigitalSet skeletonJunction(domainVolume);
-				if (dotproduct < 0.9) {
+				if (dotproduct > 0.6 && dotproduct < 0.9) {
 					Z3i::DigitalSet junctionSet(domainVolume);
 					Z3i::RealVector n0 = pairImportance.first;
-					viewer.addLine(currentPoint->myPoint, currentPoint->myPoint+(n0)*10); 
+//					viewer.addLine(currentPoint->myPoint, currentPoint->myPoint+(n0)*10); 
 					//  skeletonJunction = computeSkeletonInJunction(vcm, chi, dt, junctionSet, setVolumeWeighted, domainVolume,
 					//  															 currentPoint->myPoint, normal, n0, dt(currentPoint->myPoint),
 				    // 															 dotproduct, numeric_limits<double>::max(), viewer);
@@ -882,7 +916,7 @@ int main( int  argc, char**  argv )
 					// vcm.setMySmallR(radius);
 					// chi = KernelFunction(1.0, radius);
 					Z3i::RealVector n1 = pairImportance.second;
-					viewer.addLine(currentPoint->myPoint, currentPoint->myPoint+(n1)*10);
+//					viewer.addLine(currentPoint->myPoint, currentPoint->myPoint+(n1)*10);
 					skeletonJunction = computeSkeletonInJunction(vcm, chi, dt, junctionSet, setVolumeWeighted, domainVolume,
 																 currentPoint->myPoint, normal, n1, dt(currentPoint->myPoint),
 																 dotproduct, numeric_limits<double>::max(), viewer);
@@ -890,7 +924,7 @@ int main( int  argc, char**  argv )
 					viewer << skeletonJunction;
 				} else {
 					   
-			 					
+					VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
 				//VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 1);
 				
 				// Branching detection	
@@ -912,15 +946,15 @@ int main( int  argc, char**  argv )
   		i++;
 	}
 	trace.endBlock();
-	delete vcm_surface;
+//	delete vcm_surface;
 	
 	//Discarding points being in branching parts
-	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
-//		viewer << CustomColors3D(Color(0,128,0,128), Color(0,128,0,128)) << *it;
-	 	auto itToErase = skeletonPoints.find(*it);
-	 	if (itToErase != skeletonPoints.end())
-	 		skeletonPoints.erase(itToErase);
-	} 
+// 	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
+// //		viewer << CustomColors3D(Color(0,128,0,128), Color(0,128,0,128)) << *it;
+// 	 	auto itToErase = skeletonPoints.find(*it);
+// 	 	if (itToErase != skeletonPoints.end())
+// 	 		skeletonPoints.erase(itToErase);
+// 	} 
 
 	for (auto it=skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {
 		viewer << CustomColors3D(Color::Red, Color::Red) << *it;
