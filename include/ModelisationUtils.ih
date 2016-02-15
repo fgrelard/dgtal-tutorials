@@ -271,7 +271,7 @@ void createVolumeFromCurve(const vector<CurvePoint> & curve, set<Point> & volume
 	}
 	for (const Ball<CurvePoint>& current : ballVector) {
 		for (const CurvePoint& point : current.pointsInBall()) {
-			volume.insert(Point(point[0], point[1], point[2]));
+			volume.insert(point);
 		}
 	}
 }
@@ -284,14 +284,14 @@ void createHalfVolumeFromCurve(const vector<CurvePoint> & curve, set<Point> & vo
 	}
 	for (const Ball<CurvePoint>& current : ballVector) {
 		for (const CurvePoint& point : current.pointsInHalfBall()) {
-			volume.insert(Point(point[0], point[1], point[2]));
+			volume.insert(point);
 		}
 	}
 }
 
 
 template <typename CurvePoint, typename Point>
-void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & volume, int ballRadius, double angle) {
+void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & volume, int ballRadius, double angle, const Eigen::Vector3d& vectorRot) {
     typedef Ball<CurvePoint> Ball;
 	Ball ball({0,0,0}, ballRadius);
 	Eigen::Matrix<double, Eigen::Dynamic, 4> matrix(1, 4);
@@ -308,7 +308,7 @@ void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & 
 	}
 
 	set<Point> rotatedCurves;
-	Eigen::Affine3d rot(Eigen::AngleAxisd(angle, Eigen::Vector3d::UnitX()));	
+	Eigen::Affine3d rot(Eigen::AngleAxisd(angle, vectorRot));	
 	Eigen::Matrix<double, Eigen::Dynamic, 4> m = matrix * rot.matrix();
 	for (int i = 0; i < m.innerSize(); i++) {
 		if (m(i, 0) != 0 || m(i, 1) != 0 || m(i, 2) != 0) {

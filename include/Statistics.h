@@ -9,6 +9,9 @@
 #include "DGtal/images/ImageSelector.h"
 #include "DGtal/images/imagesSetsUtils/ImageFromSet.h"
 #include <Eigen/Dense>
+#include "DGtal/math/Histogram.h"
+#include "DGtal/math/Statistic.h"
+#include "geometry/Distance.h"
 
 namespace Statistics {
 	template <typename T>
@@ -44,6 +47,12 @@ namespace Statistics {
 
 	template <typename Matrix, typename Image2D>
 	Matrix computeCovarianceMatrixImage(const Image2D& image);
+
+template <typename Container>
+double otsuThreshold(const Container& container);
+
+template <typename Container>
+double unimodalThresholding(const Container& container);
 	
 }
 
@@ -235,6 +244,85 @@ Vector Statistics::extractEigenValue(const Matrix& m, int colNumber) {
 		vector[i] = veigen[i];
 	}
 	return vector;
+}
+
+
+template <typename Container>
+double Statistics::otsuThreshold(const Container& container) {
+	using namespace DGtal;
+	double  proba = 0;                // first order cumulative
+    double  mu = 0;                // second order cumulative
+    double  mean = 0;               // total mean level        
+	double    threshold = 0;        // optimal threshold value
+	double max = 0.0;
+	
+	Statistic<double> stats;
+	stats.addValues( container.begin(), container.end() );
+	stats.terminate(); // stats are computed.
+
+	Histogram<double>* hist = new Histogram<double>();
+	hist->init( Histogram<double>::SquareRoot, stats );
+	hist->addValues( container.begin(), container.end() );
+	hist->terminate();
+	double myWidth = ( stats.max() - stats.min() ) / hist->size() ;
+	double myBin = stats.min();
+	for (int i=0; i< hist->size(); i++) {
+		myBin += myWidth;
+//		std::cout << myBin << " " << hist->pdf(i) << endl;
+		mean+= ((double) i / hist->size()) * hist->pdf(i);
+	}
+	for (int i = 0; i < hist->size(); i++) {
+		proba += hist->pdf(i);
+		mu += ((double)i/hist->size()) * hist->pdf(i);
+		double currentValue =  pow((mean * proba - mu), 2) * proba * (1 - proba);
+		if (currentValue > max) {
+			max = currentValue;
+			threshold = ((double)i/hist->size());
+		}
+			
+	}
+		
+	return threshold;
+}
+
+template <typename Container>
+double Statistics::unimodalThresholding(const Container& container) {
+	using namespace DGtal;
+	Statistic<double> stats;
+	stats.addValues( container.begin(), container.end() );
+	stats.terminate(); // stats are computed.
+
+	Histogram<double>* hist = new Histogram<double>();
+	hist->init( Histogram<double>::SquareRoot, stats );
+	hist->addValues( container.begin(), container.end() );
+	hist->terminate();
+	double myWidth = ( stats.max() - stats.min() ) / hist->size() ;
+	Z2i::RealPoint maxPeak(0,0);
+	for (int i = 1; i < hist->size(); i++) {
+		if (hist->pdf(i) > maxPeak[1])
+			maxPeak = Z2i::RealPoint(i*myWidth, hist->pdf(i));
+	}
+	Z2i::RealPoint tail(stats.max(), hist->pdf(hist->size()-1));
+	Z2i::RealVector directionLine = (tail - maxPeak).getNormalized();
+	double maxDistanceOrthogonal = 0.0;
+	double threshold = 0.0;
+
+	//Start from maxPeak (origin)
+	int begin = maxPeak[0] / myWidth;
+	for (int i = begin+1; i < hist->size(); i++) {
+		Z2i::RealPoint currentPoint(i * myWidth, hist->pdf(i));
+		Z2i::RealVector v = currentPoint - maxPeak;
+		Z2i::RealPoint orthogonalProjection = ((v.dot(directionLine)) / (directionLine.dot(directionLine))) * directionLine;
+
+		//Need to change basis (go back to true origin)
+		orthogonalProjection += maxPeak;
+		double currentOrthogonalDistance = euclideanDistance(orthogonalProjection, currentPoint);
+		if (currentOrthogonalDistance > maxDistanceOrthogonal) {
+			maxDistanceOrthogonal = currentOrthogonalDistance;
+			threshold = currentPoint[0];
+		}			
+	}
+	return threshold;
 }
 
 

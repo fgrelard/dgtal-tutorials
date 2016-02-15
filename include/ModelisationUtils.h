@@ -67,8 +67,8 @@ void createLogarithmicCurve(std::vector<Point> & curve, int range, float increme
 template <typename CurvePoint, typename Point>
 void createVolumeFromCurve(const std::vector<Point> & curve, std::set<Point> & volume, int ballRadius);
 
-template <typename Pencil, typename CurvePoint, typename Point>
-void createRotatedVolumeFromCurve(const std::vector<CurvePoint> & curve, std::set<Point> & volume, int ballRadius);
+template <typename CurvePoint, typename Point>
+void createRotatedVolumeFromCurve(const std::vector<CurvePoint> & curve, std::set<Point> & volume, int ballRadius, double angle, const Eigen::Vector3d& vector = Eigen::Vector3d::UnitX());
 
 template <typename DigitalSet>
 DigitalSet addNoise(const DigitalSet& set);

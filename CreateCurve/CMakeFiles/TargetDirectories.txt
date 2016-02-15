@@ -1,1 +1,2 @@
 /home/florent/Documents/DGtal/tutorials-copy/CreateCurve/CMakeFiles/Curve.dir
+/home/florent/Documents/DGtal/tutorials-copy/CreateCurve/CMakeFiles/Noise.dir

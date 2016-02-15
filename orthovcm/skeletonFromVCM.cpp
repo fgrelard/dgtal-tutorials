@@ -52,8 +52,6 @@
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 #include "DGtal/kernel/sets/DigitalSetInserter.h"
 #include "DGtal/topology/ImplicitDigitalSurface.h"
-#include "DGtal/math/Histogram.h"
-#include "DGtal/math/Statistic.h"
 #include "DGtal/geometry/surfaces/ChordGenericNaivePlaneComputer.h"
 
 #include <boost/program_options/options_description.hpp>
@@ -154,129 +152,7 @@ vector<double> extractCurvatureOnPoints(const VCM& vcm) {
 	return curvatureValues; 
 }
 
-template <typename Container>
-double otsuThreshold(const Container& container) {
 
-	double  proba = 0;                // first order cumulative
-    double  mu = 0;                // second order cumulative
-    double  mean = 0;               // total mean level        
-	double    threshold = 0;        // optimal threshold value
-	double max = 0.0;
-	
-	Statistic<double> stats;
-	stats.addValues( container.begin(), container.end() );
-	stats.terminate(); // stats are computed.
-
-	Histogram<double>* hist = new Histogram<double>();
-	hist->init( Histogram<double>::SquareRoot, stats );
-	hist->addValues( container.begin(), container.end() );
-	hist->terminate();
-	double myWidth = ( stats.max() - stats.min() ) / hist->size() ;
-	double myBin = stats.min();
-	for (int i=0; i< hist->size(); i++) {
-		myBin += myWidth;
-//		std::cout << myBin << " " << hist->pdf(i) << endl;
-		mean+= ((double) i / hist->size()) * hist->pdf(i);
-	}
-	for (int i = 0; i < hist->size(); i++) {
-		proba += hist->pdf(i);
-		mu += ((double)i/hist->size()) * hist->pdf(i);
-		double currentValue =  pow((mean * proba - mu), 2) * proba * (1 - proba);
-		if (currentValue > max) {
-			max = currentValue;
-			threshold = ((double)i/hist->size());
-		}
-			
-	}
-		
-	return threshold;
-}
-
-template <typename Container>
-double unimodalThresholding(const Container& container) {
-	Statistic<double> stats;
-	stats.addValues( container.begin(), container.end() );
-	stats.terminate(); // stats are computed.
-
-	Histogram<double>* hist = new Histogram<double>();
-	hist->init( Histogram<double>::SquareRoot, stats );
-	hist->addValues( container.begin(), container.end() );
-	hist->terminate();
-	double myWidth = ( stats.max() - stats.min() ) / hist->size() ;
-	Z2i::RealPoint maxPeak(0,0);
-	for (int i = 1; i < hist->size(); i++) {
-		if (hist->pdf(i) > maxPeak[1])
-			maxPeak = Z2i::RealPoint(i*myWidth, hist->pdf(i));
-	}
-	Z2i::RealPoint tail(stats.max(), hist->pdf(hist->size()-1));
-	Z2i::RealVector directionLine = (tail - maxPeak).getNormalized();
-	double maxDistanceOrthogonal = 0.0;
-	double threshold = 0.0;
-
-	//Start from maxPeak (origin)
-	int begin = maxPeak[0] / myWidth;
-	for (int i = begin+1; i < hist->size(); i++) {
-		Z2i::RealPoint currentPoint(i * myWidth, hist->pdf(i));
-		Z2i::RealVector v = currentPoint - maxPeak;
-		Z2i::RealPoint orthogonalProjection = ((v.dot(directionLine)) / (directionLine.dot(directionLine))) * directionLine;
-
-		//Need to change basis (go back to true origin)
-		orthogonalProjection += maxPeak;
-		double currentOrthogonalDistance = euclideanDistance(orthogonalProjection, currentPoint);
-		if (currentOrthogonalDistance > maxDistanceOrthogonal) {
-			maxDistanceOrthogonal = currentOrthogonalDistance;
-			threshold = currentPoint[0];
-		}			
-	}
-	return threshold;
-}
-
-
-template <typename VCM>
-Z3i::RealPoint extractVectorVCMAtPoint(const VCM& vcm, const Z3i::Point& point, int coordinate) {
-	typedef typename VCM::Point2EigenStructure::const_iterator P2EConstIterator;
-
-	auto mapPointEigen = vcm.mapPoint2ChiVCM();
-	Z3i::RealPoint vector = mapPointEigen[point].vectors.column(coordinate);
-	double scalar = mapPointEigen[point].values[coordinate];
-	return vector;
-}
-
-Z3i::DigitalSet markAroundBranchingPoints(const Z3i::DigitalSet& setVolume, const Z3i::Point& center, double radius) {
-	Z3i::DigitalSet aSet(setVolume.domain());
-	Ball<Z3i::Point> ball(center, radius);
-	std::vector<Z3i::Point> pointsInBall = ball.pointsInBall();
-	for (auto it = pointsInBall.begin(), ite = pointsInBall.end(); it != ite; ++it) {
-		if (setVolume.find(*it) != setVolume.end()) {
-			aSet.insert(*it);
-		}
-	}
-	return aSet;
-}
-
-template <typename ImageAdapterExtractor, typename Matrix, typename Image>
-double computeRadiusFromIntersection(const Image& volume, const Z3i::Point& point, const Z3i::RealPoint& normal,
-									 double radius) {
-	typedef ImageSelector<Z2i::Domain, bool>::Type Image2D;
-	DGtal::functors::Identity idV;
-	Z3i::Domain domain3Dyup(volume.domain().lowerBound() + Z3i::Point(-radius, -radius, -radius), volume.domain().upperBound() + Z3i::Point(radius, radius, radius));
-	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
-									  DGtal::Z2i::Point(radius, radius));
-    
-	
-	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(domain3Dyup, point, normal, radius, domain3Dyup.lowerBound());
-
-	ImageAdapterExtractor extractedImage(volume, domainImage2D, embedder, idV);
-	Image2D processImage = ImageUtil::convertImage<Image2D>(extractedImage);
-	Z2i::DigitalSet aSet = VCMUtil::extractConnectedComponent(processImage, Z2i::Point(radius/2, radius/2), 1, 255);
-    Matrix covmatrix = Statistics::computeCovarianceMatrix<Matrix>(aSet);
-	if (covmatrix.size() == 0) return 0;
-	double eigenvalue = Statistics::extractEigenValue<Z2i::RealPoint>(covmatrix, 0)[1];
-	if (eigenvalue >= 0)
-		return sqrt(eigenvalue);
-	else
-		return 0;
-}
 
 template <typename Matrix>
 double computeRadiusFromIntersection3D(const Z3i::DigitalSet& aSet) {
@@ -355,47 +231,6 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 	return toReturn;
 }
 
-template <typename VoronoiMap>
-Z3i::DigitalSet extractVoronoiCell(const Z3i::DigitalSet& backgroundSet, const VoronoiMap& voronoiMap, const Z3i::Point& point) {
-	Z3i::DigitalSet aSet(backgroundSet.domain());
-	for (auto it = backgroundSet.begin(), ite = backgroundSet.end(); it != ite; ++it) {
-		if (voronoiMap(*it) == point) {
-			aSet.insert(*it);
-		}
-	}
-	return aSet;
-}
-
-
-double averageDistanceToClosestPoint(const Z3i::DigitalSet& aSet, const Z3i::DigitalSet& comparisonSet) {
-	double sum = 0;
-	for (auto it = aSet.begin(), ite = aSet.end(); it != ite; ++it) {
-		Z3i::Point closestPoint = *min_element(comparisonSet.begin(), comparisonSet.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
-				return Z3i::l2Metric(one, *it) < Z3i::l2Metric(two, *it);
-			});
-		sum += Z3i::l2Metric(*it, closestPoint);
-	}
-	return (sum / aSet.size());
-}
-
-Z3i::DigitalSet neighborsOfSet(const Z3i::DigitalSet& aSet, const Z3i::DigitalSet& constraintSet) {
-	
-	Z3i::DigitalSet neighbors(aSet.domain());
-	DigitalSetInserter<Z3i::DigitalSet> inserter(neighbors);
-	for (auto it = aSet.begin(), ite = aSet.end(); it != ite; ++it) {
-		Z3i::Adj26::writeNeighbors(inserter, *it);
-	}
-	Z3i::DigitalSet neighborsInConstraintSet(aSet.domain());
-	for (auto it = neighbors.begin(), ite = neighbors.end(); it != ite; ++it) {
-		if (constraintSet.find(*it) != constraintSet.end())
-			neighborsInConstraintSet.insert(*it);
-	}
-	return neighborsInConstraintSet;
-}
-
-
-
-
 
 template <typename VCM, typename KernelFunction>
 double computeCurvature(const Z3i::DigitalSet& junctions, const Z3i::Point& branchPoint, double radius=1.0) {
@@ -408,28 +243,6 @@ double computeCurvature(const Z3i::DigitalSet& junctions, const Z3i::Point& bran
 
 
 
-Z3i::Point nearestBranchPoint(const Z3i::DigitalSet& aSet, const Z3i::DigitalSet& branchingPoints) {
-	Z3i::Point point = *(aSet.begin());
-	Z3i::Point closestPoint = *min_element(branchingPoints.begin(), branchingPoints.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
-			return Z3i::l2Metric(one, point) < Z3i::l2Metric(two, point);
-		});
-	return closestPoint;
-}
-
-Z3i::DigitalSet computeSaddleArea(const Z3i::DigitalSet& setSurface,
-								  const Z3i::Point& branchPoint,
-								  double radius) {
-	typedef typename Z3i::L2Metric Distance;
-	
-	Distance distance;
-	GeodesicBall<Distance, Z3i::Point> ball(distance, branchPoint, radius);
-	Z3i::Object26_6 obj26(Z3i::dt26_6, setSurface);
-	
-	std::vector<Z3i::Point> pointsInSaddle = ball.surfaceIntersection(obj26);
-	Z3i::DigitalSet saddleAreaSet(setSurface.domain());
-	saddleAreaSet.insert(pointsInSaddle.begin(), pointsInSaddle.end());
-	return saddleAreaSet;
-}
 
 template <typename VCM, typename KernelFunction>
 Z3i::RealVector computeVectorJunction(const Z3i::RealVector& normal, const VCM& vcm, const KernelFunction& chi, const Z3i::Point& point, int coordinate) {
@@ -441,30 +254,78 @@ Z3i::RealVector computeVectorJunction(const Z3i::RealVector& normal, const VCM& 
 	return evec.column(coordinate);
 }
 
+Z3i::RealVector rotateAroundAxis(const Eigen::AngleAxis<float>& angle, const Z3i::RealVector& vectorToRotate) {
+	Eigen::Vector3f v(vectorToRotate[0], vectorToRotate[1], vectorToRotate[2]);
+	v = angle * v;
+	Z3i::RealVector rotated(v(0), v(1), v(2));
+	return rotated;
+	
+}
+
 template <typename VCM, typename KernelFunction>
-double computeImportance(const VCM& vcm, const KernelFunction& chi, const Z3i::Point& point,
-						 std::pair<Z3i::RealVector, Z3i::RealVector>& pairVectorImportance) {
-	Z3i::RealVector n0 = VCMUtil::computeNormalFromVCM(point, vcm, chi, 2);
-	Z3i::RealVector n1 = VCMUtil::computeNormalFromVCM(point, vcm, chi, 1);
-	Z3i::RealVector v1 = computeVectorJunction(n0, vcm, chi, point, 0);
-	Z3i::RealVector v2 = computeVectorJunction(-n0, vcm, chi, point, 0);
-	Z3i::RealVector v3 = computeVectorJunction(n1, vcm, chi, point, 0);
-	Z3i::RealVector v4 = computeVectorJunction(-n1, vcm, chi, point, 0);
+double computeImportance(const VCM& vcm, const KernelFunction& chi, const Z3i::Point& point, const Z3i::RealVector& dirVector,
+						 std::pair<Z3i::RealVector, Z3i::RealVector>& pairVectorImportance, double referenceImportance = 1.0) {
+	Z3i::RealVector v1 = computeVectorJunction(dirVector, vcm, chi, point, 0);
+	Z3i::RealVector v2 = computeVectorJunction(-dirVector, vcm, chi, point, 0);
 
 	if (v1.dot(v2) < 0)
 		v1 = -v1;
-	if (v3.dot(v4) < 0)
-		v3 = -v3;
 	
-	if (std::abs(v1.dot(v2)) < std::abs(v3.dot(v4))) {
-		pairVectorImportance = std::make_pair(n0, -n0);
+	if (std::abs(v1.dot(v2)) < referenceImportance) {
+		pairVectorImportance = std::make_pair(dirVector, -dirVector);
 		return v1.dot(v2);
 	}
-	else {
-		pairVectorImportance = std::make_pair(n1, -n1);
-		return v3.dot(v4);
-	}	
+	else 
+	    return referenceImportance;
 }
+
+
+template <typename VCM, typename KernelFunction>
+double lowestImportance(const VCM& vcm, const KernelFunction& chi, const Z3i::Point& point,
+						std::pair<Z3i::RealVector, Z3i::RealVector>& pairVectorImportance) {
+	Z3i::RealVector n0 = VCMUtil::computeNormalFromVCM(point, vcm, chi, 2);
+	Z3i::RealVector n1 = VCMUtil::computeNormalFromVCM(point, vcm, chi, 1);
+
+	double firstImportance = computeImportance(vcm,chi,point,n0,pairVectorImportance);
+	double secondImportance = computeImportance(vcm,chi,point,n1,pairVectorImportance, firstImportance);
+
+	return secondImportance;
+}
+
+template <typename Container, typename VCM, typename KernelFunction>
+double lowestImportance(const Container& container, const VCM& vcm, const KernelFunction& chi, const Z3i::Point& point,
+						std::pair<Z3i::RealVector, Z3i::RealVector>& pairVectorImportance) {
+
+	typedef Eigen::MatrixXd Matrix;
+    Matrix matrix = Statistics::computeCovarianceMatrix<Matrix>(container);
+	if (matrix.size() == 0) return 1.0;
+	Z3i::RealVector n0 = Statistics::extractEigenVector<Z3i::RealVector>(matrix, 1);
+	Z3i::RealVector n1 = Statistics::extractEigenVector<Z3i::RealVector>(matrix, 2);
+	double firstImportance = computeImportance(vcm,chi,point,n0,pairVectorImportance);
+	double secondImportance = computeImportance(vcm,chi,point,n1,pairVectorImportance, firstImportance);
+	pairVectorImportance = std::make_pair(n1, -n1);
+	return secondImportance;
+	
+}
+
+template <typename VCM, typename KernelFunction>
+double lowestImportanceFullRotation(const VCM& vcm, const KernelFunction& chi, const Z3i::Point& point,
+									std::pair<Z3i::RealVector, Z3i::RealVector>& pairVectorImportance) {
+	Z3i::RealVector n0 = VCMUtil::computeNormalFromVCM(point, vcm, chi, 2);
+	Z3i::RealVector n1 = VCMUtil::computeNormalFromVCM(point, vcm, chi, 1);
+	double firstImportance = computeImportance(vcm,chi,point,n0,pairVectorImportance);
+	double increment = M_PI / 180.;
+	Z3i::RealVector normal = VCMUtil::computeNormalFromVCM(point, vcm, chi, 0);
+	Eigen::AngleAxis<float> angle(increment, Eigen::Vector3f(normal[0], normal[1], normal[2]));
+	Z3i::RealVector rotated = n0;
+	double secondImportance = firstImportance;
+	for (double i = 0; i < 2 * M_PI; i += increment) {
+		rotated = rotateAroundAxis(angle, rotated);
+	    secondImportance = computeImportance(vcm,chi,point,rotated,pairVectorImportance, secondImportance);
+	}
+	return secondImportance;
+}
+
 
 Z3i::RealVector computeOrthogonalProjection(const Z3i::RealVector& vectorToProject,
 											const Z3i::RealVector& dirVector) {
@@ -502,12 +363,59 @@ Z3i::RealVector farthestVectorToReference(const Z3i::RealVector& reference,
 	return farthest;
 }
 
+template <typename DTL2>
+Z3i::Point findMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const Z3i::Point& junctionPoint) {
+	double maxDT = 0.0;
+	Z3i::Point maxDTPoint;
+	for (auto it = set.begin(), ite = set.end(); it != ite; ++it) {
+		Z3i::Point point = *it;
+		if (dt(point) > maxDT) {
+			maxDT = dt(point);
+			maxDTPoint = point;
+		}
+		else if (dt(point) == maxDT) {
+			if (Z3i::l2Metric(junctionPoint, point) < Z3i::l2Metric(junctionPoint, maxDTPoint))
+				maxDTPoint = point;
+		}
+	}
+	return maxDTPoint;
+}
+
+template <typename DTL2>
+Z3i::Point findLocalMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const Z3i::Point& junctionPoint, const Z3i::Point& initialPoint,
+							   const Z3i::RealVector& dirVector) {
+	Z3i::Point maxDTPoint;
+	double distanceToJunctionPoint = numeric_limits<double>::max();
+	Z3i::Object26_6 objSet(Z3i::dt26_6, set);
+	for (auto it = set.begin(), ite = set.end(); it != ite; ++it) {
+		Z3i::Point point = *it;
+		
+		std::vector<Z3i::Point> neighbors;
+		std::back_insert_iterator<std::vector<Z3i::Point>> inserter(neighbors);
+		objSet.writeNeighbors(inserter, point);
+		
+		double distance = dt(point);
+		bool candidate = true;
+		for (auto itN = neighbors.begin(), itNe = neighbors.end(); itN != itNe; ++itN) {
+			if (dt(*itN) >= distance)
+				candidate = false;
+		}
+		if (candidate && Z3i::l2Metric(junctionPoint, point) < distanceToJunctionPoint && VCMUtil::abovePlane(point, dirVector, initialPoint-dirVector*2)
+			) {
+			maxDTPoint = point;
+			distanceToJunctionPoint = Z3i::l2Metric(junctionPoint, point);
+		}
+	}
+	return maxDTPoint;
+}
+
 void newParametersInJunction(Z3i::DigitalSet& plane, Z3i::Point& junctionCenter, Z3i::Point& junctionPoint, Z3i::RealVector& normal, double& junctionRadius,
 							 const Z3i::DigitalSet& planeToAssign, const Z3i::DigitalSet& junctionSet, const Z3i::Point& junctionPointToAssign, const Z3i::RealVector& junctionNormalToAssign, double radiusToAssign) {
-	junctionCenter = Statistics::extractCenterOfMass3D(planeToAssign);
+//	junctionCenter = Statistics::extractCenterOfMass3D(planeToAssign);
     junctionPoint = junctionCenter;
 	int scalar = 1;
-	while (junctionPoint == junctionCenter || junctionSet.find(junctionPoint) != junctionSet.end()) {
+	while (junctionPoint == junctionCenter  || junctionSet.find(junctionPoint) != junctionSet.end()
+		) {
 		junctionPoint = junctionCenter+junctionNormalToAssign*scalar;
 		scalar++;
 	}
@@ -516,75 +424,114 @@ void newParametersInJunction(Z3i::DigitalSet& plane, Z3i::Point& junctionCenter,
 	plane = planeToAssign;
 }
 
-template <typename VCM, typename KernelFunction, typename DTL2, typename Container, typename Domain, typename Viewer3D>
-Z3i::DigitalSet computeSkeletonInJunction(VCM& vcm, KernelFunction& chi, const DTL2& dt, Z3i::DigitalSet& branch,
-										  const Container& setVolumeWeighted, const Domain& domainVolume,
-										  const Z3i::Point& currentPoint, const Z3i::RealVector& normal, Z3i::RealVector& dirVector, double initialRadius,
-										  double importance, double distanceMax, Viewer3D& viewer) {
+template <typename WeightedPointCount>
+Z3i::Point trackPointSetVolumeWeighted(const set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>>& setVolumeWeighted,
+									   const Z3i::Point& initial, const Z3i::RealVector& vector) {
+	Z3i::Point current = initial;
+	int scalar = 1;
+	auto itSetSetVolumeWeighted = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+			return wpc->myPoint == current;
+		});
+	while (itSetSetVolumeWeighted != setVolumeWeighted.end()) {
+		current = initial + vector * scalar;
+		scalar++;
+		itSetSetVolumeWeighted = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+				return wpc->myPoint == current;
+			});
+	}
+	return current;	
+}
 
-	trace.info() << "new" << endl;
-	Z3i::Point junctionPoint = currentPoint;
+template <typename VCM, typename KernelFunction, typename DTL2, typename WeightedPointCount, typename Domain, typename Viewer3D>
+Z3i::DigitalSet computeSkeletonInJunction(VCM& vcm, KernelFunction& chi, const DTL2& dt, Z3i::DigitalSet& branch,
+										  set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>>& setVolumeWeighted, const Domain& domainVolume,
+										  Z3i::Point& currentPoint, Z3i::RealVector& normal, Z3i::RealVector& dirVector, double initialRadius,
+										  double importance, double distanceMax, Viewer3D& viewer) {
+//	trace.info() << currentPoint << endl;
+	Z3i::Point junctionPoint = currentPoint, previousCenter;
 	int i = 0;
-	Z3i::RealVector minusDirVector, initialDirVector = dirVector, junctionNormalPrime = normal, junctionNormal2 = normal;
+	Z3i::RealVector minusDirVector, initialDirVector = dirVector, junctionNormalPrime = normal, previousNormal;
 	double junctionRadius = initialRadius*2;
 	Z3i::DigitalSet skeletonInJunction(domainVolume);
 	double currentImportance = importance;
-	while (// dt(junctionPoint + minusDirVector) >= 1 &&
-		   i < 100) {
-		if (dirVector == Z3i::RealVector())
+	int delta = 2;
+	while (dt.domain().isInside(junctionPoint + minusDirVector) && dt(junctionPoint + minusDirVector) >= 1 &&
+		   i < 30) {
+		if (dirVector == Z3i::RealVector() || junctionRadius == 0)
 			break;
-		// Z3i::Point p1 = junctionPoint;
-		// int scalar = 1;
-		// while (p1 == junctionPoint) {
-		// 	p1 = junctionPoint+dirVector*scalar;
-		// 	scalar++;
-		// }
-		double radius = junctionRadius/2;		
-		junctionPoint += dirVector;
+		double radius = junctionRadius/2;
+//		junctionPoint += dirVector;
+		Z3i::Point pointWithDirVector = trackPointSetVolumeWeighted(setVolumeWeighted, junctionPoint, dirVector);
+		radius = Z3i::l2Metric(pointWithDirVector, junctionPoint)+delta;
 		Z3i::DigitalSet planePrime = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 																   junctionPoint, junctionNormalPrime,
-																   0, radius, junctionRadius, true, dirVector );
-		// radius = initialRadius;
-		// Z3i::DigitalSet plane2 = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
-		// 													   p1, junctionNormal2,
-		// 													   0, radius, junctionRadius, true, dirVector);
-		// if (normal.dot(junctionNormal2) < 0)
-		// 	junctionNormal2 = -junctionNormal2;
+																   0, radius, initialRadius, false, dirVector );
+
 		if (normal.dot(junctionNormalPrime) < 0)
 			junctionNormalPrime = -junctionNormalPrime;
 		Z3i::Point junctionCenter;
 		Z3i::DigitalSet plane(planePrime.domain());
-		// if (junctionNormal2.dot(junctionNormalPrime) < junctionNormalPrime.dot(normal))
-		// 	newParametersInJunction(plane, junctionCenter, junctionPoint, normal, junctionRadius, plane2, junctionPoint, junctionNormal2, radius); 
-		//  else
-		branch.insert(planePrime.begin(), planePrime.end());
 
-		newParametersInJunction(plane, junctionCenter, junctionPoint, junctionNormalPrime, junctionRadius, planePrime, branch, junctionPoint, junctionNormalPrime, radius); 
-		std::vector<Z3i::RealVector> displayPlane = SliceUtils::computePlaneFromNormalVector(junctionNormalPrime, junctionCenter);
-		viewer.addQuad(junctionCenter+(displayPlane[0]-junctionCenter)*20,
-					   junctionCenter+(displayPlane[1]-junctionCenter)*20,
-					   junctionCenter+(displayPlane[2]-junctionCenter)*20,
-					   junctionCenter+(displayPlane[3]-junctionCenter)*20)
+		std::pair<Z3i::RealVector, Z3i::RealVector> pairImportance;
+		currentImportance = lowestImportance(planePrime, vcm, chi, junctionPoint, pairImportance);
+		Z3i::RealVector previousDirVector = dirVector * radius;		
+		dirVector = closestVectorToReference(dirVector, {pairImportance.first, pairImportance.second});
+		
+		junctionCenter = findLocalMaxDTInSet(planePrime, dt, junctionPoint, junctionPoint, dirVector);
+		if (junctionCenter == Z3i::Point())
+		 	junctionCenter = findMaxDTInSet(planePrime, dt, junctionPoint);
+		Z3i::Point startCuttingPlane = junctionCenter - dirVector * radius;
+		Z3i::DigitalSet setToMark(plane.domain());
+		for (auto it = planePrime.begin(), ite = planePrime.end(); it != ite; ++it) {
+			if (VCMUtil::abovePlane(*it, dirVector, startCuttingPlane))
+				setToMark.insert(*it);
+				
+		}
+
+
+		if (currentPoint == Z3i::Point(0, 3, 29)) {
+			trace.info() << junctionPoint << " " << junctionCenter << " " << dirVector << " " << junctionNormalPrime << " " << radius << " " <<junctionRadius << endl;
+			viewer.addLine(junctionPoint, junctionPoint+dirVector*radius);
+		}
+		
+		newParametersInJunction(plane, junctionCenter, junctionPoint, junctionNormalPrime, junctionRadius, planePrime, branch, junctionPoint, junctionNormalPrime, initialRadius);
+
+		Z3i::DigitalSet difference(domainVolume);
+		if(previousNormal!= Z3i::RealVector())
+			difference= VCMUtil::markDifferenceBetweenPlanes(setVolumeWeighted, previousNormal, previousCenter, junctionNormalPrime, junctionCenter, domainVolume, junctionRadius);
+		
+		branch.insert(planePrime.begin(), planePrime.end());
+		branch.insert(difference.begin(), difference.end());
+		
+		previousNormal = junctionNormalPrime;
+		previousCenter = junctionCenter;
+
+		// std::vector<Z3i::RealVector> displayPlane = SliceUtils::computePlaneFromNormalVector(junctionNormalPrime, junctionCenter);
+		//  viewer.addQuad(junctionCenter+(displayPlane[0]-junctionCenter)*20,
+		// 			   junctionCenter+(displayPlane[1]-junctionCenter)*20,
+		// 			   junctionCenter+(displayPlane[2]-junctionCenter)*20,
+		// 			   junctionCenter+(displayPlane[3]-junctionCenter)*20);
 //		viewer << plane;
 
 //		radius++;
-		// vcm.setMySmallR(radius);
-		// chi = KernelFunction(1.0, radius);
-		std::pair<Z3i::RealVector, Z3i::RealVector> pairImportance, pairDirVectorImportance;
-		currentImportance = computeImportance(vcm, chi, junctionPoint, pairImportance);		
-		double dirVectorImportance = computeImportance(vcm, chi, junctionPoint+dirVector, pairDirVectorImportance);
-		Z3i::RealVector previousDirVector = dirVector * radius;		
-		dirVector = farthestVectorToReference(dirVector, {pairImportance.first, pairImportance.second,
-					pairDirVectorImportance.first, pairDirVectorImportance.second});
-		Z3i::RealVector newOrthogonal = computeOrthogonalProjection(previousDirVector, dirVector);
-		junctionRadius = newOrthogonal.norm();
-		trace.info() << previousDirVector.norm() << " " << junctionRadius << endl;
-		minusDirVector = -dirVector * radius;
-		viewer.addLine(junctionCenter, junctionCenter+dirVector*10);
-		skeletonInJunction.insert(junctionCenter);
-		i++;
 
+
+
+		minusDirVector = -dirVector * (radius-delta);
+		// if (find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+		//  			return wpc->myPoint == junctionCenter && wpc->myProcessed;
+		//  		}) == setVolumeWeighted.end() && junctionCenter != Z3i::Point())
+
+		if (find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+		  			return wpc->myPoint == junctionCenter;
+				}) != setVolumeWeighted.end())
+			skeletonInJunction.insert(junctionCenter);
+		i++;
 	}
+	if (currentPoint == Z3i::Point(0, 3, 29))
+		trace.info() << endl << endl;
+	currentPoint = junctionPoint;
+	normal = junctionNormalPrime;
 	return skeletonInJunction;
 }
 										 
@@ -739,7 +686,7 @@ int main( int  argc, char**  argv )
 
 	
 // 	vector<double> curvaturePoints = extractCurvatureOnPoints(*vcm_surface);
-// 	double threshold = otsuThreshold(curvaturePoints);
+// 	double threshold = Statistics::otsuThreshold(curvaturePoints);
 // 	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, threshold);
 // 	trace.info() << threshold << endl;
 // 	NotPointPredicate notBranching(branchingPoints);
@@ -844,7 +791,7 @@ int main( int  argc, char**  argv )
     
 	trace.beginBlock("Computing skeleton");
 	//Main loop to compute skeleton (stop when no vol points left to process)
-	while (numberLeft > 0.4 * setVolume.size())
+	while (numberLeft > 0)
 	{
 		trace.progressBar((setVolumeWeighted.size() - numberLeft), setVolumeWeighted.size());		
 		currentPoint->myProcessed = true;
@@ -870,14 +817,16 @@ int main( int  argc, char**  argv )
 															 currentPoint->myPoint, normal,
 															 0, radius, distanceMax, true);
 
+
 		if (previousNormal.dot(normal) < 0) {
 			normal = -normal;
 		}
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-		
-		double radiusIntersection = computeRadiusFromIntersection3D<MatrixXd>(connectedComponent3D);		
+		double radiusIntersection = computeRadiusFromIntersection3D<MatrixXd>(connectedComponent3D);
+		bool trackedJunction = false;
 //		double radiusJunction = radiusForJunction(branchingPoints, *vcm_surface, realCenter, radiusIntersection);
 		//Center of mass computation
+//	    viewer << currentPoint->myPoint;
 		if (realCenter != Z3i::RealPoint()) {
 			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 			// Z3i::DigitalSet shell = computeShell(currentPoint->myPoint, setVolume, radiusIntersection*3, radiusIntersection*5);
@@ -895,54 +844,78 @@ int main( int  argc, char**  argv )
 			}
 
 			
-
-
 			if (label != 1 && !processed && degree > 1 && Z3i::l2Metric(currentPoint->myPoint, centerOfMass) <= sqrt(3)) {			   
 				// Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, setVolume, realCenter, radiusIntersection);
 				// branches.insert(branch.begin(), branch.end());				
 				std::pair<Z3i::RealVector, Z3i::RealVector> pairImportance;
-				double dotproduct = computeImportance(vcm, chi, currentPoint->myPoint, pairImportance);
+				double dotproduct = lowestImportance(connectedComponent3D, vcm, chi, currentPoint->myPoint, pairImportance);
 				Color color = hueColorMap(dotproduct);
 				viewer << CustomColors3D(color, color);
 				Z3i::DigitalSet skeletonJunction(domainVolume);
-				if (dotproduct > 0.6 && dotproduct < 0.9) {
+				Z3i::RealVector n0 = pairImportance.first;
+				Z3i::RealVector n1 = pairImportance.second;  			   
+				if (dotproduct < 0.89) {
+					Z3i::DigitalSet branch(domainVolume);					
 					Z3i::DigitalSet junctionSet(domainVolume);
-					Z3i::RealVector n0 = pairImportance.first;
+
 //					viewer.addLine(currentPoint->myPoint, currentPoint->myPoint+(n0)*10); 
-					//  skeletonJunction = computeSkeletonInJunction(vcm, chi, dt, junctionSet, setVolumeWeighted, domainVolume,
-					//  															 currentPoint->myPoint, normal, n0, dt(currentPoint->myPoint),
-				    // 															 dotproduct, numeric_limits<double>::max(), viewer);
-					// viewer << skeletonJunction;
-					// vcm.setMySmallR(radius);
-					// chi = KernelFunction(1.0, radius);
-					Z3i::RealVector n1 = pairImportance.second;
-//					viewer.addLine(currentPoint->myPoint, currentPoint->myPoint+(n1)*10);
+					
+					Point junctionPoint = currentPoint->myPoint;
+					Z3i::RealVector junctionNormal = normal;
+//					viewer.addLine(currentPoint->myPoint, currentPoint->myPoint+(n0)*10); 
 					skeletonJunction = computeSkeletonInJunction(vcm, chi, dt, junctionSet, setVolumeWeighted, domainVolume,
-																 currentPoint->myPoint, normal, n1, dt(currentPoint->myPoint),
+																 junctionPoint, junctionNormal, n0, dt(junctionPoint),
 																 dotproduct, numeric_limits<double>::max(), viewer);
-					VCMUtil::markConnectedComponent3D(setVolumeWeighted, junctionSet, 0);
-					viewer << skeletonJunction;
-				} else {
-					   
-					VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
-				//VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 1);
+					branch.insert(junctionSet.begin(), junctionSet.end());					
+					viewer << CustomColors3D(Color::Blue, Color::Blue) << skeletonJunction;
+
+					
+					vcm.setMySmallR(radius);
+					chi = KernelFunction(1.0, radius);
+//					viewer.addLine(currentPoint->myPoint, currentPoint->myPoint+(n1)*10);
+					junctionPoint = currentPoint->myPoint;
+					junctionNormal = normal;
+					junctionSet = Z3i::DigitalSet(domainVolume);
+					Z3i::DigitalSet otherSkeletonJunction = computeSkeletonInJunction(vcm, chi, dt, junctionSet, setVolumeWeighted, domainVolume,
+																					  junctionPoint, junctionNormal, n1, dt(junctionPoint),
+																					  dotproduct, numeric_limits<double>::max(), viewer);
+					branch.insert(junctionSet.begin(), junctionSet.end());
+					viewer << otherSkeletonJunction;
+
+					// for (auto it = branch.begin(), ite = branch.end(); it != ite; ++it) {
+					// 	if (skeletonPoints.find(*it) != skeletonPoints.end())
+					// 		skeletonPoints.erase(*it);
+					// }
+					
+					skeletonPoints.insert(otherSkeletonJunction.begin(), otherSkeletonJunction.end());
+					skeletonPoints.insert(skeletonJunction.begin(), skeletonJunction.end());
+					VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, branch, junctionPoint, junctionNormal);
+					VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 0);
+					trackedJunction = true;
+				} else {					   
+					
 				
-				// Branching detection	
-				previousNormal = normal;
-				previousCenter = centerOfMass;
-				skeletonPoints.insert(centerOfMass);
-				viewer << CustomColors3D(color, color) << centerOfMass;				
-				viewer << Viewer3D<>::updateDisplay;
-			    qApp->processEvents();
+					// Branching detection	
+					previousNormal = normal;
+					previousCenter = centerOfMass;
+					skeletonPoints.insert(centerOfMass);
+					viewer << CustomColors3D(color, color) << centerOfMass;				
+					viewer << Viewer3D<>::updateDisplay;
+					qApp->processEvents();
+
 				}
 			}			
 		}					
 		//Go to next point according to normal OR to max value in DT
-		VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
+		if (!trackedJunction) {
+			VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
+			VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
+		}
 		numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
 							  [&](WeightedPointCount* wpc) {
 								  return (!wpc->myProcessed);
 							  });
+
   		i++;
 	}
 	trace.endBlock();

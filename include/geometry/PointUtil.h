@@ -222,8 +222,11 @@ std::vector<Point> PointUtil::bezierCurve(const Point& source,
 template <typename Point, typename Container, typename Vector>
 Point PointUtil::trackPoint(const Point& initial, const Container& container, const Vector& vector) {
 	Point point(initial);
-	while (container.find(point) != container.end())
-		point += vector;
+	int scalar = 1;
+	while (container.find(point) != container.end()) {
+		point = initial + vector*scalar; 
+		scalar++;
+	}
 	return point;
 }
 
