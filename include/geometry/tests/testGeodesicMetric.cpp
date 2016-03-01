@@ -25,7 +25,7 @@ void testGeodesicMetric(int argc, char** argv) {
 	typedef functors::NotPointPredicate<Z3i::DigitalSet> NotPointPredicate;
 	typedef GeodesicMetric<Z3i::Space, Graph> GeodesicMetric;
 	typedef Z3i::L2Metric Metric;
-	typedef VoronoiMap<Z3i::Space, NotPointPredicate, Metric> VoronoiMap;
+	typedef VoronoiMap<Z3i::Space, NotPointPredicate, GeodesicMetric> VoronoiMap;
 	Image image = GenericReader<Image>::import("/home/florent/test_img/bronche2.vol");
 	Z3i::Domain domainVolume = image.domain();
 	Z3i::DigitalSet setVolume(domainVolume);
@@ -40,8 +40,8 @@ void testGeodesicMetric(int argc, char** argv) {
 	NotPointPredicate notPredicate(aSet);
 	Metric l2;
 	GeodesicMetric geoMetric(graphSurface);
-//	VoronoiMap vMap(domainVolume, notPredicate, geoMetric);
-	VoronoiMap vMap(domainVolume, notPredicate, l2);
+	VoronoiMap vMap(domainVolume, notPredicate, geoMetric);
+//	VoronoiMap vMap(domainVolume, notPredicate, l2);
 	QApplication app(argc, argv);
 	Viewer3D<> viewer;
 	viewer.show();

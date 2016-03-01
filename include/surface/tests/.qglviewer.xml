@@ -2,18 +2,18 @@
 <QGLViewer version="2.5.0">
   <State stereo="false" cameraMode="revolve">
     <foregroundColor red="180" blue="180" green="180"/>
-    <backgroundColor red="51" blue="51" green="51"/>
+    <backgroundColor red="217" blue="255" green="228"/>
   </State>
   <Display axisIsDrawn="false" gridIsDrawn="false" FPSIsDisplayed="false" cameraIsEdited="false"/>
-  <Geometry fullScreen="false" width="600" posX="110" height="400" posY="14"/>
+  <Geometry fullScreen="false" width="800" posX="1110" height="600" posY="14"/>
   <Camera>
     <Parameters fieldOfView="0.785398" sceneRadius="28.2887" Type="PERSPECTIVE" zNearCoefficient="0.005" orthoCoef="0.0494539" zClippingCoefficient="1.73205">
       <SceneCenter x="0" y="0" z="24.5"/>
     </Parameters>
     <Stereo focusDistance="68.2949" physScreenWidth="0.5" IODist="0.062"/>
     <ManipulatedCameraFrame>
-      <position x="20.7616" y="-14.626" z="-44.9225"/>
-      <orientation q0="-0.412518" q1="-0.894089" q2="0.0314798" q3="-0.171588"/>
+      <position x="28.8611" y="-51.099" z="-20.4486"/>
+      <orientation q0="0.733492" q1="0.515769" q2="-0.0436268" q3="0.440533"/>
       <ManipulatedParameters transSens="1" rotSens="1" wheelSens="1" spinSens="0.3"/>
       <ManipulatedCameraParameters flySpeed="0.282887">
         <flyUpVector x="0" y="1" z="0"/>

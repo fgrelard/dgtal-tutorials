@@ -199,7 +199,7 @@ CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
 DGtal_DIR:PATH=/usr/local/share/DGtal/CMake
 
 //The directory containing a CMake configuration file for ITK.
-ITK_DIR:PATH=/usr/local/lib/cmake/ITK-4.6
+ITK_DIR:PATH=/usr/local/lib/cmake/ITK-4.10
 
 //Path to a library.
 QT_ARTHURPLUGIN_PLUGIN_DEBUG:FILEPATH=QT_ARTHURPLUGIN_PLUGIN_DEBUG-NOTFOUND
@@ -348,14 +348,20 @@ QT_QKRCODECS_PLUGIN_DEBUG:FILEPATH=QT_QKRCODECS_PLUGIN_DEBUG-NOTFOUND
 //Path to a library.
 QT_QKRCODECS_PLUGIN_RELEASE:FILEPATH=/usr/lib/x86_64-linux-gnu/qt4/plugins/codecs/libqkrcodecs.so
 
-//The qmake executable for the Qt installation to use
-QT_QMAKE_EXECUTABLE:FILEPATH=/usr/bin/qmake
+//Where can the qmake-qt4 library be found
+QT_QMAKE_EXECUTABLE:FILEPATH=/usr/bin/qmake-qt4
 
 //Path to a library.
 QT_QMNG_PLUGIN_DEBUG:FILEPATH=QT_QMNG_PLUGIN_DEBUG-NOTFOUND
 
 //Path to a library.
 QT_QMNG_PLUGIN_RELEASE:FILEPATH=/usr/lib/x86_64-linux-gnu/qt4/plugins/imageformats/libqmng.so
+
+//Path to a library.
+QT_QNATIVEWIFIBEARER_PLUGIN_DEBUG:FILEPATH=QT_QNATIVEWIFIBEARER_PLUGIN_DEBUG-NOTFOUND
+
+//Path to a library.
+QT_QNATIVEWIFIBEARER_PLUGIN_RELEASE:FILEPATH=QT_QNATIVEWIFIBEARER_PLUGIN_RELEASE-NOTFOUND
 
 //Path to a library.
 QT_QSQLDB2_PLUGIN_DEBUG:FILEPATH=QT_QSQLDB2_PLUGIN_DEBUG-NOTFOUND
@@ -545,6 +551,12 @@ QT_QTDESIGNER_LIBRARY_DEBUG:FILEPATH=QT_QTDESIGNER_LIBRARY_DEBUG-NOTFOUND
 
 //Path to a library.
 QT_QTDESIGNER_LIBRARY_RELEASE:FILEPATH=/usr/lib/x86_64-linux-gnu/libQtDesigner.so
+
+//Path to a library.
+QT_QTGA_PLUGIN_DEBUG:FILEPATH=QT_QTGA_PLUGIN_DEBUG-NOTFOUND
+
+//Path to a library.
+QT_QTGA_PLUGIN_RELEASE:FILEPATH=/usr/lib/x86_64-linux-gnu/qt4/plugins/imageformats/libqtga.so
 
 //Path to a file.
 QT_QTGUI_INCLUDE_DIR:PATH=/usr/include/qt4/QtGui
@@ -830,11 +842,11 @@ CMAKE_BUILD_TYPE-MODIFIED:INTERNAL=ON
 //This is the directory where this CMakeCache.txt was created
 CMAKE_CACHEFILE_DIR:INTERNAL=/home/florent/Documents/DGtal/tutorials-copy/include/surface/tests
 //Major version of cmake used to create the current loaded cache
-CMAKE_CACHE_MAJOR_VERSION:INTERNAL=2
+CMAKE_CACHE_MAJOR_VERSION:INTERNAL=3
 //Minor version of cmake used to create the current loaded cache
-CMAKE_CACHE_MINOR_VERSION:INTERNAL=8
+CMAKE_CACHE_MINOR_VERSION:INTERNAL=2
 //Patch version of cmake used to create the current loaded cache
-CMAKE_CACHE_PATCH_VERSION:INTERNAL=12
+CMAKE_CACHE_PATCH_VERSION:INTERNAL=2
 //ADVANCED property for variable: CMAKE_COLOR_MAKEFILE
 CMAKE_COLOR_MAKEFILE-ADVANCED:INTERNAL=1
 //Path to CMake executable.
@@ -885,6 +897,8 @@ CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 CMAKE_EXPORT_COMPILE_COMMANDS-ADVANCED:INTERNAL=1
 //Name of generator.
 CMAKE_GENERATOR:INTERNAL=Unix Makefiles
+//Name of generator platform.
+CMAKE_GENERATOR_PLATFORM:INTERNAL=
 //Name of generator toolset.
 CMAKE_GENERATOR_TOOLSET:INTERNAL=
 //Start directory with the top level CMakeLists.txt file for this
@@ -917,7 +931,7 @@ CMAKE_OBJDUMP-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_RANLIB
 CMAKE_RANLIB-ADVANCED:INTERNAL=1
 //Path to CMake installation.
-CMAKE_ROOT:INTERNAL=/usr/share/cmake-2.8
+CMAKE_ROOT:INTERNAL=/usr/share/cmake-3.2
 //ADVANCED property for variable: CMAKE_SHARED_LINKER_FLAGS
 CMAKE_SHARED_LINKER_FLAGS-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_SHARED_LINKER_FLAGS_DEBUG
@@ -951,7 +965,7 @@ CMAKE_USE_RELATIVE_PATHS-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_VERBOSE_MAKEFILE
 CMAKE_VERBOSE_MAKEFILE-ADVANCED:INTERNAL=1
 //Details about finding Qt4
-FIND_PACKAGE_MESSAGE_DETAILS_Qt4:INTERNAL=[/usr/bin/qmake][/usr/lib/x86_64-linux-gnu/qt4/bin/moc][/usr/lib/x86_64-linux-gnu/qt4/bin/rcc][/usr/include/qt4][/usr/lib/x86_64-linux-gnu][/usr/include/qt4/QtCore][/usr/lib/x86_64-linux-gnu/libQtCore.so][/usr/include/qt4/QtGui][/usr/lib/x86_64-linux-gnu/libQtGui.so][/usr/include/qt4/QtXml][/usr/lib/x86_64-linux-gnu/libQtXml.so][/usr/include/qt4/QtOpenGL][/usr/lib/x86_64-linux-gnu/libQtOpenGL.so][v4.8.6()]
+FIND_PACKAGE_MESSAGE_DETAILS_Qt4:INTERNAL=[/usr/bin/qmake-qt4][/usr/lib/x86_64-linux-gnu/qt4/bin/moc][/usr/lib/x86_64-linux-gnu/qt4/bin/rcc][/usr/include/qt4][/usr/lib/x86_64-linux-gnu][/usr/include/qt4/QtCore][/usr/lib/x86_64-linux-gnu/libQtCore.so][/usr/include/qt4/QtGui][/usr/lib/x86_64-linux-gnu/libQtGui.so][/usr/include/qt4/QtXml][/usr/lib/x86_64-linux-gnu/libQtXml.so][/usr/include/qt4/QtOpenGL][/usr/lib/x86_64-linux-gnu/libQtOpenGL.so][v4.8.6()]
 //ADVANCED property for variable: QT_ARTHURPLUGIN_PLUGIN_DEBUG
 QT_ARTHURPLUGIN_PLUGIN_DEBUG-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: QT_ARTHURPLUGIN_PLUGIN_RELEASE
@@ -974,6 +988,8 @@ QT_DESIGNER_EXECUTABLE-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: QT_DOC_DIR
 QT_DOC_DIR-ADVANCED:INTERNAL=1
 QT_HEADERS_DIR:INTERNAL=/usr/include/qt4
+//ADVANCED property for variable: QT_LIBRARY_DIR
+QT_LIBRARY_DIR-ADVANCED:INTERNAL=1
 //Qt library dir
 QT_LIBRARY_DIR:INTERNAL=/usr/lib/x86_64-linux-gnu
 //ADVANCED property for variable: QT_LINGUIST_EXECUTABLE
@@ -1054,10 +1070,15 @@ QT_QJPEG_PLUGIN_RELEASE-ADVANCED:INTERNAL=1
 QT_QKRCODECS_PLUGIN_DEBUG-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: QT_QKRCODECS_PLUGIN_RELEASE
 QT_QKRCODECS_PLUGIN_RELEASE-ADVANCED:INTERNAL=1
+QT_QMAKE_EXECUTABLE_LAST:INTERNAL=/usr/bin/qmake-qt4
 //ADVANCED property for variable: QT_QMNG_PLUGIN_DEBUG
 QT_QMNG_PLUGIN_DEBUG-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: QT_QMNG_PLUGIN_RELEASE
 QT_QMNG_PLUGIN_RELEASE-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: QT_QNATIVEWIFIBEARER_PLUGIN_DEBUG
+QT_QNATIVEWIFIBEARER_PLUGIN_DEBUG-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: QT_QNATIVEWIFIBEARER_PLUGIN_RELEASE
+QT_QNATIVEWIFIBEARER_PLUGIN_RELEASE-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: QT_QSQLDB2_PLUGIN_DEBUG
 QT_QSQLDB2_PLUGIN_DEBUG-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: QT_QSQLDB2_PLUGIN_RELEASE
@@ -1184,6 +1205,10 @@ QT_QTDESIGNER_LIBRARY-ADVANCED:INTERNAL=1
 QT_QTDESIGNER_LIBRARY_DEBUG-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: QT_QTDESIGNER_LIBRARY_RELEASE
 QT_QTDESIGNER_LIBRARY_RELEASE-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: QT_QTGA_PLUGIN_DEBUG
+QT_QTGA_PLUGIN_DEBUG-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: QT_QTGA_PLUGIN_RELEASE
+QT_QTGA_PLUGIN_RELEASE-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: QT_QTGUI_INCLUDE_DIR
 QT_QTGUI_INCLUDE_DIR-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: QT_QTGUI_LIBRARY

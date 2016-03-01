@@ -34,7 +34,7 @@
 #include "DGtal/geometry/surfaces/estimation/LocalEstimatorFromSurfelFunctorAdapter.h"
 #include "DGtal/geometry/surfaces/estimation/estimationFunctors/ElementaryConvolutionNormalVectorEstimator.h"
 #include "MedialAxis.h"
-//#include "geometry/VCMUtil.h"
+#include "geometry/VCMUtil.h"
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -106,9 +106,11 @@ VoronoiCovarianceMeasureOnDigitalSurface( ConstAlias< Surface > _surface,
 		Point closestPointToCurrent = *min_element(dtPoints.begin(), dtPoints.end(), [&](const Point& one, const Point& two) {
 				return DGtal::Z3i::l2Metric(one, *it) < DGtal::Z3i::l2Metric(two, *it);
 			});
-//		std::vector<DGtal::Z3i::RealPoint> normalsToPoint{DGtal::Z3i::RealPoint(0,0,1), DGtal::Z3i::RealPoint(0,1,0), DGtal::Z3i::RealPoint(1,0,0)};
+		std::vector<DGtal::Z3i::RealPoint> normalsToPoint{DGtal::Z3i::RealPoint(0,0,1), DGtal::Z3i::RealPoint(0,1,0), DGtal::Z3i::RealPoint(1,0,0)};
 //		double radius = VCMUtil::radiusForVCMSurface(setSurface, *it, normalsToPoint);
+//		trace.info() << radius << " ";
 		double radius = myDT(closestPointToCurrent) + delta;
+//		trace.info() << radius << std::endl;
 		myChi = KernelFunction( 1.0, radius);
 		myVCM.setMySmallR(radius);
 

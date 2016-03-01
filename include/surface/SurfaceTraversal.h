@@ -91,7 +91,7 @@ std::vector<Point> SurfaceTraversal::shortestPath(Visitor& visitor, const Point&
 			auto itMapExisting = aMapPrevious.find(*it);
 			if (itMapExisting == aMapPrevious.end()) {
 				aMapPrevious[*it] = node.first;
-			}
+			} 
 		}
 		visitor.expand();
 	}
@@ -124,6 +124,7 @@ std::vector<Point> SurfaceTraversal::shortestPath(Visitor& visitor, const Point&
 	}
 	return thePath; //path not found = empty vector
 }
+
 
 template <typename Point>
 std::vector<Point> SurfaceTraversal::reconstructPath(const std::map<Point, Point>& aMapPrevious, const Point& source, const Point& goal) {

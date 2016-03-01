@@ -10,6 +10,12 @@
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 #include "geometry/WeightedPointCount.h"
 #include "geometry/PointUtil.h"
+#include "PointUtil.h"
+#include "Statistics.h"
+#include "DSSUtil.h"
+
+#include "DGtal/geometry/curves/StandardDSS6Computer.h"
+#include "DGtal/geometry/curves/SaturatedSegmentation.h"
 #include <limits>
 
 #include <set>
@@ -26,6 +32,7 @@ namespace VCMUtil {
 	bool planeContains(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current);
 	bool abovePlane(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current);
 
+	double radiusForVCMSurface(const DGtal::Z3i::DigitalSet& setSurface, const DGtal::Z3i::Point& point, const std::vector<DGtal::Z3i::RealPoint>& normals);
 	
 	template <typename Domain, typename WeightedPoint>
 	void extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, const Domain & domain, const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint> >& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double& distanceMax);
@@ -146,12 +153,50 @@ bool VCMUtil::planeContains(const DGtal::Z3i::Point& point, const DGtal::Z3i::Re
 }
 
 bool VCMUtil::abovePlane(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current) {
-	double d = -(-normal[0] * current[0] - normal[1] * current[1] - normal[2] * current[2]);
+	double d = normal[0] * current[0] + normal[1] * current[1] + normal[2] * current[2];
 	//Naive plane (26 connexity)
 	double valueToCheckForPlane = point[0] * normal[0] + point[1] * normal[1] + point[2] * normal[2];
 	if (valueToCheckForPlane >= d)
 		return true;
 	return false;
+}
+
+
+double VCMUtil::radiusForVCMSurface(const DGtal::Z3i::DigitalSet& setSurface, const DGtal::Z3i::Point& point, const std::vector<DGtal::Z3i::RealPoint>& normals) {
+	typedef std::vector<DGtal::Z3i::Point> Container;
+	typedef Container::iterator Iterator;
+	typedef DGtal::StandardDSS6Computer<Iterator,int,8> SegmentComputer;  
+	typedef DGtal::SaturatedSegmentation<SegmentComputer> Segmentation;
+	typedef DGtal::ImageSelector<DGtal::Z3i::Domain, unsigned char>::Type Image;
+	
+	double radiusVCM = std::numeric_limits<double>::max();
+	std::vector<double> lengths;
+	for (auto it = normals.begin(), ite = normals.end(); it != ite; ++it) {
+		DGtal::Z3i::RealPoint normal = *it;
+		double d = -(-normal[0] * point[0] - normal[1] * point[1] - normal[2] * point[2]);
+		//Naive plane (26 connexity)
+		double omega = std::max(abs(normal[0]), std::max(abs(normal[1]), abs(normal[2])));
+		
+		DGtal::Z3i::DigitalSet slice_i = extractConnectedComponent3D(setSurface.domain(), setSurface, normal, point, d, omega, 20);
+		// if (slice_i.size() > 0) {
+		// Image image = DGtal::ImageFromSet<Image>::create(slice_i, 1);
+		// std::string outputFile  = "/home/florent/test_img/slices/trash/" + std::to_string(point[0])
+		// 	+ std::to_string(point[1]) + std::to_string(point[2]) + std::to_string(normal[0]) + std::to_string(normal[0]) + std::to_string(normal[0]) +".vol";
+		// DGtal::VolWriter<Image>::exportVol(outputFile, image);
+		// }
+		Container vSlice_i = PointUtil::containerFromDepthTraversal<Container>(slice_i, point);
+		SegmentComputer algo;
+		Iterator i = vSlice_i.begin(), end = vSlice_i.end();
+		Segmentation s(i, end, algo);
+		s.setMode("MostCentered++");
+		std::vector<SegmentComputer> vDSS= DSSUtil::computeDSSPassingThrough(point, s);
+		std::vector<double> lengthsDSS = DSSUtil::extractLengths(vDSS);
+		double meanLength = Statistics::mean(lengthsDSS);
+		if (meanLength < radiusVCM) {
+		    radiusVCM = meanLength;
+		}		
+	}
+	return radiusVCM;
 }
 
 template <typename Domain, typename WeightedPoint>
