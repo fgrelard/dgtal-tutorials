@@ -517,6 +517,45 @@ Z3i::DigitalSet connectDisconnectedComponents(const Z3i::Object26_6& volume, con
 	return lineSet;
 }
 
+
+template <typename Viewer>
+void fillHoles(Z3i::DigitalSet& skeletonPoints, Viewer& viewer) {
+	Z3i::Object26_6 objectImage(Z3i::dt26_6, skeletonPoints);
+	vector<Z3i::Object26_6> skeletonCC;
+	back_insert_iterator< std::vector<Z3i::Object26_6> > inserterCC( skeletonCC );
+	objectImage.writeComponents(inserterCC);
+	for (size_t i = 0; i < skeletonCC.size(); i++) {
+		Z3i::DigitalSet currentCC = skeletonCC[i].pointSet();
+		for (size_t j = i+1; j < skeletonCC.size(); j++) {
+			Z3i::DigitalSet otherCC = skeletonCC[j].pointSet();
+			double distance = numeric_limits<double>::max();
+			Z3i::Point currentLink, otherLink;
+			for (auto itCurrent = currentCC.begin(), itCurrentE = currentCC.end();
+				 itCurrent != itCurrentE; ++itCurrent) {
+				Z3i::Point current = *itCurrent;
+				for (auto itOther = otherCC.begin(), itOtherE = otherCC.end(); itOther != itOtherE;
+					 ++itOther) {
+					Z3i::Point other = *itOther;
+					double currentDistance = Z3i::l2Metric(current, other);
+					if (currentDistance > sqrt(3) &&
+						currentDistance <= 2* sqrt(3) &&
+						currentDistance < distance) {
+						distance = currentDistance;
+						currentLink = current;
+						otherLink = other;
+					}				  
+				}
+			}
+			vector<Z3i::Point> link = PointUtil::linkTwoPoints(currentLink, otherLink);
+			for (auto itL = link.begin(), itLe = link.end(); itL != itLe; ++itL) {
+				viewer << CustomColors3D(Color::Yellow, Color::Yellow) << *itL;
+				skeletonPoints.insert(*itL);
+			}					   
+		}
+	}
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
 {
@@ -657,7 +696,7 @@ int main( int  argc, char**  argv )
 	double threshold = otsuThreshold(curvaturePoints);
 	double threshold2 = unimodalThresholding(curvaturePoints);
 	trace.info() << threshold << " " << threshold2 << endl;
-	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, threshold);
+	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, threshold2);
 	trace.info() << threshold << endl;
 	NotPointPredicate notBranching(branchingPoints);
 	Z3i::Object26_6 obj(Z3i::dt26_6, branchingPoints);
@@ -715,15 +754,15 @@ int main( int  argc, char**  argv )
 	int numberLeft = setVolumeWeighted.size();
 	
 	Z3i::RealPoint normal(0,0,1);
-	Z3i::RealPoint previousNormal=normal;
+	Z3i::RealPoint previousNormal=normal, seedNormal = normal;
 
-	Z3i::DigitalSet connectedComponent3D(domainVolume);
+	Z3i::DigitalSet connectedComponent3D(domainVolume), seedConnectedComponent3D(domainVolume);
 	Z3i::DigitalSet branchingParts(domainVolume);
 	Z3i::RealPoint realCenter;
 	Z3i::Point centerOfMass;
-	Z3i::Point previousCenter;
+	Z3i::Point previousCenter, seedCenter;
 	Z3i::DigitalSet branches(setVolume.domain());
-
+	bool isNewSeed = true;
 	
 	trace.beginBlock("Computing skeleton");
 	//Main loop to compute skeleton (stop when no vol points left to process)
@@ -777,26 +816,40 @@ int main( int  argc, char**  argv )
 			
 			VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
 			if (label != 1  && !processed
-				&& degree > 1 && Z3i::l2Metric(currentPoint->myPoint, centerOfMass) <= sqrt(3)) {			   
+				&& degree > 1 && Z3i::l2Metric(currentPoint->myPoint, centerOfMass) <= sqrt(3)) {
+				
 				//detectBranchingPointsInNeighborhood(junctionPointToRadius, maxCurvaturePoints, *vcm_surface, 
 				//								    normal, centerOfMass, radius);
-				Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, setVolume, realCenter, radius-1);
+				Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(branchingPoints, setVolume, realCenter, radiusIntersection);
 				branches.insert(branch.begin(), branch.end());
 				
-				VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 1);
+				//VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 1);
 				
-				// Branching detection				
+				// Branching detection
 				skeletonPoints.insert(centerOfMass);
 				previousNormal = normal;
 				previousCenter = centerOfMass;
 				viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
 				viewer << Viewer3D<>::updateDisplay;
-			    qApp->processEvents();
+				qApp->processEvents();
+				
 			}
 		}
 		
 		//Go to next point according to normal OR to max value in DT
-		VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
+		if (isNewSeed) {
+			seedNormal = normal;
+			seedCenter = centerOfMass;
+			seedConnectedComponent3D = connectedComponent3D;
+		}
+		isNewSeed = VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);		
+		if (isNewSeed) {
+			WeightedPointCount* otherPoint = new WeightedPointCount(*currentPoint);
+			isNewSeed = VCMUtil::trackNextPoint(otherPoint, setVolumeWeighted, seedConnectedComponent3D, seedCenter, seedNormal);
+			if (!isNewSeed) {
+				currentPoint = otherPoint;
+			} 
+		}
 		numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
 							  [&](WeightedPointCount* wpc) {
 								  return (!wpc->myProcessed);
@@ -811,7 +864,9 @@ int main( int  argc, char**  argv )
 	 	auto itToErase = skeletonPoints.find(*it);
 	 	if (itToErase != skeletonPoints.end())
 	 		skeletonPoints.erase(itToErase);
-	} 
+	}
+
+	fillHoles(skeletonPoints, viewer);
 
 	for (auto it=skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {
 		viewer << CustomColors3D(Color::Red, Color::Red) << *it;

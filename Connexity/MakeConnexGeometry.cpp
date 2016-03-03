@@ -253,6 +253,20 @@ Z3i::Point findMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const Z3i::
 }
 
 
+vector<Z3i::Point> findEndPoints(const Z3i::DigitalSet& set) {
+	Z3i::Object6_26 objectSet(Z3i::dt6_26, set);
+	vector<Z3i::Point> endPoints;
+	for (auto it = set.begin(), ite = set.end(); it != ite; ++it) {
+		vector<Z3i::Point> neighbors;
+		back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
+		objectSet.writeNeighbors(inserter, *it);
+		if (neighbors.size() == 1)
+			endPoints.push_back(*it);
+	}
+	return endPoints;
+}
+
+
 template <typename DTL2>
 Z3i::Point findLocalMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const Z3i::Point& junctionPoint) {
 	Z3i::Point maxDTPoint;
@@ -460,19 +474,22 @@ int main( int  argc, char**  argv )
 			}
 			return maxa > maxb;
 		});
+	
 	ObjectType reference = *(objects.begin());
 	objects.erase(objects.begin());
 
 	Point closestBranchingCurrent;
 	trace.beginBlock("Connecting disconnected components");
+   
 	while (objects.size() > 0) {
 		trace.progressBar(nbConnectedComponents-objects.size(), nbConnectedComponents);
 		vector<ObjectType>::iterator minimizingObjectToReference = objects.end();
-		double distanceMin = numeric_limits<int>::max();
+		double distanceMin = numeric_limits<double>::max();
 		vector<Z3i::Point> points;
 		Z3i::Point belongingToCurrentObject, belongingToReference;
 //		for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
 		ObjectType currentObject = *(objects.begin());
+		
 		for (auto itCurrentObject = currentObject.pointSet().begin(),
 				 itCurrentObjectE = currentObject.pointSet().end(); itCurrentObject != itCurrentObjectE; ++itCurrentObject) {
 
@@ -483,8 +500,7 @@ int main( int  argc, char**  argv )
 				vector<Point> points = PointUtil::linkTwoPoints(*itReference, *itCurrentObject);
 				bool add = true;
 				double distanceDT = min(dt(*itCurrentObject), dt(*itReference));
-				
-				for (auto itP = points.begin(), itPe = points.end(); itP != itPe; ++itP) {						
+				for (auto itP = points.begin(), itPe = points.end(); itP != itPe; ++itP) {
 					if (Z3i::l2Metric(*itP, closestBranchingPoint)+1 < distanceDT ||
 						dt(*itP) == 0) {
 						add = false;
@@ -641,6 +657,7 @@ int main( int  argc, char**  argv )
 				currentWPC->myProcessed = true;
 				double radius = dt(currentWPC->myPoint);
 				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted, currentWPC->myPoint, normalSub, 0,  radius, 100, true);
+				
 				realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 				Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 				viewer << CustomColors3D(Color::Blue, Color::Blue) << centerOfMass;

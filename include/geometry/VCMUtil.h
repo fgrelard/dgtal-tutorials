@@ -53,8 +53,13 @@ namespace VCMUtil {
 	template <typename VCM, typename KernelFunction, typename Domain, typename Container>
 	DGtal::Z3i::DigitalSet computeDiscretePlane(VCM& vcm, KernelFunction& chi, const Domain& domainVolume, const Container& setVolumeWeighted, const DGtal::Z3i::Point& point, DGtal::Z3i::RealPoint& normal, int coordinate, double& radius, double distanceMax, bool dilate=true, const DGtal::Z3i::RealVector& dirVector=DGtal::Z3i::RealVector());
 
+
+	/**
+	 * Returns next point with normal in non marked set
+	 * Returns true if a new seed is selected
+	 */
 	template <typename WeightedPointCount, typename Container>
-	void trackNextPoint(WeightedPointCount* &currentPoint, const Container& setVolumeWeighted,
+	bool trackNextPoint(WeightedPointCount* &currentPoint, const Container& setVolumeWeighted,
 						const DGtal::Z3i::DigitalSet& connectedComponent3D,
 						const DGtal::Z3i::Point& centerOfMass, const DGtal::Z3i::RealPoint& normal);
 
@@ -337,17 +342,18 @@ DGtal::Z3i::DigitalSet VCMUtil::computeDiscretePlane(VCM& vcm, KernelFunction& c
 		if (DGtal::Z3i::l2Metric(*it, point) <= radius)
 			discretePlane.insert(*it);
 	}
-	return discretePlane;
+	return connectedComponent3D;
 }
 
 template <typename WeightedPointCount, typename Container>
-void VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container& setVolumeWeighted,
+bool VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container& setVolumeWeighted,
 					const DGtal::Z3i::DigitalSet& connectedComponent3D,
 					const DGtal::Z3i::Point& centerOfMass, const DGtal::Z3i::RealPoint& normal) {
+	bool newSeed = false;
 	auto pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
 			return (wpc->myPoint == centerOfMass);
 		});
-	int scalar = 1;
+    int scalar = 1;
 	DGtal::Z3i::Point current = centerOfMass;
 	auto newPoint = setVolumeWeighted.begin();
 	if (pointInWeightedSet != setVolumeWeighted.end()) {
@@ -360,7 +366,7 @@ void VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container&
 				return (wpc->myPoint == current);
 			});
 		if (newPoint == setVolumeWeighted.end() || (*newPoint)->myProcessed) {
-			scalar = 1;
+			scalar = 1.0;
 			current = centerOfMass;
 			if (pointInWeightedSet != setVolumeWeighted.end()) {
 				while (current == centerOfMass ||
@@ -379,6 +385,7 @@ void VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container&
 					if (pointInWeightedSet != setVolumeWeighted.end()) {
 						newPoint = pointInWeightedSet;
 					}
+					newSeed = true;
 				}
 			}
 		}
@@ -389,8 +396,10 @@ void VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container&
 		if (pointInWeightedSet != setVolumeWeighted.end()) {
 			newPoint = pointInWeightedSet;
 		}
+		newSeed = true;
 	}
 	currentPoint = (*newPoint);
+	return newSeed;
 }
 
 double VCMUtil::computeCurvatureJunction(const DGtal::Z3i::RealPoint& lambda) {

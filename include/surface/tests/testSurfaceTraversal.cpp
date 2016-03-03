@@ -25,7 +25,7 @@ void testSurfaceTraversal(int argc, char** argv) {
 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(image, 1, 255);
 	Graph graphSurface(Z3i::dt26_6, setSurface);
 
-	Z3i::Point source(1, -9, 8);
+	Z3i::Point source(1, -9, 2);
 	Z3i::Point destination(-9, -1, 8);
 	vector<Z3i::Point> path = SurfaceTraversal::AStarAlgorithm(graphSurface, source, destination);
 	//vector<Z3i::Point> path = SurfaceTraversal::DijkstraAlgorithm(graphSurface, source, destination);
