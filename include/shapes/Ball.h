@@ -15,6 +15,7 @@ public:
 	Ball(const Point& center, double radius) : myCenter(center), myRadius(radius) {}
 	Ball(const Ball& other) : myCenter(other.myCenter), myRadius(other.myRadius) {}
 	bool contains(const Point& point) const {return euclideanDistance(point, myCenter) <= myRadius;}
+	std::vector<Point> intersection(const DGtal::Z3i::DigitalSet& setPoint);
 	std::vector<Point> surfaceIntersection(const DGtal::Z3i::DigitalSet& setSurface);
 	std::vector<Point> pointsInBall() const;
 	std::vector<Point> pointsInHalfBall() const;
@@ -26,10 +27,23 @@ public:
 	std::set<Point> pointsSurfaceBall() const;
 	bool operator!=(const Ball & other) const {return (myCenter != other.myCenter || myRadius != other.myRadius);}
 	Point getCenter()  {return myCenter;}
+	double getRadius() {return myRadius;}
 private:
 	Point myCenter;
 	double myRadius;
 };
+
+template <typename Point>
+std::vector<Point> Ball<Point>::intersection(const DGtal::Z3i::DigitalSet& setPoint) {
+	std::vector<Point> intersection;
+	for (auto it = setPoint.begin(), ite = setPoint.end(); it != ite; ++it) {
+		double distance = euclideanDistance(*it, myCenter);
+		if (distance <= myRadius) {
+			intersection.push_back(*it);
+		}
+	}
+	return intersection;
+}
 
 template <typename Point>
 std::vector<Point> Ball<Point>::surfaceIntersection(const DGtal::Z3i::DigitalSet& setSurface) {

@@ -181,6 +181,8 @@ namespace DGtal
 		/// the VCM.
 		Scalar radiusTrivial() const;
 
+		VCM& vcm();
+
 		/**
 		   @param[in] outIt an output iterator on Point to write the point(s) associated to surfel \a s. 
 		   @param[in] s the surfel that is embedded in the digital space according to mySurfelEmbedding.

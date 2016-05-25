@@ -561,7 +561,7 @@ int main( int argc, char** argv )
 
 
 
-	Image img  = ITKReader<Image>::importITK( inputFilename );
+	Image img  = VolReader<Image>::importVol( inputFilename );
 	Image skeleton = VolReader<Image>::importVol( inputSkeletonName );
 	Z3i::Domain domain = img.domain();
 	KSpace ks;
@@ -577,8 +577,9 @@ int main( int argc, char** argv )
 	
 	Z3i::DigitalSet set3d (domain);
 	SetFromImage<Z3i::DigitalSet>::append<Image> (set3d, img, 
-												  thresholdMin, thresholdMax);
-	Z3i::SCell bel = Surfaces<KSpace>::findABel( ks, set3d, 10000000 );
+												  thresholdMin-1, thresholdMax);
+	Binarizer binarizer(img, thresholdMin-1, thresholdMax);
+	Z3i::SCell bel = Surfaces<KSpace>::findABel( ks, set3d, 100000 );
 	typedef SurfelAdjacency<KSpace::dimension> MySurfelAdjacency;
 	MySurfelAdjacency surfAdj( true );
 	MyDigitalSurfaceContainer* ptrSurfContainer = 

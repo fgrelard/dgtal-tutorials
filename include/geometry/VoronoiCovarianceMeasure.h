@@ -51,6 +51,8 @@
 #include "DGtal/images/ImageContainerBySTLVector.h"
 #include "DGtal/geometry/volumes/distance/VoronoiMap.h"
 #include "DGtal/geometry/tools/SpatialCubicalSubdivision.h"
+#include "DGtal/math/linalg/EigenDecomposition.h"
+
 //////////////////////////////////////////////////////////////////////////////
 
 namespace DGtal

@@ -64,7 +64,7 @@ DGtal::Z3i::DigitalSet SurfaceUtils::extractSurfaceVoxels(const Image& volume, i
 	DTL2 dt(&volume.domain(), &binarizer, &DGtal::Z3i::l2Metric);
 
 	for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
-		if (dt(*it) == 1)
+		if (dt(*it) > 0 && dt(*it) <= 1)
 			surfacePoints.insert(*it);
 	}
 	return surfacePoints;

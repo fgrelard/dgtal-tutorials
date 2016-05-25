@@ -78,8 +78,6 @@
 #include "DGtal/topology/LightImplicitDigitalSurface.h"
 #include "DGtal/kernel/BasicPointPredicates.h"
 
-
-
 // Local includes
 #include "geometry/RosenProffittLengthEstimator.h"
 #include "surface/SurfacePoint.h"
@@ -244,7 +242,7 @@ double estimateDSSLength(const vector<Point>& points) {
 		SegmentComputer current(*er);
 		Z3i::Point direction;
 		PointVector<3, double> intercept, thickness;
-		current.getParameters(direction, intercept, thickness);
+//		current.getParameters(direction, intercept, thickness);
 		if (direction != Z3i::Point::zero) {
 			cpt++;
 			length += euclideanDistance(*(current.end()-1), *(current.begin()));

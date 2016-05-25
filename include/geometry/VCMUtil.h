@@ -7,6 +7,7 @@
 #include "DGtal/math/linalg/EigenDecomposition.h"
 #include "WeightedPointCountComparator.h"
 #include "DGtal/images/ImageSelector.h"
+#include "DGtal/topology/MetricAdjacency.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 #include "geometry/WeightedPointCount.h"
 #include "geometry/PointUtil.h"
@@ -23,7 +24,9 @@
 
 namespace VCMUtil {
 	template <typename VCM, typename KernelFunction>
-	DGtal::Z3i::RealPoint computeNormalFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi, int coordinate, const DGtal::Z3i::RealVector& dirVector = DGtal::Z3i::RealVector());
+	DGtal::Z3i::RealPoint computeNormalFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi,
+											   int coordinate, const DGtal::Z3i::RealVector& dirVector = DGtal::Z3i::RealVector(),
+											   const std::vector<DGtal::Z3i::Point>& v = std::vector<DGtal::Z3i::Point>());
 
 	template <typename VCM, typename KernelFunction>
 	DGtal::Z3i::RealPoint computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi);
@@ -35,7 +38,7 @@ namespace VCMUtil {
 	double radiusForVCMSurface(const DGtal::Z3i::DigitalSet& setSurface, const DGtal::Z3i::Point& point, const std::vector<DGtal::Z3i::RealPoint>& normals);
 	
 	template <typename Domain, typename WeightedPoint>
-	void extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, const Domain & domain, const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint> >& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double& distanceMax);
+	void extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, const Domain & domain, const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint> >& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double distanceMax);
 
 	template <typename Image>
 	DGtal::Z2i::DigitalSet extractConnectedComponent(const Image& image, const DGtal::Z2i::Point& referencePoint, int thresholdMin,
@@ -46,12 +49,15 @@ namespace VCMUtil {
 
 	template <typename WeightedPoint>
 	bool isRadiusMaximal(const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint>>& volume, const DGtal::Z3i::DigitalSet& intersection, const DGtal::Z3i::Point& referencePoint, double currentDistance, const DGtal::Z3i::RealVector& dirVector);
+
+
+	bool isRadiusMaximalOneCC(const DGtal::Z3i::DigitalSet& intersection);
 	
 	template <typename WeightedPoint>
 	bool markConnectedComponent3D(std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint>>& volume, const DGtal::Z3i::DigitalSet& intersection, int label);
 
 	template <typename VCM, typename KernelFunction, typename Domain, typename Container>
-	DGtal::Z3i::DigitalSet computeDiscretePlane(VCM& vcm, KernelFunction& chi, const Domain& domainVolume, const Container& setVolumeWeighted, const DGtal::Z3i::Point& point, DGtal::Z3i::RealPoint& normal, int coordinate, double& radius, double distanceMax, bool dilate=true, const DGtal::Z3i::RealVector& dirVector=DGtal::Z3i::RealVector());
+	DGtal::Z3i::DigitalSet computeDiscretePlane(VCM& vcm, KernelFunction& chi, const Domain& domainVolume, const Container& setVolumeWeighted, const DGtal::Z3i::Point& point, DGtal::Z3i::RealPoint& normal, int coordinate, double& radius, double distanceMax, bool dilate=true, const DGtal::Z3i::RealVector& dirVector=DGtal::Z3i::RealVector(), const std::vector<DGtal::Z3i::Point>& v = std::vector<DGtal::Z3i::Point>());
 
 
 	/**
@@ -81,16 +87,19 @@ namespace VCMUtil {
 }
 
 template <typename VCM, typename KernelFunction>
-DGtal::Z3i::RealPoint VCMUtil::computeNormalFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi, int coordinate, const DGtal::Z3i::RealVector& dirVector) {
+DGtal::Z3i::RealPoint VCMUtil::computeNormalFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi, int coordinate, const DGtal::Z3i::RealVector& dirVector, const std::vector<DGtal::Z3i::Point>& v) {
 	
 	typedef DGtal::EigenDecomposition<3,double> LinearAlgebraTool;
 	LinearAlgebraTool::Matrix vcm_r, evec;
 	DGtal::Z3i::RealVector eval;
 // Compute VCM and diagonalize it.
-	if (dirVector == DGtal::Z3i::RealVector())
-		vcm_r = vcm.measure( chi, currentPoint);
-	else
+	if (dirVector != DGtal::Z3i::RealVector())
 		vcm_r = vcm.measureJunction( dirVector, chi, currentPoint);
+	else if (v != std::vector<DGtal::Z3i::Point>())
+		vcm_r = vcm.measure(v, chi, currentPoint);
+	else
+		vcm_r = vcm.measure( chi, currentPoint);
+	
 	LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
 	// // Display normal
 	DGtal::Z3i::RealVector normal = evec.column(coordinate);
@@ -150,7 +159,7 @@ DGtal::Z3i::DigitalSet VCMUtil::extractConnectedComponent3D(const Domain & domai
 bool VCMUtil::planeContains(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current) {
 	double d = -(-normal[0] * current[0] - normal[1] * current[1] - normal[2] * current[2]);
 	//Naive plane (26 connexity)
-	double omega = std::max(abs(normal[0]), std::max(abs(normal[1]), abs(normal[2])));
+	double omega = std::max(std::abs(normal[0]), std::max(std::abs(normal[1]), std::abs(normal[2])));
 	double valueToCheckForPlane = point[0] * normal[0] + point[1] * normal[1] + point[2] * normal[2];
 	if (valueToCheckForPlane >= d && valueToCheckForPlane < d + omega)
 		return true;
@@ -205,7 +214,7 @@ double VCMUtil::radiusForVCMSurface(const DGtal::Z3i::DigitalSet& setSurface, co
 }
 
 template <typename Domain, typename WeightedPoint>
-void VCMUtil::extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, const Domain & domain, const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint> >& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double& distanceMax) {
+void VCMUtil::extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, const Domain & domain, const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint> >& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double distanceMax) {
 	typedef DGtal::Z3i::Object26_6 ObjectType;
 
 	DGtal::Z3i::DigitalSet aSet(domain);
@@ -238,7 +247,7 @@ bool VCMUtil::isRadiusMaximal(const std::set<WeightedPoint*, WeightedPointCountC
 	bool alright = true;
 	if (dirVector == DGtal::Z3i::RealVector()) {
 		for (auto it = intersection.begin(), ite = intersection.end(); it != ite; ++it) {
-			if (DGtal::Z3i::l2Metric(*it, referencePoint) > currentDistance) {
+			if (DGtal::Z3i::l2Metric(*it, referencePoint) >= currentDistance) {
 				alright = false;
 			}
 		}
@@ -260,6 +269,30 @@ bool VCMUtil::isRadiusMaximal(const std::set<WeightedPoint*, WeightedPointCountC
 	}
    
 	return alright;
+}
+
+bool VCMUtil::isRadiusMaximalOneCC(const DGtal::Z3i::DigitalSet& intersection) {
+	typedef DGtal::Z3i::Object26_6 ObjectType;
+	
+	bool alright = false;
+	DGtal::Z3i::DigitalSet surface(intersection.domain());
+	for (const DGtal::Z3i::Point& p : intersection) {
+		DGtal::MetricAdjacency<DGtal::Z3i::Space, 1> adj;
+		std::vector<DGtal::Z3i::Point> neighbors;
+		std::back_insert_iterator<std::vector<DGtal::Z3i::Point>> inserter(neighbors);
+		adj.writeNeighbors(inserter, p);
+		for (const DGtal::Z3i::Point& n : neighbors) {
+			if (intersection.find(n) == intersection.end())
+				surface.insert(p);
+		}
+	}
+
+	ObjectType objSurface(DGtal::Z3i::dt26_6, surface);
+	std::vector<ObjectType> objects;
+	std::back_insert_iterator< std::vector<ObjectType> > inserter( objects );
+	unsigned int nbConnectedComponents = objSurface.writeComponents(inserter);
+	return (nbConnectedComponents == 1);
+
 }
 
 
@@ -313,35 +346,40 @@ template <typename VCM, typename KernelFunction, typename Domain, typename Conta
 DGtal::Z3i::DigitalSet VCMUtil::computeDiscretePlane(VCM& vcm, KernelFunction& chi,
 													 const Domain& domainVolume, const Container& setVolumeWeighted,
 													 const DGtal::Z3i::Point& point, DGtal::Z3i::RealPoint& normal, int coordinate, double& radius,
-													 double distanceMax, bool dilate, const DGtal::Z3i::RealVector& dirVector) {
+													 double distanceMax, bool dilate, const DGtal::Z3i::RealVector& dirVector,
+													 const std::vector<DGtal::Z3i::Point>& v) {
+
+	typedef typename Container::value_type Point;
 
 	bool alright = false;
 	DGtal::Z3i::DigitalSet connectedComponent3D(domainVolume);
 	double currentDistance = radius;
 	do  {
+	
 	    currentDistance++;
 		chi = KernelFunction(1.0, currentDistance);
 		vcm.setMySmallR(currentDistance);
-		if (dirVector == DGtal::Z3i::RealVector())
-			normal = computeNormalFromVCM(point, vcm, chi, coordinate);
+		if (dirVector != DGtal::Z3i::RealVector())
+			normal = computeNormalFromVCM(point, vcm, chi, coordinate, dirVector);			
+		else if (v != std::vector<DGtal::Z3i::Point>())
+			normal = computeNormalFromVCM(point, vcm, chi, coordinate, DGtal::Z3i::RealVector(), v);
 		else
-			normal = computeNormalFromVCM(point, vcm, chi, coordinate, dirVector);
-		
+			normal = computeNormalFromVCM(point, vcm, chi, coordinate);
+					   		
 		double d = -(-normal[0] * point[0] - normal[1] * point[1] - normal[2] * point[2]);
 		//Naive plane (26 connexity)
 		double omega = std::max(std::abs(normal[0]), std::max(std::abs(normal[1]), std::abs(normal[2])));
 		connectedComponent3D = DGtal::Z3i::DigitalSet(domainVolume);
 	    extractConnectedComponent3D(connectedComponent3D, domainVolume, setVolumeWeighted, normal, point, d, omega, currentDistance);
-		alright = isRadiusMaximal(setVolumeWeighted, connectedComponent3D, point, currentDistance, dirVector);		
+		alright = isRadiusMaximal(setVolumeWeighted, connectedComponent3D, point, currentDistance, dirVector);
 	} while (!alright && dilate && currentDistance < distanceMax);
 	
-	radius = currentDistance;
-
-	DGtal::Z3i::DigitalSet discretePlane(domainVolume);
-	for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
-		if (DGtal::Z3i::l2Metric(*it, point) <= radius)
-			discretePlane.insert(*it);
-	}
+	// radius = currentDistance;
+	// DGtal::Z3i::DigitalSet discretePlane(domainVolume);
+	// for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
+	// 	if (DGtal::Z3i::l2Metric(*it, point) <= radius)
+	// 		discretePlane.insert(*it);
+	// }
 	return connectedComponent3D;
 }
 
@@ -353,14 +391,19 @@ bool VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container&
 	auto pointInWeightedSet = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
 			return (wpc->myPoint == centerOfMass);
 		});
-    int scalar = 1;
+    double scalar = 1;
 	DGtal::Z3i::Point current = centerOfMass;
 	auto newPoint = setVolumeWeighted.begin();
 	if (pointInWeightedSet != setVolumeWeighted.end()) {
-		while (current == centerOfMass ||
-			   connectedComponent3D.find(current) != connectedComponent3D.end()) {
+		while ( current == centerOfMass &&
+			   //(newPoint != setVolumeWeighted.end()  && ((*newPoint)->myProcessed))
+			    connectedComponent3D.find(current) != connectedComponent3D.end()
+			) {
 			current = centerOfMass + normal * scalar;
-			scalar++;
+			scalar += 0.5;
+			newPoint = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+					return (wpc->myPoint == current);
+				});
 		}
 		newPoint = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
 				return (wpc->myPoint == current);
@@ -369,10 +412,15 @@ bool VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container&
 			scalar = 1.0;
 			current = centerOfMass;
 			if (pointInWeightedSet != setVolumeWeighted.end()) {
-				while (current == centerOfMass ||
-					   connectedComponent3D.find(current) != connectedComponent3D.end()) {
+				while ( current == centerOfMass &&
+					   //(newPoint != setVolumeWeighted.end()  && ((*newPoint)->myProcessed))
+					    connectedComponent3D.find(current) != connectedComponent3D.end()
+					) {
 					current = centerOfMass - normal * scalar;
-					scalar++;
+					scalar += 0.5;
+					newPoint = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
+							return (wpc->myPoint == current);
+						});
 					
 				}
 				newPoint = find_if(setVolumeWeighted.begin(), setVolumeWeighted.end(), [&](WeightedPointCount* wpc) {
@@ -403,7 +451,10 @@ bool VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container&
 }
 
 double VCMUtil::computeCurvatureJunction(const DGtal::Z3i::RealPoint& lambda) {
-	double ratio = (lambda[0]) / (lambda[0] + lambda[1] + lambda[2]);
+	double lambda0 = (lambda[0] < 1) ? 1.0 : lambda[0];
+	double lambda1 = (lambda[1] < 1) ? 1.0 : lambda[1];
+	double lambda2 = (lambda[2] < 1) ? 1.0 : lambda[2];
+	double ratio = (lambda0) / (lambda0 + lambda1 + lambda2);
 	return ratio;
 }
 
@@ -434,27 +485,15 @@ DGtal::Z3i::DigitalSet VCMUtil::markDifferenceBetweenPlanes(std::set<WeightedPoi
 										  const Domain& domain, double distanceMax) {
 	DGtal::Z3i::DigitalSet differenceDigitalSet(domain);
 	DGtal::Z3i::RealPoint next = normalNext;
-	if (normalPrevious.dot(normalNext) < 0) {
+	if (normalPrevious.dot(normalNext) > 0) {
 		next  = -normalNext;
  	}
-	std::set<WeightedPoint*> inferiorPointsPrevious = computePointsBelowPlane(volume, normalPrevious, centerPrevious, distanceMax);
-	std::set<WeightedPoint*> inferiorPointsNext = computePointsBelowPlane(volume, next, centerNext, distanceMax);
-	std::set<WeightedPoint*> difference;
-	if (inferiorPointsNext.size() > inferiorPointsPrevious.size()) {
-		set_difference(inferiorPointsNext.begin(), inferiorPointsNext.end(),
-					   inferiorPointsPrevious.begin(), inferiorPointsPrevious.end(),
-					   inserter(difference, difference.end()));
-		
-	}
-	else {
-		set_difference(inferiorPointsPrevious.begin(), inferiorPointsPrevious.end(),
-					   inferiorPointsNext.begin(), inferiorPointsNext.end(),
-					   inserter(difference, difference.end()));
-	}
-	
+
 	for (auto it = volume.begin(), ite = volume.end(); it != ite; ++it) {
-		if (difference.find(*it) != difference.end()) {
-			differenceDigitalSet.insert((*it)->myPoint);
+		DGtal::Z3i::Point p = (*it)->myPoint;
+		if (VCMUtil::abovePlane(p, next, centerNext) && VCMUtil::abovePlane(p, normalPrevious, centerPrevious) &&
+			DGtal::Z3i::l2Metric(p, centerNext) <= distanceMax) {
+			differenceDigitalSet.insert(p);
 		}
 	}
 	return differenceDigitalSet;

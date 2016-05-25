@@ -93,16 +93,16 @@ VoronoiCovarianceMeasureOnDigitalSurface( ConstAlias< Surface > _surface,
 	if ( verbose ) trace.endBlock();
 
 // Compute Voronoi Covariance Matrix for all points.
-	myVCM.init( vectPoints.begin(), vectPoints.end() );
+	myVCM.init( setSurface.begin(), setSurface.end() );
 
 // Compute VCM( chi_r ) for each point.
 	if ( verbose ) trace.beginBlock ( "Integrating VCM( chi_r(p) ) for each point." );
 	int i = 0;
 // HatPointFunction< Point, Scalar > chi_r( 1.0, r );
-	for ( typename std::vector<Point>::const_iterator it = vectPoints.begin(), itE = vectPoints.end();
+	for (auto it = setSurface.begin(), itE = setSurface.end();
 		  it != itE; ++it )
 	{
-		if ( verbose ) trace.progressBar( ++i, vectPoints.size() );
+		if ( verbose ) trace.progressBar( ++i, setSurface.size() );
 		Point closestPointToCurrent = *min_element(dtPoints.begin(), dtPoints.end(), [&](const Point& one, const Point& two) {
 				return DGtal::Z3i::l2Metric(one, *it) < DGtal::Z3i::l2Metric(two, *it);
 			});
@@ -110,13 +110,17 @@ VoronoiCovarianceMeasureOnDigitalSurface( ConstAlias< Surface > _surface,
 //		double radius = VCMUtil::radiusForVCMSurface(setSurface, *it, normalsToPoint);
 //		trace.info() << radius << " ";
 		double radius = myDT(closestPointToCurrent) + delta;
+
+
+		//if (myDT(closestPointToCurrent) < 2) radius++;
 //		trace.info() << radius << std::endl;
+//		radius = delta;
 		myChi = KernelFunction( 1.0, radius);
 		myVCM.setMySmallR(radius);
 
 		Point p = *it;
 		myPt2Radius[p] = radius;
-		
+	   
 		MatrixNN measure = myVCM.measure( myChi, p );
 // On diagonalise le résultat.
 		EigenStructure & evcm = myPt2EigenStructure[ p ];
@@ -204,6 +208,15 @@ r() const
 {
 	return myVCM.r();
 }
+template <typename TDigitalSurfaceContainer, typename TSeparableMetric, typename TKernelFunction, typename DTL2>
+inline
+typename DGtal::VoronoiCovarianceMeasureOnDigitalSurface<TDigitalSurfaceContainer, TSeparableMetric, TKernelFunction, DTL2>::VCM&
+DGtal::VoronoiCovarianceMeasureOnDigitalSurface<TDigitalSurfaceContainer, TSeparableMetric, TKernelFunction, DTL2>::
+vcm() 
+{
+	return myVCM;
+}
+
 //-----------------------------------------------------------------------------
 template <typename TDigitalSurfaceContainer, typename TSeparableMetric, typename TKernelFunction, typename DTL2>
 inline

@@ -48,11 +48,11 @@ namespace Statistics {
 	template <typename Matrix, typename Image2D>
 	Matrix computeCovarianceMatrixImage(const Image2D& image);
 
-template <typename Container>
-double otsuThreshold(const Container& container);
+	template <typename Container>
+	double otsuThreshold(const Container& container);
 
-template <typename Container>
-double unimodalThresholding(const Container& container);
+	template <typename Container>
+	double unimodalThresholding(const Container& container);
 	
 }
 
@@ -191,7 +191,7 @@ Matrix Statistics::computeCovarianceMatrix(const Container& aSet) {
 	int dimens = Point::dimension;
 	int size = aSet.size();
 	Matrix A(size, dimens);
-	if (size == 0) return A;
+	if (size < dimens) return Matrix(0, 0);
 	
 	int i = 0;
 	for (ConstIterator it = aSet.begin(), ite = aSet.end();
@@ -226,7 +226,7 @@ Matrix Statistics::computeCovarianceMatrixImage(const Image2D& image) {
 
 template <typename Vector, typename Matrix>
 Vector Statistics::extractEigenVector(const Matrix& m, int colNumber) {
-	Eigen::SelfAdjointEigenSolver<Matrix> eig(m);
+	Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(m);
 	Vector vector;
 	auto veigen = eig.eigenvectors().col(colNumber);	
 	for (typename Vector::Dimension i = 0; i < Vector::dimension; i++) {
@@ -237,7 +237,7 @@ Vector Statistics::extractEigenVector(const Matrix& m, int colNumber) {
 
 template <typename Vector, typename Matrix>
 Vector Statistics::extractEigenValue(const Matrix& m, int colNumber) {
-	Eigen::SelfAdjointEigenSolver<Matrix> eig(m);
+	Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(m);
 	Vector vector;
 	auto veigen = eig.eigenvalues().col(colNumber);	
 	for (typename Vector::Dimension i = 0; i < Vector::dimension; i++) {
@@ -299,6 +299,7 @@ double Statistics::unimodalThresholding(const Container& container) {
 	double myWidth = ( stats.max() - stats.min() ) / hist->size() ;
 	Z2i::RealPoint maxPeak(0,0);
 	for (int i = 1; i < hist->size(); i++) {
+//		cout << i*myWidth+stats.min() << " " << hist->pdf(i) << endl;
 		if (hist->pdf(i) > maxPeak[1])
 			maxPeak = Z2i::RealPoint(i*myWidth, hist->pdf(i));
 	}
@@ -322,6 +323,7 @@ double Statistics::unimodalThresholding(const Container& container) {
 			threshold = currentPoint[0];
 		}			
 	}
+	threshold = threshold + (threshold - maxPeak[0]);
 	return threshold;
 }
 

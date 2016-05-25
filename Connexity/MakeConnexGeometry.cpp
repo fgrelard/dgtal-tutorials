@@ -32,6 +32,7 @@
 #include "geometry/WeightedPoint.h"
 #include "surface/SurfaceUtils.h"
 #include "geometry/WeightedPointCount.h"
+#include "surface/SurfaceTraversal.h"
 #include "geometry/VCMUtil.h"
 #include "Statistics.h"
 #include "geometry/VoronoiCovarianceMeasureOnDigitalSurface.h"
@@ -254,7 +255,7 @@ Z3i::Point findMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const Z3i::
 
 
 vector<Z3i::Point> findEndPoints(const Z3i::DigitalSet& set) {
-	Z3i::Object6_26 objectSet(Z3i::dt6_26, set);
+	Z3i::Object26_6 objectSet(Z3i::dt26_6, set);
 	vector<Z3i::Point> endPoints;
 	for (auto it = set.begin(), ite = set.end(); it != ite; ++it) {
 		vector<Z3i::Point> neighbors;
@@ -291,6 +292,38 @@ Z3i::Point findLocalMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const 
 		}
 	}
 	return maxDTPoint;
+}
+
+Z3i::DigitalSet ensureConnexity(const Z3i::DigitalSet& set) {
+	Z3i::DigitalSet cleanSet(set.domain());
+	Z3i::Object26_6 obj(Z3i::dt26_6, set);
+	Z3i::DigitalSet & S = obj.pointSet();
+	cleanSet = S;
+	for (auto it = S.begin(), ite = S.end(); it != ite; ++it) {
+		Z3i::Object26_6 obj(Z3i::dt26_6, cleanSet);
+		if (obj.isSimple(*it)) {
+		    cleanSet.erase(*it);
+		}
+	}
+
+	return cleanSet;
+}
+
+Z3i::DigitalSet closestSet(const Z3i::DigitalSet& referenceSet, const std::vector<Z3i::DigitalSet>& sets) {
+	double distance = numeric_limits<double>::max();
+	Z3i::DigitalSet toReturn(referenceSet.domain());
+	for (const Z3i::DigitalSet& set : sets) {
+		for (const Z3i::Point& pSet: set) {
+			for (const Z3i::Point& pRef : referenceSet) {
+				double currentDistance = Z3i::l2Metric(pSet, pRef);
+				if (currentDistance < distance) {
+					distance = currentDistance;
+					toReturn = set;
+				}
+			}
+		}		
+	}
+	return toReturn;
 }
 
 int main( int  argc, char**  argv )
@@ -394,9 +427,17 @@ int main( int  argc, char**  argv )
 		
    
 
+	
 	ThresholdedImage binarizer(volume, thresholdMin-1, thresholdMax);
 	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
 	BackgroundPredicate backgroundPredicate(binarizer);
+
+	Metric l2;
+	VCM vcm( R, 1, l2, true );
+	vcm.init( setVolume.begin(), setVolume.end() );
+	Domain domain = vcm.domain();
+	KernelFunction chi( 1.0, 1 );
+
 
 	DTL2::Domain domainDT = dt.domain();
 	for (auto it = domainDT.begin(), ite = domainDT.end(); it != ite; ++it) {
@@ -407,9 +448,126 @@ int main( int  argc, char**  argv )
 	}
 
 	double distanceMax = (*setVolumeWeighted.begin())->myWeight;
-	KSpace ks;
-	Metric l2;
 	
+	Z3i::DigitalSet cleanSkeletonPoints = ensureConnexity(skeletonPoints);
+	vector<Z3i::Point> v = findEndPoints(cleanSkeletonPoints);
+// 	set<Z3i::Point> setV(v.begin(), v.end());
+
+// 	Z3i::RealPoint normal;
+// 	Z3i::Object26_6  objSkeleton(Z3i::dt26_6, cleanSkeletonPoints);
+// 	map<Z3i::Point, Z3i::RealPoint> mapPointToNormal;
+// 	for (auto it = setV.begin(), ite = setV.end(); it != ite; ++it) {
+// 		Z3i::Point current = *it;
+// 		double radius = dt(current);
+// 		Z3i::DigitalSet set = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted, current, normal, 0,  radius, 100, true);
+// 		vector<Z3i::Point> neighborsCurrent;
+// 		back_insert_iterator<vector<Z3i::Point>> inserter(neighborsCurrent);
+// 		objSkeleton.writeNeighbors(inserter, current);
+		
+// 		if (neighborsCurrent.size() > 0) {
+// 			Z3i::RealPoint dirVector = (current - neighborsCurrent[0]).getNormalized();
+// 			if (dirVector.dot(normal) < 0)
+// 				normal = -normal;
+// 		}
+// 		mapPointToNormal[current] = normal;
+// 	}
+
+// 	Z3i::DigitalSet junctions(setVolume.domain());
+// 	map<Z3i::Point, Z3i::Point> pairToLink;
+
+// 	for (auto it = mapPointToNormal.begin(), ite = mapPointToNormal.end(); it != ite; ++it) {
+// 		Z3i::Point point = it->first;
+// 		Z3i::RealPoint normal = it->second;
+// 		Z3i::DigitalSet initialSet(setVolume.domain());
+// 		for (auto itS = setVolume.begin(), itSe = setVolume.end(); itS != itSe; ++itS) {
+// 			if (VCMUtil::abovePlane(*itS, normal, point))
+// 				initialSet.insert(*itS);
+// 		}
+// 		Z3i::DigitalSet currentSet = initialSet;
+// 		for (auto itO = mapPointToNormal.begin(), itOe = mapPointToNormal.end(); itO != itOe; ++itO) {
+// 			Z3i::Point otherPoint = itO->first;
+// 			if (otherPoint == point) continue;
+// 			Z3i::RealPoint otherNormal = itO->second;
+// 			if (VCMUtil::abovePlane(point, otherNormal, otherPoint)) {
+// 				Z3i::DigitalSet newSet(initialSet.domain());
+// 				for (auto itS = currentSet.begin(), itSe = currentSet.end(); itS != itSe; ++itS) {
+// 					if (VCMUtil::abovePlane(*itS, otherNormal, otherPoint))
+// 						newSet.insert(*itS);
+// 				}
+// 				if (newSet.size() < currentSet.size()) {
+// 					currentSet = newSet;
+// 					pairToLink[point] = otherPoint;
+// 				}
+// 			}
+// 		}
+// 		junctions.insert(currentSet.begin(), currentSet.end());
+
+// //		viewer << CustomColors3D(Color::Green, Color::Green) << currentSet;
+// 	}
+
+// 	// for (const auto& pair : pairToLink) {
+// 	// 	Z3i::Point initial = pair.first;
+// 	// 	Z3i::Point toLink = pair.second;
+// 	// 	Z3i::DigitalSet candidates(setVolume.domain());
+// 	// 	do {
+// 	// 		candidates.insert(toLink);
+// 	// 		toLink = pairToLink[toLink];
+// 	// 	} while (candidates.find(toLink) == candidates.end());
+// 	// 	for (const auto& sEP : candidates) {
+// 	// 		for (const auto& sOEP : candidates) {
+// 	// 			vector<Z3i::Point> link = PointUtil::linkTwoPoints(sEP, sOEP);
+// 	// 			for (const auto& l : link)
+// 	// 				viewer << l;
+// 	// 		}
+// 	// 	}
+// 	// }
+
+// 	Z3i::Object26_6 objJunctions(Z3i::dt26_6, junctions);
+// 	vector<Z3i::Object26_6> objectsJunctions;
+// 	back_insert_iterator< std::vector<Z3i::Object26_6> > inserterJ( objectsJunctions );
+//     objJunctions.writeComponents(inserterJ);
+// 	for (const auto& objJunction : objectsJunctions) {
+// 		Z3i::DigitalSet setJunction = objJunction.pointSet();
+// 		int r = rand() % 256, g = rand() % 256, b = rand() % 256;
+// 		Color c(r,g,b);
+// 		set<Z3i::Point> sameEndPoint;
+// 		for (const auto & p : setV) {
+// 			if (setJunction.find(p) != setJunction.end()){
+// 				viewer << CustomColors3D(c,c) << p;
+// 				sameEndPoint.insert(p);
+// 			}
+// 		}
+// 		if (sameEndPoint.size() == 1) {
+// 			vector<Z3i::DigitalSet> v;
+// 			for (const auto& objOther : objectsJunctions) {
+// 				v.push_back(objOther.pointSet());
+// 			}
+// 			Z3i::DigitalSet closest = closestSet(setJunction, v);
+// 			for (const auto & p : setV) {
+// 				if (closest.find(p) != closest.end()){
+// 					sameEndPoint.insert(p);
+// 				}
+// 			}
+// 		}
+// 		for (const auto& sEP : sameEndPoint) {
+// 			for (const auto& sOEP : sameEndPoint) {
+// 				vector<Z3i::Point> link = PointUtil::linkTwoPoints(sEP, sOEP);
+// 				for (const auto& l : link)
+// 					viewer << l;
+// 			}
+// 		}
+// 	}
+	
+// 	for (auto it = cleanSkeletonPoints.begin(), ite = cleanSkeletonPoints.end(); it != ite; ++it) {
+// 		viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+// 	}
+
+// 	viewer << Viewer3D<>::updateDisplay;
+// 	application.exec();
+// 	return 0;
+	
+	
+	KSpace ks;	
 	ks.init( volume.domain().lowerBound(),
 			 volume.domain().upperBound(), true );
 	SurfelAdjacency<KSpace::dimension> surfAdj( true ); // interior in all directions.
@@ -443,13 +601,7 @@ int main( int  argc, char**  argv )
  		maxCurvaturePoints.insert(maximizingCurvaturePoint);
 	}
 	
-	
 
-	
-	VCM vcm( R, 1, l2, true );
-	vcm.init( setVolume.begin(), setVolume.end() );
-	Domain domain = vcm.domain();
-	KernelFunction chi( 1.0, 1 );
 	
 	typedef Z3i::Object26_6 ObjectType;
 
@@ -480,7 +632,7 @@ int main( int  argc, char**  argv )
 
 	Point closestBranchingCurrent;
 	trace.beginBlock("Connecting disconnected components");
-   
+	
 	while (objects.size() > 0) {
 		trace.progressBar(nbConnectedComponents-objects.size(), nbConnectedComponents);
 		vector<ObjectType>::iterator minimizingObjectToReference = objects.end();
@@ -523,16 +675,7 @@ int main( int  argc, char**  argv )
 			minimizingObjectToReference = objects.begin();
 			objects.erase(minimizingObjectToReference);
 		}
-		else if (Z3i::l2Metric(belongingToReference, belongingToCurrentObject) <= 2 * sqrt(3)) {
-			for (auto it = minimizingObjectToReference->pointSet().begin(), ite = minimizingObjectToReference->pointSet().end();
-				 it != ite; ++it) {
-				reference.pointSet().insert(*it);
-			}
-			vector<Point> newPoints = PointUtil::linkTwoPoints(belongingToCurrentObject, belongingToReference);
-			for (auto it = newPoints.begin(), ite = newPoints.end(); it != ite; ++it) 
-				skeletonPoints.insert(*it);
-			objects.erase(minimizingObjectToReference);
-		}
+		
 		else {
 	  
 		   
@@ -600,12 +743,7 @@ int main( int  argc, char**  argv )
 		 	  
 			Z3i::DigitalSet newPointsSet(setVolume.domain());
 			newPointsSet.insert(newPoints.begin(), newPoints.end());
-			for (auto it = newPoints.begin(), ite = newPoints.end(); it != ite; ++it) {
-				//skeletonPoints.insert(*it);
-				//viewer << CustomColors3D(Color::Blue, Color::Blue) << *it;
-			}
-			// viewer << Viewer3D<>::updateDisplay;
-			// qApp->processEvents();
+			
 
 			Z3i::DigitalSet computationVolume = computeBallAroundVector(newPoints, setVolume, dt);
 			Z3i::DigitalSet restrictedComputationVolume = computeBallAroundVector(computationPoints, setVolume, dt);

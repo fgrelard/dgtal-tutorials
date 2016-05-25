@@ -55,7 +55,7 @@
 #include "DGtal/topology/SetOfSurfels.h"
 #include "DGtal/topology/DigitalSurface2DSlice.h"
 #include "DGtal/topology/helpers/Surfaces.h"
-
+#include "DGtal/topology/MetricAdjacency.h"
 #include "DGtal/geometry/curves/ArithmeticalDSSComputer.h"
 #include "DGtal/geometry/curves/FreemanChain.h"
 #include "DGtal/geometry/curves/SaturatedSegmentation.h"

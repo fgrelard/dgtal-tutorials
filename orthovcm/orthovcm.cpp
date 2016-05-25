@@ -45,6 +45,7 @@
 #include "DGtal/io/readers/VolReader.h"
 #include "DGtal/graph/DepthFirstVisitor.h"
 
+
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
@@ -76,7 +77,7 @@ int main( int  argc, char**  argv )
 	typedef LinearAlgebraTool::Matrix Matrix;
 	typedef ImageSelector<Domain, unsigned char>::Type Image;
 	typedef VoronoiCovarianceMeasure<Space,Metric> VCM;
-	typedef functors::HatPointFunction<Point,double> KernelFunction;
+	typedef functors::BallConstantPointFunction<Point,double> KernelFunction;
   
 	typedef MSTTangent<Point> Tangent;
 	typedef Pencil<Point, Tangent, RealPoint> Pencil;
@@ -87,11 +88,10 @@ int main( int  argc, char**  argv )
 		("help,h", "display this message")
 		("skeleton,s", po::value<std::string>(), "vol file (skeleton)")
 		("input,i", po::value<std::string>(), "vol file (corresponding volume)")
-		("output,o", po::value<std::string>(), "sliced vol file with orthogonal planes")
 		("thresholdMin,m", po::value<int>()->default_value(0), "minimum threshold for binarization")
 		("thresholdMax,M", po::value<int>()->default_value(255), "maximum threshold for binarization")
-		("radiusInside,r", po::value<double>()->default_value(10), "radius of the ball inside voronoi cell")
-		("radiusNeighbour,R", po::value<double>()->default_value(10), "radius of the ball for the neighbourhood")
+		("radiusInside,R", po::value<double>()->default_value(10), "radius of the ball inside voronoi cell")
+		("radiusNeighbour,r", po::value<double>()->default_value(10), "radius of the ball for the neighbourhood")
 		; 
 
 	bool parseOK=true;
@@ -117,7 +117,6 @@ int main( int  argc, char**  argv )
 	}
 	string skeletonFilename = vm["skeleton"].as<std::string>();
 	string inputFilename = vm["input"].as<std::string>();
-	string outFilename = vm["output"].as<std::string>();
 	int thresholdMin = vm["thresholdMin"].as<int>();
 	int thresholdMax = vm["thresholdMax"].as<int>();
 	double R = vm["radiusInside"].as<double>();
@@ -180,7 +179,7 @@ int main( int  argc, char**  argv )
 
 
 //Computing lambda MST tangents
-	std::vector<Pencil> tangents = TangentUtils::orthogonalPlanesWithTangents<Pencil>(vPoints.begin(), vPoints.end());
+	std::vector<Pencil> tangents = TangentUtils::theoreticalTangentsOnBoudin<Pencil>(vPoints.begin(), vPoints.end(), 20);
   
 	VCM vcm( R, ceil( r ), l2, true );
 	vcm.init( vPoints.begin(), vPoints.end() );
@@ -200,6 +199,7 @@ int main( int  argc, char**  argv )
 									  DGtal::Z2i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH));
 	DGtal::functors::Identity idV;
 	int i = 0;
+	double sumDotProduct = 0;
 	for ( auto it = ++tangents.begin(), itE = tangents.end();
 		  it != itE; ++it )
 	{
@@ -219,7 +219,7 @@ int main( int  argc, char**  argv )
 
 		vcm_r = vcm.measure( chi, it->getPoint() );
 		LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
-		double feature = eval[1] /  (eval[0] + eval[ 1 ]+  eval[3]);
+
 	    // Display normal
 		RealVector n = evec.column( 2 );
 		n*=size;
@@ -227,28 +227,29 @@ int main( int  argc, char**  argv )
 		RealVector n2 = evec.column( 1 );
 		n2*=size;
 
-		//if(sliceNumber > 2280 && sliceNumber < 2420 && sliceNumber % 10 ==0) {
-		if(sliceNumber % 10 ==0) {
+		RealVector normal = evec.column(0).getNormalized();
+		sumDotProduct += std::abs(normal.dot(it->getTangent().getNormalized()));
+		if(sliceNumber > 2560 && sliceNumber < 2700 && sliceNumber % 10 ==0) {
+		//if(sliceNumber % 10 ==0) {
 			viewer.setLineColor(Color::Blue);
 			viewer.setFillColor(Color::Blue);
 			viewer.setFillTransparency(150);
-			viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
-			std::string outName;
-			outName += outFilename + "_" + std::to_string(i) + ".pgm";
-			PGMWriter<ImageAdapterExtractor>::exportPGM(outName, extractedImage);
+			viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);		
 			i++;
 		}
 			//}
 		sliceNumber++;
 	}
 
-	for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
-		if (volume(*it) >= thresholdMin)
-			viewer << CustomColors3D(Color(0,0,255,20), Color(0,0,255,20))<<*it;
+	trace.info() << sumDotProduct / sliceNumber << endl;
+
+	for (auto it = vPoints.begin(), ite = vPoints.end(); it != ite; ++it) {
+		//	if (volume(*it) >= thresholdMin)
+//			viewer << CustomColors3D(Color(0,0,255,20), Color(0,0,255,20))<<*it;
 	}
-  
+	viewer << CustomColors3D(Color(150,0,0,50), Color(150,0,0,50)) << setSurface;
 	viewer << Viewer3D<>::updateDisplay;
-	application.exec();
+    application.exec();
 	return 0;
 }
 //                                                                          //

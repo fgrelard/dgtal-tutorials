@@ -246,27 +246,16 @@ init( PointInputIterator itb, PointInputIterator ite )
           double d = myMetric( q, p );
           if ( d <= myBigR ) // We restrict computation to the R offset of K.
 		  {
-			  bool process = true;
 			  VectorN v( p[ 0 ] - q[ 0 ], p[ 1 ] - q[ 1 ], p[ 2 ] - q[ 2 ] );
-			  if (myIsInDomain) {
-				  VectorN vNorm = v.getNormalized();
-				  while (vNorm.norm() < v.norm()) {
-					  Point qprime = q + vNorm;
-					  if (!inCharSet(q+vNorm) )
-						  process = false;
-					  vNorm += v.getNormalized();
-				  }
-			  }
-			  if (process) {
-				  // Computes tensor product V^t x V
-				  for ( Dimension i = 0; i < 3; ++i ) 
-					  for ( Dimension j = 0; j < 3; ++j )
-						  m.setComponent( i, j, v[ i ] * v[ j ] ); 
-				  myVCM[ q ] += m;
-			  }
-            }
-        }
-    }
+              // Computes tensor product V^t x V
+              for ( Dimension i = 0; i < 3; ++i ) 
+                for ( Dimension j = 0; j < 3; ++j )
+                  m.setComponent( i, j, v[ i ] * v[ j ] ); 
+              myVCM[ q ] += m; 
+			 
+		  }
+	  }
+  }
   if ( myVerbose ) trace.endBlock();
  
   if ( myVerbose ) trace.endBlock();
@@ -324,7 +313,8 @@ measure( const std::vector<Point>& neighbors, Point2ScalarFunction chi_r, Point 
           it_neighbors_end = neighbors.end(); it_neighbors != it_neighbors_end; ++it_neighbors )
     {
       Point q = *it_neighbors;
-      Scalar coef = chi_r( q - p );
+	  // Scalar coef = chi_r( q - p );
+	  Scalar coef = 1.0;
       if ( coef > 0.0 ) 
         {
           typename std::map<Point,MatrixNN>::const_iterator it = myVCM.find( q );

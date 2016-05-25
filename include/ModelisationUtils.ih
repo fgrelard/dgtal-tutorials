@@ -100,6 +100,22 @@ void drawEllipse(vector<Point>& vectorPoints, float a, float b, float cx, float 
 	}
 }
 
+template <typename Point>
+void drawEllipsoid(set<Point>& vectorPoints, float a, float b, float c, float cx, float cy, float cz, float increment) {
+	Point center(cx/a, cy/b, cz/c);
+	for (float x = cx - a, xend = cx + a + 1; x < xend; x+=increment) {
+		for (float y = cy - b, yend = cy + b +  1; y < yend; y+=increment) {
+			for (float z = cz - c, zend = cz + c +  1; z < zend; z+=increment) {
+				Point current(x/a, y/b, z/c);
+//				std::cout << euclideanDistance(center, current) << std::endl;
+				if (euclideanDistance(center, current) <= 1) {
+					vectorPoints.insert(Point(x,y,z));
+				}
+			}
+		}
+	}
+}
+
 
 void drawDisk(Eigen::Matrix<double, Eigen::Dynamic, 4> & m, double radius, double cx, double cy, double cz, long int &row, float increment) {
 	for (float x = cx - radius, xend = cx + radius + 1; x < xend; x+=increment) {
@@ -293,18 +309,18 @@ void createHalfVolumeFromCurve(const vector<CurvePoint> & curve, set<Point> & vo
 template <typename CurvePoint, typename Point>
 void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & volume, int ballRadius, double angle, const Eigen::Vector3d& vectorRot) {
     typedef Ball<CurvePoint> Ball;
-	Ball ball({0,0,0}, ballRadius);
+	typedef typename Point::Scalar Scalar;
 	Eigen::Matrix<double, Eigen::Dynamic, 4> matrix(1, 4);
 	long int row = 0;
 		
 	//drawDisk(matrix, 20.0, 0, 0, 0, row, 0.5);
 	for (const CurvePoint& point : curve) {
+		matrix.conservativeResize(row+1, 4);
 		matrix(row, 0) = point[0];
 		matrix(row, 1) = point[1];
 		matrix(row, 2) = point[2];
 		matrix(row, 3) = 1;
-		row++;
-		matrix.conservativeResize(row+1, 4);
+		row++;		
 	}
 
 	set<Point> rotatedCurves;
@@ -312,9 +328,9 @@ void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & 
 	Eigen::Matrix<double, Eigen::Dynamic, 4> m = matrix * rot.matrix();
 	for (int i = 0; i < m.innerSize(); i++) {
 		if (m(i, 0) != 0 || m(i, 1) != 0 || m(i, 2) != 0) {
-			int posx = m(i, 0);
-			int posy = m(i, 1);
-			int posz = m(i, 2) + 25;
+			Scalar posx = m(i, 0);
+			Scalar posy = m(i, 1);
+			Scalar posz = m(i, 2) + 25;
 		    rotatedCurves.insert({posx, posy, posz});
 		}
 	}
@@ -322,10 +338,11 @@ void createRotatedVolumeFromCurve(const vector<CurvePoint>& curve, set<Point> & 
 	for (auto it = rotatedCurves.begin(), ite = rotatedCurves.end();
 		 it != ite; ++it) {
 		Ball ball(*it, ballRadius);
-		vector<Point> pointsInBall = ball.pointsInBall();
+		Point current = *it;
+		vector<CurvePoint> pointsInBall = ball.pointsInBall();
+		// drawEllipsoid(pointsInBall, 7, 10, 7, current[0], current[1], current[2], 0.5);
 		volume.insert(pointsInBall.begin(), pointsInBall.end());
-	}
-   
+	}   
 }
 
 template <typename DigitalSet>

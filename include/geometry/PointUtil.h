@@ -72,7 +72,7 @@ Domain PointUtil::computeBoundingBox(const Container & points) {
 		max_y = point[1] > max_y ? point[1] : max_y;
 		max_z = point[2] > max_z ? point[2] : max_z;
 	}
-	Domain domain({min_x, min_y, min_z}, {max_x, max_y, max_z});
+	Domain domain({min_x-1, min_y-1, min_z-1}, {max_x+1, max_y+1, max_z+1});
 	return domain;
 }
 

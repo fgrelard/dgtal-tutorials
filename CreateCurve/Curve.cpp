@@ -96,19 +96,25 @@ int main( int argc, char** argv )
 	int range = 200;
 	int pitch =  20;
 	int radius = 10;
-	
+
 	vector<PointVector<3, double>> curve;
-	createContinuousLogarithmicCurve(curve, 35, increment);
-//	createStraightLine(curve, 50, increment);
+	set<PointVector<3,double>> vectorPoints;
+	
+//	createContinuousLogarithmicCurve(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
-    set<PointVector<3,double>> vectorPoints;
+//	createVolumeFromCurve(curve, vectorPoints, 7);
+	createStraightLine(curve, 35, increment);
+
+
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	thinVolume<Pencil>(curve, vectorPoints, 20.0);
 //	drawDeformedCylinder(vectorPoints, 50, 5, increment);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 6, M_PI/3);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 6, -M_PI/2, -Eigen::Vector3d(0, sqrt(2)/2, sqrt(2)/2));
-	createRotatedVolumeFromCurve(curve, vectorPoints, 8, -2*M_PI/3, Eigen::Vector3d(sqrt(2)/2, sqrt(2)/2, 0));
+	createRotatedVolumeFromCurve(curve, vectorPoints, 4, M_PI/2);
+	createRotatedVolumeFromCurve(curve, vectorPoints, 4, -2.8333*M_PI/6.6667// , -Eigen::Vector3d(0, sqrt(2)/2, sqrt(2)/2)
+		);
+	createRotatedVolumeFromCurve(curve, vectorPoints, 4, -3.8333*M_PI/6.6667//, Eigen::Vector3d(sqrt(2)/2, sqrt(2)/2, 0)
+		);
 //	createRotatedVolumeFromCurve(curve, vectorPoints, 5, 2*M_PI/3);
 		
 	Ball<PointVector<3, double>> ball(Point(0,0,0), 10); 
