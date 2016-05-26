@@ -77,6 +77,7 @@
 #include "geometry/WeightedPointCount.h"
 #include "geometry/VCMUtil.h"
 #include "geometry/WeightedPointCount.h"
+#include "geometry/SaddleComputer.h"
 #include "surface/SurfaceTraversal.h"
 #include "Statistics.h"
 #include "shapes/Ball.h"
@@ -414,6 +415,16 @@ vector<Z3i::Point> findEndPoints(const Z3i::DigitalSet& set) {
 	return endPoints;
 }
 
+bool sameSet(const Z3i::DigitalSet& first, const Z3i::DigitalSet& second) {
+	if (first.size() != second.size()) return false;
+	unsigned int cpt = 0;
+	for (const Z3i::Point& f : first) {
+		if (second.find(f) != second.end())
+			cpt++;
+	}
+	return (cpt == first.size());
+}
+
 vector<GraphEdge*> neighboringEdges(const vector<GraphEdge*>& edges,
 									const Z3i::DigitalSet& currentEdge,
 									const Z3i::DigitalSet& branchingPoints) {
@@ -433,6 +444,7 @@ vector<GraphEdge*> neighboringEdges(const vector<GraphEdge*>& edges,
 	
 	for (GraphEdge* edge : edges) {
 		Z3i::DigitalSet setEdge = edge->pointSet();
+		if (sameSet(setEdge, currentEdge)) continue;
 		for (const Z3i::Point& n : nb) {
 			if (setEdge.find(n) != setEdge.end())
 				neighbors.push_back(edge);
@@ -530,12 +542,10 @@ double distanceToDelineateSubVolume(const Z3i::Point& current,
 	return distance;
 }
 
-template <typename VCM, typename KernelFunction, typename Container>
-map<Z3i::Point, Z3i::Point> computePlanesForSubVolume(const Z3i::Point& current,
-													  const Z3i::Point& b,
-													  const vector<GraphEdge*> neighborEdge,
-													  const Container& setVolume,
-													  double distance) {
+template <typename VCM, typename KernelFunction>
+map<Z3i::Point, Z3i::RealPoint> computePlanesForSubVolume(const Z3i::Point& b,
+														  const vector<GraphEdge*> neighborEdge,
+														  double distance) {
 	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;	
 	Metric l2;
 	
@@ -548,6 +558,7 @@ map<Z3i::Point, Z3i::Point> computePlanesForSubVolume(const Z3i::Point& current,
 			double difference = std::abs(Z3i::l2Metric(e, b) - distance);
 			if (difference < maxDifference) {
 				candidate  = e;
+				maxDifference = difference;
 			}
 		}
 
@@ -565,11 +576,11 @@ map<Z3i::Point, Z3i::Point> computePlanesForSubVolume(const Z3i::Point& current,
 
 template <typename VCM, typename KernelFunction, typename Container>
 Container constructSubVolume(const Z3i::Point& current,
-								   const vector<GraphEdge*>& graph,
-								   const Z3i::DigitalSet& currentEdge,
-								   const Container& setVolume,
-								   const Z3i::DigitalSet& branchingPoints,
-								   const Z3i::DigitalSet& saddlePoints) {
+							 const vector<GraphEdge*>& graph,
+							 const Z3i::DigitalSet& currentEdge,
+							 const Container& setVolume,
+							 const Z3i::DigitalSet& branchingPoints,
+							 const Z3i::DigitalSet& saddlePoints) {
 	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
 
 	vector<Z3i::Point> neighbors;
@@ -588,25 +599,27 @@ Container constructSubVolume(const Z3i::Point& current,
 													   currentEdge,
 													   branchingPoints);
 	
-	double distance = distanceToDelineateSubVolume(current, b, neighborEdge, setVolume, saddlePoints);
-	map<Z3i::Point, Z3i::RealPoint> normals = computePlanesForSubVolume(current, b, neighborEdge, setVolume, distance);
+	double distance = distanceToDelineateSubVolume<VCM, KernelFunction>(current, b, neighborEdge, setVolume, saddlePoints);
+	map<Z3i::Point, Z3i::RealPoint> normals = computePlanesForSubVolume<VCM, KernelFunction>(b, neighborEdge, distance);
 
 	Container subVolume;
 	for (auto it = setVolume.begin(), ite = setVolume.end();
 		 it != ite; ++it) {
-		Z3i::Point current = (*it)->myPoint;
-		bool toAdd = false;
+		Z3i::Point pointVolume = (*it)->myPoint;
+		int cpt = 0;
 		for (const auto& pair : normals) {
-			if (VCMUtil::abovePlane(current, pair.second, pair.first)) {
-				toAdd = true;
-			}
-			if (toAdd)
-				subVolume.insert(*it);
+			if (pair.first == current)
+				continue;
+			if (VCMUtil::abovePlane(pointVolume, pair.second, pair.first)) {
+				cpt++;
+			}		
 		}
+		bool toAdd = (cpt >= normals.size()-1);
+		if (toAdd)
+			subVolume.insert(*it);
 	}
 	return subVolume;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
@@ -804,7 +817,12 @@ int main( int  argc, char**  argv )
 			checkPointForMedialAxis(dt, vPoints, *it);
 		}		
 	}
-   
+
+	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
+	SaddleComputer<DTL2, BackgroundPredicate> saddleComputer(setVolume, dt, backgroundPredicate, R, r, delta);
+	Z3i::DigitalSet saddlePoints = saddleComputer.extractSaddlePoints(setVolume);
+	Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(saddlePoints);
+	
 	//Construct VCM surface
 	Metric l2;
 	VCM vcmSurface(R, ceil(r), l2, false);
@@ -812,9 +830,6 @@ int main( int  argc, char**  argv )
 	vcmSurface.init(setVolume.begin(), setVolume.end());
 		
 	KernelFunction chi( 1.0, r );
-
- 
-	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 
 	int i = 0;
 	
@@ -857,7 +872,21 @@ int main( int  argc, char**  argv )
 			
 			// Compute discrete plane
 			radius = edge.size() * 0.4;
-			connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+			set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> subVolumeWeighted;
+			subVolumeWeighted = constructSubVolume<VCM, KernelFunction>(s,
+																		hierarchicalGraph,
+																		edge,
+																		setVolumeWeighted,
+																		branchingPoints,
+																		saddlePoints);
+
+			if (subVolumeWeighted.size() < setVolumeWeighted.size()) {
+				trace.info() << subVolumeWeighted.size() << " " << setVolumeWeighted.size() << endl;
+				for (auto it = subVolumeWeighted.begin(), ite=  subVolumeWeighted.end(); it != ite; ++it) {
+					viewer << CustomColors3D(Color(0,120,0,120), Color(0,120,0,120)) << (*it)->myPoint;
+				}
+			}
+			connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted,
 																 s, normal,
 																 0, radius, distanceMax, false);
 
@@ -885,10 +914,10 @@ int main( int  argc, char**  argv )
 			// 	keep = (dot > angleThreshold);
 			// }
 			realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-
+			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 			//Center of mass computation
 			if (realCenter != Z3i::RealPoint()) {
-				centerOfMass = findMaxDTInSet(connectedComponent3D, dt, s);
+//				centerOfMass = findMaxDTInSet(connectedComponent3D, dt, s);
 
 				//Pruning
 				if (graphEdge->getLabel() == 1 && !keep) {				    
@@ -911,12 +940,15 @@ int main( int  argc, char**  argv )
 		if (cpt >= 0.5 * edge.size())
 			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << edge;
 		else
-			viewer << CustomColors3D(Color::Red, Color::Red) << edge;
+			viewer << CustomColors3D(Color::Red, Color::Red) << smoothedEdge;
+		viewer << Viewer3D<>::updateDisplay;
+		qApp->processEvents();
+				
 		i++;
 	}
 		
 	trace.endBlock();	   
-	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+//	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
 	
 	//second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {

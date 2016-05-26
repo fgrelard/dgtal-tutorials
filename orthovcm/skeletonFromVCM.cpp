@@ -68,6 +68,7 @@
 #include "geometry/ImageUtil.h"
 #include "surface/SurfaceUtils.h"
 #include "surface/Morphomaths.h"
+#include "geometry/SaddleComputer.h"
 #include "clustering/diana.hpp"
 #include "geometry/WeightedPointCount.h"
 #include "geometry/VCMUtil.h"
@@ -639,7 +640,8 @@ int main( int  argc, char**  argv )
 	bool isDT = vm["skeleton"].as<bool>();
 
 	QApplication application(argc,argv);
-
+	Viewer3D<> viewer;
+	viewer.show();
 	
 	Image volume = VolReader<Image>::importVol(inputFilename);
 	Z3i::Domain domainVolume = volume.domain();
@@ -672,73 +674,16 @@ int main( int  argc, char**  argv )
 	}
 
 
-   
-	//Construct VCM surface
 	Metric l2;
-	KSpace ks;
-	ks.init( volume.domain().lowerBound(),
-			 volume.domain().upperBound(), true );
-	SurfelAdjacency<KSpace::dimension> surfAdj( true ); // interior in all directions.
-	Surfel bel = Surfaces<KSpace>::findABel( ks, backgroundPredicate, 1000000 );
-	DigitalSurfaceContainer* container =
-		new DigitalSurfaceContainer( ks, backgroundPredicate, surfAdj, bel, false  );
-	DigitalSurface< DigitalSurfaceContainer > surface( container ); //acquired
-
-	//! [DVCM3D-instantiation]
-	Surfel2PointEmbedding embType = InnerSpel; // Could be Pointels|InnerSpel|OuterSpel;
-	KernelFunction chiSurface( 1.0, r );             // hat function with support of radius r
-
-	
-	VCMOnSurface* vcm_surface = new VCMOnSurface( surface, embType, R, r,
-												  chiSurface, dt, delta, l2, true);
-
-	
-
-	Viewer3D<Space, KSpace> viewer(ks);
-	viewer.show();
-	
-	
-	vector<double> curvaturePoints = extractCurvatureOnPoints(*vcm_surface);
-	double threshold = Statistics::otsuThreshold(curvaturePoints);
-	double threshold2 = Statistics::unimodalThresholding(curvaturePoints);
-	trace.info() << threshold << " " << threshold2 << endl;
-
-//	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
-	Z3i::DigitalSet setSurface(domainVolume);
-	std::set<Point> pointSet;
-	for ( auto it = surface.begin(), itE = surface.end(); it != itE; ++it )
-		vcm_surface->getPoints( std::inserter( pointSet, pointSet.begin() ), *it );
-	setSurface.insert(pointSet.begin(), pointSet.end());
-	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, threshold2);
+	SaddleComputer<DTL2, BackgroundPredicate> saddleComputer(setVolume, dt, backgroundPredicate, R, r, delta);
+	Z3i::DigitalSet branchingPoints = saddleComputer.extractSaddlePoints(setVolume);
+ 	Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(branchingPoints);
+	Z3i::DigitalSet setSurface = saddleComputer.getSurface(domainVolume);
 
 	//Z3i::DigitalSet saddleEroded = erodeSaddleAreas(branchingPoints,
 	//												setSurface, vPoints, dt);
 	//branchingPoints = saddleEroded;
 	
-	trace.info() << threshold << endl;
-	NotPointPredicate notBranching(branchingPoints);
-	Z3i::Object26_6 obj(Z3i::dt26_6, branchingPoints);
-	vector<Z3i::Object26_6> objects;
-	back_insert_iterator< std::vector<Z3i::Object26_6> > inserter( objects );
-	unsigned int nbConnectedComponents = obj.writeComponents(inserter);
-	Z3i::DigitalSet maxCurvaturePoints(domainVolume);
-	Matrix vcmrB, evecB;
-	Z3i::RealVector evalB;
-	for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
-		double ratioMax = 0;
-		Point maximizingCurvaturePoint;
-		for (auto itPoint = it->pointSet().begin(), itPointE = it->pointSet().end(); itPoint != itPointE; ++itPoint) {
-			auto lambda = (vcm_surface->mapPoint2ChiVCM()).at(*itPoint).values;
-			double ratio = VCMUtil::computeCurvatureJunction(lambda); 
-			if (ratio > ratioMax) {
-				ratioMax = ratio;
-				maximizingCurvaturePoint = *itPoint;
-			}
-		}
-   
-
-		maxCurvaturePoints.insert(maximizingCurvaturePoint);
-	}
 
    
 	
@@ -910,7 +855,6 @@ int main( int  argc, char**  argv )
 	}
 	trace.endBlock();
 	
-	delete vcm_surface;
 	
 	//Discarding points being in branching parts
 	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
