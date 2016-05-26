@@ -494,6 +494,120 @@ Z3i::DigitalSet ensureConnexity(const Z3i::DigitalSet& set) {
 	return cleanSet;
 }
 
+template <typename VCM, typename KernelFunction, typename Container>
+double distanceToDelineateSubVolume(const Z3i::Point& current,
+									const Z3i::Point& b,
+									const vector<GraphEdge*> neighborEdge,
+									const Container& setVolume,
+									const Z3i::DigitalSet& saddlePoints) {
+
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;	
+	Metric l2;
+	double distance = 0;
+	for (GraphEdge* edge : neighborEdge) {
+		Z3i::DigitalSet setEdge = edge->pointSet();
+		if (setEdge.find(current) != setEdge.end()) continue;
+		for (const Z3i::Point& e : setEdge) {			   			
+			double radius = setEdge.size() * 0.4;
+			VCM vcm(20, ceil(radius), l2, false);
+			vcm.init(setEdge.begin(), setEdge.end());
+			KernelFunction chi(1.0, radius);
+			Z3i::RealPoint normal;
+			Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, saddlePoints, setVolume,
+																				 e, normal,
+																				 0, radius, radius*2, false);
+			for (const Z3i::Point& s : saddlePoints) {
+				if (connectedComponent3D.find(s) != connectedComponent3D.end()) {
+					double currentDistance = Z3i::l2Metric(e, b);
+					if (currentDistance > distance) {
+						distance = currentDistance;
+					}
+				}
+					
+			}
+		}
+	}
+	return distance;
+}
+
+template <typename VCM, typename KernelFunction, typename Container>
+map<Z3i::Point, Z3i::Point> computePlanesForSubVolume(const Z3i::Point& current,
+													  const Z3i::Point& b,
+													  const vector<GraphEdge*> neighborEdge,
+													  const Container& setVolume,
+													  double distance) {
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;	
+	Metric l2;
+	
+	map<Z3i::Point, Z3i::RealPoint> normals;
+	for (GraphEdge* edge: neighborEdge) {
+		Z3i::DigitalSet setEdge = edge->pointSet();
+		double maxDifference = std::numeric_limits<double>::max();
+		Z3i::Point candidate;
+		for (const Z3i::Point& e : setEdge) {
+			double difference = std::abs(Z3i::l2Metric(e, b) - distance);
+			if (difference < maxDifference) {
+				candidate  = e;
+			}
+		}
+
+		double radius = setEdge.size() * 0.4;
+		VCM vcm(20, ceil(radius), l2, false);
+		vcm.init(setEdge.begin(), setEdge.end());
+		KernelFunction chi(1.0, radius);
+		Z3i::RealPoint normal = VCMUtil::computeNormalFromVCM(candidate, vcm, chi, 0);
+		Z3i::RealPoint directionVector = (candidate - b).getNormalized();
+		normal = (normal.dot(directionVector) < 0) ? normal : -normal;
+		normals[candidate] = normal;		
+	}
+	return normals;
+}
+
+template <typename VCM, typename KernelFunction, typename Container>
+Container constructSubVolume(const Z3i::Point& current,
+								   const vector<GraphEdge*>& graph,
+								   const Z3i::DigitalSet& currentEdge,
+								   const Container& setVolume,
+								   const Z3i::DigitalSet& branchingPoints,
+								   const Z3i::DigitalSet& saddlePoints) {
+	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
+
+	vector<Z3i::Point> neighbors;
+	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);	
+	MAdj::writeNeighbors(inserter, current);
+
+	Z3i::Point b;
+	for (const Z3i::Point& n : neighbors) {
+		if (branchingPoints.find(n) != branchingPoints.end())
+			b = n;
+	}
+	if (b == Z3i::Point())
+		return setVolume;
+
+	vector<GraphEdge*> neighborEdge = neighboringEdges(graph,
+													   currentEdge,
+													   branchingPoints);
+	
+	double distance = distanceToDelineateSubVolume(current, b, neighborEdge, setVolume, saddlePoints);
+	map<Z3i::Point, Z3i::RealPoint> normals = computePlanesForSubVolume(current, b, neighborEdge, setVolume, distance);
+
+	Container subVolume;
+	for (auto it = setVolume.begin(), ite = setVolume.end();
+		 it != ite; ++it) {
+		Z3i::Point current = (*it)->myPoint;
+		bool toAdd = false;
+		for (const auto& pair : normals) {
+			if (VCMUtil::abovePlane(current, pair.second, pair.first)) {
+				toAdd = true;
+			}
+			if (toAdd)
+				subVolume.insert(*it);
+		}
+	}
+	return subVolume;
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
 {
@@ -720,12 +834,13 @@ int main( int  argc, char**  argv )
 	for (GraphEdge* graphEdge : hierarchicalGraph) {
 		Z3i::DigitalSet edge = graphEdge->pointSet();
 		trace.progressBar(i, edgeGraph.size());	
-		if (graphEdge->getLabel() != 1 || edge.size() == 0) continue;
+		if (edge.size() == 0) continue;
 		VCM vcm(R, ceil(r), l2, false);
 		vcm.init(edge.begin(), edge.end());
 		bool add = true;
 		//Main loop to compute skeleton (stop when no vol points left to process)
 		int cpt = 0;
+		Z3i::DigitalSet smoothedEdge(edge.domain());
 		for (const Z3i::Point& s : edge)
 		{
 				
@@ -739,15 +854,13 @@ int main( int  argc, char**  argv )
 					chi = KernelFunction( 1.0, radius);
 				}
 			}
+			
 			// Compute discrete plane
 			radius = edge.size() * 0.4;
 			connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 																 s, normal,
 																 0, radius, distanceMax, false);
 
-			double majorAxis = computeRadiusFromIntersection(volume, s, normal, distanceMax*2, 1, 1);
-			double minorAxis = computeRadiusFromIntersection(volume, s, normal, distanceMax*2, 0, 1);
-			double ratio = minorAxis / majorAxis;
 			//Z3i::DigitalSet surfelSet = extractRelevantSurfacePointsForVolVCM(connectedComponent3D, dt, s);
 			Z3i::DigitalSet surfelSet = extractSurfacePointsWithEigenVectors(connectedComponent3D, dt, s, dt(s));
 		    vector<Z3i::Point> surfels(surfelSet.begin(), surfelSet.end());
@@ -760,34 +873,35 @@ int main( int  argc, char**  argv )
 			Z3i::RealPoint normalSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
 			double dot = std::abs(normalSurface.dot(normal));
 			bool keep = (dot > angleThreshold);
-			if (!keep) {
-				Z3i::DigitalSet planeSurface = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume,
-																			 setVolumeWeighted, s, normalSurface,
-																			 0, radiusSurface, distanceMax, false, Z3i::RealVector(),
-																			 surfels);
-				Z3i::DigitalSet surfelSetSurface = extractSurfacePointsWithEigenVectors(planeSurface, dt, s, dt(s));
-				vector<Z3i::Point> surfelsSurface(surfelSetSurface.begin(), surfelSetSurface.end());
-				Z3i::RealPoint normalFromSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfelsSurface);
-				dot = std::abs(normal.dot(normalFromSurface));
-				keep = (dot > angleThreshold);
-			}
+			// if (!keep) {
+			// 	Z3i::DigitalSet planeSurface = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume,
+			// 																 setVolumeWeighted, s, normalSurface,
+			// 																 0, radiusSurface, distanceMax, false, Z3i::RealVector(),
+			// 																 surfels);
+			// 	Z3i::DigitalSet surfelSetSurface = extractSurfacePointsWithEigenVectors(planeSurface, dt, s, dt(s));
+			// 	vector<Z3i::Point> surfelsSurface(surfelSetSurface.begin(), surfelSetSurface.end());
+			// 	Z3i::RealPoint normalFromSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfelsSurface);
+			// 	dot = std::abs(normal.dot(normalFromSurface));
+			// 	keep = (dot > angleThreshold);
+			// }
 			realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-//			keep = (ratio > angleThreshold);
+
 			//Center of mass computation
 			if (realCenter != Z3i::RealPoint()) {
 				centerOfMass = findMaxDTInSet(connectedComponent3D, dt, s);
 
 				//Pruning
-				if (!keep) {				    
-					// viewer << CustomColors3D(Color::Yellow, Color::Yellow) << s;
-					// viewer << CustomColors3D(Color::Red, Color::Red);
-					// viewer.addLine(s, s+normal*6);
-					// viewer << CustomColors3D(Color::Blue, Color::Blue);
-					// viewer.addLine(s, s+normalSurface*6);
+				if (graphEdge->getLabel() == 1 && !keep) {				    
+					//viewer << CustomColors3D(Color::Yellow, Color::Yellow) << s;
+					viewer << CustomColors3D(Color::Red, Color::Red);
+					viewer.addLine(s, s+normal*6);
+					viewer << CustomColors3D(Color::Blue, Color::Blue);
+					viewer.addLine(s, s+normalSurface*6);
 					// viewer << surfelSet;
 					cpt++;
 				}
-				
+				else				   
+					smoothedEdge.insert(centerOfMass);				
 													
 			}
 			else {
@@ -801,16 +915,14 @@ int main( int  argc, char**  argv )
 		i++;
 	}
 		
-	trace.endBlock();
-	   
+	trace.endBlock();	   
 	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
 	
 	//second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
 	    viewer << CustomColors3D(Color(0,0,120,30), Color(0,0,120,30)) << (*it)->myPoint;
 	}
-
-	
+   
 	Image outImage(volume.domain());
 	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
 	VolWriter<Image>::exportVol(outFilename, outImage);

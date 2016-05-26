@@ -657,7 +657,7 @@ int main( int  argc, char**  argv )
 	typename Segmentation::SegmentComputerIterator end = s.end();
 //	Z3i::DigitalSet branchingPoints = branchingPointDetection(s, existingSkeletonOrdered, domainVolume);
 	Z3i::DigitalSet branchingPoints = detectCriticalPoints(existingSkeleton);
-	branchingPoints = reduceClustersToCenters(branchingPoints);
+//	branchingPoints = reduceClustersToCenters(branchingPoints);
 	
 	vector<Z3i::DigitalSet> edgeGraph = constructGraph(existingSkeletonOrdered, branchingPoints);
 	vector<Z3i::Point> endPoints = findEndPoints(existingSkeleton);

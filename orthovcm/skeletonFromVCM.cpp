@@ -121,8 +121,8 @@ unsigned int computeDegree(const Z3i::DigitalSet& shell) {
 }
 
 
-template <typename VCM, typename DTL2, typename Domain>
-Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const DTL2& dt, const vector<Z3i::Point>& vPoints,
+template <typename VCM, typename Domain>
+Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm,
 													const Domain& domain, double threshold) {
 	typedef typename VCM::Point2EigenStructure::const_iterator P2EConstIterator;
 
@@ -133,9 +133,6 @@ Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, const DTL2& 
     {
 		auto lambda = it->second.values;
 		double ratio = VCMUtil::computeCurvatureJunction(lambda);
-		Z3i::Point closestPointToCurrent = *min_element(vPoints.begin(), vPoints.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
-				return Z3i::l2Metric(one, it->first) < Z3i::l2Metric(two, it->first);
-			});
 		if (ratio > threshold &&  sqrt(lambda[2]) < R*R)
 			aSet.insert(it->first);
 	}
@@ -712,7 +709,7 @@ int main( int  argc, char**  argv )
 	for ( auto it = surface.begin(), itE = surface.end(); it != itE; ++it )
 		vcm_surface->getPoints( std::inserter( pointSet, pointSet.begin() ), *it );
 	setSurface.insert(pointSet.begin(), pointSet.end());
-	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, dt, vPoints, domainVolume, threshold2);
+	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*vcm_surface, domainVolume, threshold2);
 
 	//Z3i::DigitalSet saddleEroded = erodeSaddleAreas(branchingPoints,
 	//												setSurface, vPoints, dt);
