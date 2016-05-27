@@ -681,6 +681,72 @@ Z3i::DigitalSet constructSubVolumeWithTangent(const Z3i::Point& current,
 }
 
 
+std::set<Z3i::Point> vectorsToCompare(const std::vector<Z3i::Point>& directionVectors) {
+	
+	set<Z3i::Point> vectorsToCompare;
+	for (const Z3i::Point& directionVector: directionVectors) {
+		for (const Z3i::Point& otherDirectionVector : directionVectors) {
+			if (directionVector == otherDirectionVector) continue;
+			if (directionVector.dot(otherDirectionVector) > 0) {
+				vectorsToCompare.insert(directionVector);
+				vectorsToCompare.insert(otherDirectionVector);
+			}
+		}
+	}
+	return vectorsToCompare;
+}
+
+std::set<Z3i::Point> vectorsToPoint(const std::set<Z3i::Point>& vectorsToCompare,
+									const Z3i::Point& branchingPoint) {
+	set<Z3i::Point> vectorsToPoint;
+	for (const Z3i::Point& p : vectorsToCompare) {
+		vectorsToPoint.insert(branchingPoint + p);
+	}
+	return vectorsToPoint;
+}
+
+
+vector<GraphEdge*> edgesAssociatedWithPoints(const std::set<Z3i::Point>& point,
+											 const vector<GraphEdge*>& graph) {
+	vector<GraphEdge*> edges;
+	for (GraphEdge* edge : graph) {
+		Z3i::DigitalSet setEdge = edge->pointSet();
+		for (const Z3i::Point& p : point) {
+			if (setEdge.find(p) != setEdge.end())
+				edges.push_back(edge);
+		}
+	}
+	return edges;
+}
+
+template <typename VCM, typename KernelFunction, typename Container>
+map<Z3i::Point, Z3i::RealPoint> constructSubVolumeWithPlanes(const Z3i::Point& current,
+															 const vector<GraphEdge*>& graph,
+															 const Container& setVolume,
+															 const Z3i::Point& b,
+															 const Z3i::DigitalSet& saddlePoints) {
+	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;	
+	Metric l2;
+
+	vector<Z3i::Point> directionVectors;
+	vector<Z3i::Point> neighbors;
+	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);	
+	MAdj::writeNeighbors(inserter, b);
+	for (const Z3i::Point& n : neighbors) {
+		Z3i::Point directionVector = (b - n);
+		directionVectors.push_back(directionVector);
+	}
+
+	set<Z3i::Point> sameOrientationVectors = vectorsToCompare(directionVectors);
+	set<Z3i::Point> pointsToAnalyse = vectorsToPoint(sameOrientationVectors, b);
+	vector<GraphEdge*> edges = edgesAssociatedWithPoints(pointsToAnalyse, graph);
+	double distance = distanceToDelineateSubVolume<VCM, KernelFunction>(current, b, edges, setVolume, saddlePoints);
+	map<Z3i::Point, Z3i::RealPoint> normals = computePlanesForSubVolume<VCM, KernelFunction>(b, edges, distance);		
+	return normals;
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
 {
@@ -882,6 +948,22 @@ int main( int  argc, char**  argv )
 	SaddleComputer<DTL2, BackgroundPredicate> saddleComputer(setVolume, dt, backgroundPredicate, R, r, delta);
 	Z3i::DigitalSet saddlePoints = saddleComputer.extractSaddlePoints(setVolume);
 	Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(saddlePoints);
+
+	Z3i::Point dummy;
+	for (const Z3i::Point& b : branchingPoints) {
+		
+		map<Z3i::Point, Z3i::RealPoint> mapPointToNormal = constructSubVolumeWithPlanes<VCM, KernelFunction>(dummy, hierarchicalGraph, setVolumeWeighted, b, saddlePoints);
+	    for (const auto& pair : mapPointToNormal) {
+			Z3i::Point currentP = pair.first;
+			Z3i::RealPoint normalP = pair.second;
+			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << currentP;
+			viewer.addLine(currentP, currentP+(normalP*6));
+		}
+	}
+	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	viewer << Viewer3D<>::updateDisplay;
+	application.exec();
+	return 0;
 	
 	//Construct VCM surface
 	Metric l2;
