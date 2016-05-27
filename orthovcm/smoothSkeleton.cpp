@@ -621,6 +621,66 @@ Container constructSubVolume(const Z3i::Point& current,
 	return subVolume;
 }
 
+
+
+template <typename VCM, typename KernelFunction, typename Container>
+Z3i::DigitalSet constructSubVolumeWithTangent(const Z3i::Point& current,
+										const vector<GraphEdge*>& graph,
+										const Z3i::DigitalSet& currentEdge,
+										const Container& setVolume,
+										const Z3i::DigitalSet& branchingPoints,
+										const Z3i::DigitalSet& saddlePoints,
+										const Z3i::DigitalSet& setSurface) {
+	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;	
+	Metric l2;
+
+	Z3i::DigitalSet digitalSetVolume(saddlePoints.domain());
+	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
+		digitalSetVolume.insert((*it)->myPoint);
+	}
+	
+	vector<Z3i::Point> neighbors;
+	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);	
+	MAdj::writeNeighbors(inserter, current);
+
+	Z3i::Point b;
+	for (const Z3i::Point& n : neighbors) {
+		if (branchingPoints.find(n) != branchingPoints.end())
+			b = n;
+	}
+	if (b == Z3i::Point())
+		return digitalSetVolume;
+
+	
+	vector<GraphEdge*> neighborEdge = neighboringEdges(graph,
+													   currentEdge,
+													   branchingPoints);
+	double radius = currentEdge.size() * 0.4;
+	VCM vcm(20, ceil(radius), l2, false);
+	vcm.init(currentEdge.begin(), currentEdge.end());
+	KernelFunction chi(1.0, radius);
+	Z3i::RealPoint normal = VCMUtil::computeNormalFromVCM(current, vcm, chi, 0);
+
+	Z3i::DigitalSet subVolume(digitalSetVolume.domain());
+	Z3i::Object26_6 obj(Z3i::dt26_6, setSurface);
+	for (GraphEdge* edge : neighborEdge) {
+		Z3i::DigitalSet setEdge = edge->pointSet();
+		for (const Z3i::Point& e : setEdge) {
+			Z3i::Point trackedPoint = PointUtil::trackPoint(e, digitalSetVolume, normal);
+			Z3i::Point trackedPointMinus = PointUtil::trackPoint(e, digitalSetVolume, -normal);
+			if (saddlePoints.find(trackedPoint) != saddlePoints.end() ||
+				saddlePoints.find(trackedPointMinus) != saddlePoints.end()) {
+				vector<Z3i::Point> path = SurfaceTraversal::AStarAlgorithm(obj, trackedPoint, trackedPointMinus);
+				subVolume.insert(path.begin(), path.end());
+				break;
+			}				
+		}
+	}
+	return subVolume;
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
 {
@@ -873,17 +933,17 @@ int main( int  argc, char**  argv )
 			// Compute discrete plane
 			radius = edge.size() * 0.4;
 			set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> subVolumeWeighted;
-			subVolumeWeighted = constructSubVolume<VCM, KernelFunction>(s,
-																		hierarchicalGraph,
-																		edge,
-																		setVolumeWeighted,
-																		branchingPoints,
-																		saddlePoints);
+			Z3i::DigitalSet subVolume = constructSubVolumeWithTangent<VCM, KernelFunction>(s,
+																				   hierarchicalGraph,
+																				   edge,
+																				   setVolumeWeighted,
+																				   branchingPoints,
+																				   saddlePoints,
+																				   saddleComputer.getSurface(domainVolume));
 
-			if (subVolumeWeighted.size() < setVolumeWeighted.size()) {
-				trace.info() << subVolumeWeighted.size() << " " << setVolumeWeighted.size() << endl;
-				for (auto it = subVolumeWeighted.begin(), ite=  subVolumeWeighted.end(); it != ite; ++it) {
-					viewer << CustomColors3D(Color(0,120,0,120), Color(0,120,0,120)) << (*it)->myPoint;
+			if (subVolume.size() < setVolumeWeighted.size()) {
+				for (auto it = subVolume.begin(), ite=  subVolume.end(); it != ite; ++it) {
+					viewer << CustomColors3D(Color(0,120,0,120), Color(0,120,0,120)) << *it;
 				}
 			}
 			connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, subVolumeWeighted,
