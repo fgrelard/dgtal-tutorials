@@ -677,8 +677,9 @@ int main( int  argc, char**  argv )
 	Metric l2;
 	SaddleComputer<DTL2, BackgroundPredicate> saddleComputer(setVolume, dt, backgroundPredicate, R, r, delta);
 	Z3i::DigitalSet branchingPoints = saddleComputer.extractSaddlePoints(setVolume);
- 	Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(branchingPoints);
-	Z3i::DigitalSet setSurface = saddleComputer.getSurface(domainVolume);
+	vector<Z3i::Object26_6> objSaddle = saddleComputer.saddleConnectedComponents(branchingPoints);
+ 	Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(objSaddle);
+	Z3i::DigitalSet setSurface = saddleComputer.getSurface();
 
 	//Z3i::DigitalSet saddleEroded = erodeSaddleAreas(branchingPoints,
 	//												setSurface, vPoints, dt);

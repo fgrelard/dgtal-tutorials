@@ -374,7 +374,7 @@ DGtal::Z3i::DigitalSet VCMUtil::computeDiscretePlane(VCM& vcm, KernelFunction& c
 		alright = isRadiusMaximal(setVolumeWeighted, connectedComponent3D, point, currentDistance, dirVector);
 	} while (!alright && dilate && currentDistance < distanceMax);
 	
-	// radius = currentDistance;
+	 radius = currentDistance;
 	// DGtal::Z3i::DigitalSet discretePlane(domainVolume);
 	// for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
 	// 	if (DGtal::Z3i::l2Metric(*it, point) <= radius)

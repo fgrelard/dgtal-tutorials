@@ -130,7 +130,7 @@ Z3i::DigitalSet detectCriticalPoints(const Z3i::DigitalSet& skeleton) {
 
 Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters) {
 	Z3i::DigitalSet newClusters(clusters.domain());
-	
+
 	Z3i::Object26_6 obj(Z3i::dt26_6, clusters);
 	vector<Z3i::Object26_6> objects;
 	back_insert_iterator<vector<Z3i::Object26_6>> inserter(objects);
@@ -139,7 +139,7 @@ Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters) {
 		Z3i::DigitalSet currentPointSet = o.pointSet();
 		if (currentPointSet.size() > 1) {
 			Z3i::RealPoint center = Statistics::extractCenterOfMass3D(currentPointSet);
-			Z3i::Point centerInSet = extractNearestNeighborInSetFromPoint(currentPointSet, center); 
+			Z3i::Point centerInSet = extractNearestNeighborInSetFromPoint(currentPointSet, center);
 			newClusters.insert(centerInSet);
 		}
 		else {
@@ -165,8 +165,8 @@ Z3i::DigitalSet dominantPointDetection(const Segmentation& segmentation,
 									   const Domain& domain) {
 
 	typedef typename Segmentation::SegmentComputerIterator DSS;
-	
-	Z3i::DigitalSet dominantPoints(domain);	
+
+	Z3i::DigitalSet dominantPoints(domain);
 	DSS q = (segmentation.begin());
 	DSS p = (++segmentation.begin());
 	while (p != segmentation.end()) {
@@ -201,14 +201,14 @@ Z3i::DigitalSet branchingPointDetection(const Segmentation& segmentation,
 										const Domain& domain) {
 
 	typedef typename Segmentation::SegmentComputerIterator DSSIterator;
-	typedef typename Segmentation::SegmentComputer DSS; 
+	typedef typename Segmentation::SegmentComputer DSS;
 
-	Z3i::DigitalSet branchingPoints(domain);	
+	Z3i::DigitalSet branchingPoints(domain);
 
 	for (const Z3i::Point& s : skeletonOrdered) {
 
 		vector<DSS> segments;
-		
+
 		for (DSSIterator p = segmentation.begin(), q = segmentation.end(); p != q; ++p) {
 			DSS segment(*p);
 			for (auto it = segment.begin(), ite = segment.end(); it != ite; ++it) {
@@ -231,7 +231,7 @@ Z3i::DigitalSet branchingPointDetection(const Segmentation& segmentation,
 				int posBI = find(skeletonOrdered.begin(), skeletonOrdered.end(), beginI) - skeletonOrdered.begin();
 				int posEI = find(skeletonOrdered.begin(), skeletonOrdered.end(), endI) - skeletonOrdered.begin();
 				int posBJ = find(skeletonOrdered.begin(), skeletonOrdered.end(), beginJ) - skeletonOrdered.begin();
-				int posEJ = find(skeletonOrdered.begin(), skeletonOrdered.end(), endJ) - skeletonOrdered.begin();				
+				int posEJ = find(skeletonOrdered.begin(), skeletonOrdered.end(), endJ) - skeletonOrdered.begin();
 				if (posBJ < posEI || posBI < posEJ) {
 					nb++;
 				}
@@ -239,7 +239,7 @@ Z3i::DigitalSet branchingPointDetection(const Segmentation& segmentation,
 		}
 		if (nb >= 2) {
 			branchingPoints.insert(s);
-		}	
+		}
 	}
 	return branchingPoints;
 }
@@ -257,7 +257,7 @@ vector<Z3i::DigitalSet> constructGraph(const vector<Z3i::Point>& orderedCurve,
 			index++;
 			graph.push_back(Z3i::DigitalSet(constraint.domain()));
 			graph[index].insert(current);
-		}					
+		}
 	}
 	return graph;
 }
@@ -287,10 +287,10 @@ double computeRadiusFromIntersection(const Image& volume, const Z3i::Point& poin
 	typedef ImageSelector<Z2i::Domain, bool>::Type Image2D;
 	DGtal::functors::Identity idV;
 	Z3i::Domain domain3Dyup(volume.domain().lowerBound() + Z3i::Point(-radius, -radius, -radius), volume.domain().upperBound() + Z3i::Point(radius, radius, radius));
-	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
+	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0),
 									  DGtal::Z2i::Point(radius, radius));
-    
-	
+
+
 	DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(domain3Dyup, point, normal, radius, domain3Dyup.lowerBound());
 
 	ImageAdapterExtractor extractedImage(volume, domainImage2D, embedder, idV);
@@ -314,7 +314,7 @@ Z3i::DigitalSet extractSurfacePoints(const Z3i::DigitalSet& intersection,
 	for (const Z3i::Point& p : intersection) {
 		if (dt(p) <= 1)
 			surfacePoints.insert(p);
-			
+
 	}
 	return surfacePoints;
 }
@@ -340,7 +340,7 @@ Z3i::DigitalSet extractRelevantSurfacePointsForVolVCM(const Z3i::DigitalSet& int
 	unsigned int nbConnectedComponents = 0;
 	double radius = 1.;
 	Z3i::DigitalSet surfels(intersection.domain());
-	
+
 	while (currentSize < maxSize && nbConnectedComponents != 1) {
 		Z3i::DigitalSet plane = extractSetFromRadiusAndCenter(intersection, center, radius);
 	    surfels = extractSurfacePoints(intersection, dt);
@@ -351,7 +351,7 @@ Z3i::DigitalSet extractRelevantSurfacePointsForVolVCM(const Z3i::DigitalSet& int
 		currentSize = plane.size();
 		radius++;
 	}
-	return surfels;		
+	return surfels;
 }
 
 template <typename DTL2>
@@ -369,7 +369,7 @@ Z3i::Point projectionPoint(const DTL2& dt,
 
 template <typename DTL2>
 Z3i::RealVector signVector(const DTL2& dt,
-						   const Z3i::Point& center, 
+						   const Z3i::Point& center,
 						   const Z3i::RealVector& direction) {
 	Z3i::Point projCenter = projectionPoint(dt, center, direction);
 	Z3i::Point otherProjCenter = projectionPoint(dt,center, -direction);
@@ -429,7 +429,7 @@ vector<GraphEdge*> neighboringEdges(const vector<GraphEdge*>& edges,
 									const Z3i::DigitalSet& currentEdge,
 									const Z3i::DigitalSet& branchingPoints) {
 	typedef MetricAdjacency<Z3i::Space, 3> MetricAdjacency;
-	
+
 	vector<GraphEdge*> neighbors;
 	Z3i::Point branchPoint;
 	for (const Z3i::Point& b : branchingPoints) {
@@ -441,7 +441,7 @@ vector<GraphEdge*> neighboringEdges(const vector<GraphEdge*>& edges,
 	vector<Z3i::Point> nb;
 	back_insert_iterator<vector<Z3i::Point>> inserter(nb);
 	MetricAdjacency::writeNeighbors(inserter, branchPoint);
-	
+
 	for (GraphEdge* edge : edges) {
 		Z3i::DigitalSet setEdge = edge->pointSet();
 		if (sameSet(setEdge, currentEdge)) continue;
@@ -450,11 +450,11 @@ vector<GraphEdge*> neighboringEdges(const vector<GraphEdge*>& edges,
 				neighbors.push_back(edge);
 		}
 	}
-	
+
 	return neighbors;
 }
 
-vector<GraphEdge*> hierarchicalDecomposition(const vector<Z3i::DigitalSet>& edges,											
+vector<GraphEdge*> hierarchicalDecomposition(const vector<Z3i::DigitalSet>& edges,
 											const vector<Z3i::Point>& endPoints,
 											const Z3i::DigitalSet& branchingPoints) {
 
@@ -462,7 +462,7 @@ vector<GraphEdge*> hierarchicalDecomposition(const vector<Z3i::DigitalSet>& edge
 	vector<GraphEdge*> hierarchyGraph;
 	for (const Z3i::DigitalSet& edge : edges) {
 		GraphEdge* levelEdge = new GraphEdge(edge, std::numeric_limits<int>::max());
-	
+
 		for (const Z3i::Point& e : endPoints) {
 			if (edge.find(e) != edge.end()) {
 				levelEdge->setLabel(1);
@@ -488,7 +488,7 @@ vector<GraphEdge*> hierarchicalDecomposition(const vector<Z3i::DigitalSet>& edge
 	}
 
 	return hierarchyGraph;
-	
+
 }
 
 Z3i::DigitalSet ensureConnexity(const Z3i::DigitalSet& set) {
@@ -513,13 +513,13 @@ double distanceToDelineateSubVolume(const Z3i::Point& current,
 									const Container& setVolume,
 									const Z3i::DigitalSet& saddlePoints) {
 
-	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;	
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
 	Metric l2;
 	double distance = 0;
 	for (GraphEdge* edge : neighborEdge) {
 		Z3i::DigitalSet setEdge = edge->pointSet();
 		if (setEdge.find(current) != setEdge.end()) continue;
-		for (const Z3i::Point& e : setEdge) {			   			
+		for (const Z3i::Point& e : setEdge) {
 			double radius = setEdge.size() * 0.4;
 			VCM vcm(20, ceil(radius), l2, false);
 			vcm.init(setEdge.begin(), setEdge.end());
@@ -535,7 +535,7 @@ double distanceToDelineateSubVolume(const Z3i::Point& current,
 						distance = currentDistance;
 					}
 				}
-					
+
 			}
 		}
 	}
@@ -546,9 +546,9 @@ template <typename VCM, typename KernelFunction>
 map<Z3i::Point, Z3i::RealPoint> computePlanesForSubVolume(const Z3i::Point& b,
 														  const vector<GraphEdge*> neighborEdge,
 														  double distance) {
-	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;	
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
 	Metric l2;
-	
+
 	map<Z3i::Point, Z3i::RealPoint> normals;
 	for (GraphEdge* edge: neighborEdge) {
 		Z3i::DigitalSet setEdge = edge->pointSet();
@@ -569,7 +569,7 @@ map<Z3i::Point, Z3i::RealPoint> computePlanesForSubVolume(const Z3i::Point& b,
 		Z3i::RealPoint normal = VCMUtil::computeNormalFromVCM(candidate, vcm, chi, 0);
 		Z3i::RealPoint directionVector = (candidate - b).getNormalized();
 		normal = (normal.dot(directionVector) < 0) ? normal : -normal;
-		normals[candidate] = normal;		
+		normals[candidate] = normal;
 	}
 	return normals;
 }
@@ -584,7 +584,7 @@ Container constructSubVolume(const Z3i::Point& current,
 	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
 
 	vector<Z3i::Point> neighbors;
-	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);	
+	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
 	MAdj::writeNeighbors(inserter, current);
 
 	Z3i::Point b;
@@ -598,7 +598,7 @@ Container constructSubVolume(const Z3i::Point& current,
 	vector<GraphEdge*> neighborEdge = neighboringEdges(graph,
 													   currentEdge,
 													   branchingPoints);
-	
+
 	double distance = distanceToDelineateSubVolume<VCM, KernelFunction>(current, b, neighborEdge, setVolume, saddlePoints);
 	map<Z3i::Point, Z3i::RealPoint> normals = computePlanesForSubVolume<VCM, KernelFunction>(b, neighborEdge, distance);
 
@@ -612,7 +612,7 @@ Container constructSubVolume(const Z3i::Point& current,
 				continue;
 			if (VCMUtil::abovePlane(pointVolume, pair.second, pair.first)) {
 				cpt++;
-			}		
+			}
 		}
 		bool toAdd = (cpt >= normals.size()-1);
 		if (toAdd)
@@ -632,16 +632,16 @@ Z3i::DigitalSet constructSubVolumeWithTangent(const Z3i::Point& current,
 										const Z3i::DigitalSet& saddlePoints,
 										const Z3i::DigitalSet& setSurface) {
 	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
-	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;	
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
 	Metric l2;
 
 	Z3i::DigitalSet digitalSetVolume(saddlePoints.domain());
 	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
 		digitalSetVolume.insert((*it)->myPoint);
 	}
-	
+
 	vector<Z3i::Point> neighbors;
-	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);	
+	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
 	MAdj::writeNeighbors(inserter, current);
 
 	Z3i::Point b;
@@ -652,7 +652,7 @@ Z3i::DigitalSet constructSubVolumeWithTangent(const Z3i::Point& current,
 	if (b == Z3i::Point())
 		return digitalSetVolume;
 
-	
+
 	vector<GraphEdge*> neighborEdge = neighboringEdges(graph,
 													   currentEdge,
 													   branchingPoints);
@@ -674,7 +674,7 @@ Z3i::DigitalSet constructSubVolumeWithTangent(const Z3i::Point& current,
 				vector<Z3i::Point> path = SurfaceTraversal::AStarAlgorithm(obj, trackedPoint, trackedPointMinus);
 				subVolume.insert(path.begin(), path.end());
 				break;
-			}				
+			}
 		}
 	}
 	return subVolume;
@@ -682,7 +682,7 @@ Z3i::DigitalSet constructSubVolumeWithTangent(const Z3i::Point& current,
 
 
 std::set<Z3i::Point> vectorsToCompare(const std::vector<Z3i::Point>& directionVectors) {
-	
+
 	set<Z3i::Point> vectorsToCompare;
 	for (const Z3i::Point& directionVector: directionVectors) {
 		for (const Z3i::Point& otherDirectionVector : directionVectors) {
@@ -719,38 +719,86 @@ vector<GraphEdge*> edgesAssociatedWithPoints(const std::set<Z3i::Point>& point,
 	return edges;
 }
 
-template <typename VCM, typename KernelFunction, typename Container>
-map<Z3i::Point, Z3i::RealPoint> constructSubVolumeWithPlanes(const Z3i::Point& current,
-															 const vector<GraphEdge*>& graph,
+template <typename VCM, typename KernelFunction, typename Container, typename Domain>
+map<Z3i::Point, Z3i::RealPoint> constructSubVolumeWithPlanes(const vector<GraphEdge*>& graph,
 															 const Container& setVolume,
-															 const Z3i::Point& b,
+															 const Domain& domain,
 															 const Z3i::DigitalSet& saddlePoints) {
 	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
-	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;	
-	Metric l2;
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
 
-	vector<Z3i::Point> directionVectors;
-	vector<Z3i::Point> neighbors;
-	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);	
-	MAdj::writeNeighbors(inserter, b);
-	for (const Z3i::Point& n : neighbors) {
-		Z3i::Point directionVector = (b - n);
-		directionVectors.push_back(directionVector);
+	Metric l2;
+	int cpt = 0;
+	map<Z3i::Point, Z3i::RealPoint> pointToVectors;
+	for (GraphEdge* edge : graph) {
+		Z3i::DigitalSet setEdge = edge->pointSet();
+		if (setEdge.size() <= 2) continue;
+		bool found = false;
+		for (const Z3i::Point& p : setEdge) {
+			if (found) break;
+			double radius = setEdge.size() * 0.4;
+			VCM vcm(20, ceil(radius), l2, false);
+			vcm.init(setEdge.begin(), setEdge.end());
+			KernelFunction chi(1.0, radius);
+			Z3i::RealPoint normal;
+			Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
+																				 p, normal,
+																				 0, radius, radius*2, false);
+			for (const Z3i::Point& sp : saddlePoints) {
+				if (connectedComponent3D.find(sp) != connectedComponent3D.end()) {
+					cpt++;
+					pointToVectors[p] = normal;
+					found = true;
+					break;
+				}
+			}
+		}
 	}
 
-	set<Z3i::Point> sameOrientationVectors = vectorsToCompare(directionVectors);
-	set<Z3i::Point> pointsToAnalyse = vectorsToPoint(sameOrientationVectors, b);
-	vector<GraphEdge*> edges = edgesAssociatedWithPoints(pointsToAnalyse, graph);
-	double distance = distanceToDelineateSubVolume<VCM, KernelFunction>(current, b, edges, setVolume, saddlePoints);
-	map<Z3i::Point, Z3i::RealPoint> normals = computePlanesForSubVolume<VCM, KernelFunction>(b, edges, distance);		
-	return normals;
+	if (cpt == 2) {
+		Z3i::Point p1 = (*(pointToVectors.begin())).first;
+		Z3i::RealPoint p2 =  (*(++pointToVectors.begin())).first;
+		Z3i::RealPoint n1 = (*(pointToVectors.begin())).second;
+		Z3i::RealPoint n2 =  (*(++pointToVectors.begin())).second;
+		Z3i::RealPoint nrot = n1.crossProduct(n2);
+		Z3i::RealPoint nrot2 = n2.crossProduct(n1);
+		double alpha = acos(n1.dot(n2));
+		float angleRotation = M_PI/2 - alpha;
+		Eigen::Affine3f t(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot[0], nrot[1], nrot[2])));
+		Eigen::Affine3f t2(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot2[0], nrot2[1], nrot2[2])));
+		Eigen::Vector3f n1e(n1[0], n1[1], n1[2]);
+		Eigen::Vector3f n2e(n2[0], n2[1], n2[2]);
+		Eigen::Vector3f rotn1e = t2.linear() * n1e;
+		Eigen::Vector3f rotn2e = t.linear() * n2e;
+		Z3i::RealPoint rotn1(rotn1e[0], rotn1e[1], rotn1e[2]);
+		Z3i::RealPoint rotn2(rotn2e[0], rotn2e[1], rotn2e[2]);
+		pointToVectors[p1] = rotn1;
+		pointToVectors[p2] = rotn2;
+	}
+
+	// vector<Z3i::Point> directionVectors;
+	// vector<Z3i::Point> neighbors;
+	// back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
+	// MAdj::writeNeighbors(inserter, b);
+	// for (const Z3i::Point& n : neighbors) {
+	// 	Z3i::Point directionVector = (b - n);
+	// 	directionVectors.push_back(directionVector);
+	// }
+
+	// set<Z3i::Point> sameOrientationVectors = vectorsToCompare(directionVectors);
+	// set<Z3i::Point> pointsToAnalyse = vectorsToPoint(sameOrientationVectors, b);
+	// vector<GraphEdge*> edges = edgesAssociatedWithPoints(pointsToAnalyse, graph);
+	// double distance = distanceToDelineateSubVolume<VCM, KernelFunction>(current, b, edges, setVolume, saddlePoints);
+	// map<Z3i::Point, Z3i::RealPoint> normals = computePlanesForSubVolume<VCM, KernelFunction>(b, edges, distance);
+	trace.info() << cpt << endl;
+	return pointToVectors;
 }
 
 
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
 {
-	
+
 
 	typedef Z3i::Space Space;
 	typedef Z3i::Point Point;
@@ -763,7 +811,7 @@ int main( int  argc, char**  argv )
 	typedef ImageSelector<Domain, unsigned char>::Type Image;
 	typedef VoronoiCovarianceMeasure<Space,Metric> VCM;
 
-	
+
 	typedef MSTTangent<Point> Tangent;
 	typedef Pencil<Point, Tangent, RealPoint> Pencil;
 
@@ -784,7 +832,7 @@ int main( int  argc, char**  argv )
 	typedef KSpace::Surfel Surfel;
 	typedef VoronoiMap<Space, NotPointPredicate, Metric> VoronoiMap;
 	typedef Eigen::MatrixXd MatrixXd;
-	
+
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
 		("help,h", "display this message")
@@ -797,30 +845,30 @@ int main( int  argc, char**  argv )
 		("radiusInside,R", po::value<double>()->default_value(10), "radius of the ball inside voronoi cell")
 		("radiusNeighbour,r", po::value<double>()->default_value(10), "radius of the ball for the neighbourhood")
 		("angleThreshold,a", po::value<double>()->default_value(0.1), "anglem threshold")
-		; 
+		;
 
 	bool parseOK=true;
 	po::variables_map vm;
 	try{
-		po::store(po::parse_command_line(argc, argv, general_opt), vm);  
+		po::store(po::parse_command_line(argc, argv, general_opt), vm);
 	} catch(const std::exception& ex){
 		parseOK=false;
 		trace.info()<< "Error checking program options: "<< ex.what()<< endl;
 	}
-	po::notify(vm);    
+	po::notify(vm);
 	if( !parseOK || vm.count("help")||argc<=1)
 	{
 		std::cout << "Usage: " << argv[0] << " [input]\n"
 				  << "Display volume file as a voxel set by using QGLviewer"<< endl
 				  << general_opt << "\n";
 		return 0;
-	}  
+	}
 	if(!vm.count("input"))
 	{
-		trace.error() << " The file name was not defined" << endl;      
+		trace.error() << " The file name was not defined" << endl;
 		return 0;
 	}
-	
+
 	string outFilename = vm["output"].as<std::string>();
 	string inputFilename = vm["input"].as<std::string>();
 	string skeletonFilename = vm["skeleton"].as<std::string>();
@@ -836,11 +884,11 @@ int main( int  argc, char**  argv )
 	QApplication application(argc,argv);
 	Viewer3D<> viewer;
 	viewer.show();
-	
+
 	Image volume = VolReader<Image>::importVol(inputFilename);
 	Z3i::Domain domainVolume = volume.domain();
 	Z3i::DigitalSet setVolume(domainVolume);
-	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume, 
+	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume,
 												  thresholdMin-1, thresholdMax);
 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
 
@@ -850,9 +898,9 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet setSkeleton(domainSkeleton);
 	Z3i::DigitalSet branchingPoints(domainSkeleton);
 	SetFromImage<Z3i::DigitalSet>::append<Image>(setSkeleton, skeleton, thresholdMin-1, thresholdMax);
-	
+
 	Z3i::DigitalSet existingSkeleton = ensureConnexity(setSkeleton);
-	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;  
+	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
 	vector<Point> existingSkeletonOrdered;
 	Z3i::Point p = (*existingSkeleton.begin());
@@ -869,10 +917,10 @@ int main( int  argc, char**  argv )
 	MyNode node;
 
     unsigned int previous = 0;
-	while ( !visitor.finished() ) 
+	while ( !visitor.finished() )
 	{
   		node = visitor.current();
-		if ( existingSkeleton.find(node.first) != existingSkeleton.end() ) { //is inside domain			
+		if ( existingSkeleton.find(node.first) != existingSkeleton.end() ) { //is inside domain
 		    if (node.second <= previous) {
 				vector<Z3i::Point> neighbors;
 				back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
@@ -902,7 +950,7 @@ int main( int  argc, char**  argv )
 	vector<Z3i::DigitalSet> edgeGraph = constructGraph(existingSkeletonOrdered, branchingPoints);
 	vector<Z3i::Point> endPoints = findEndPoints(existingSkeleton);
 	vector<GraphEdge*> hierarchicalGraph = hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
-																	
+
 	//Display points
 //	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << branchingPoints;
 	// for (const Z3i::Point& p : endPoints) {
@@ -920,18 +968,18 @@ int main( int  argc, char**  argv )
 	// application.exec();
 	// return 0;
 
-	
+
 	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;
 	Image volumeBinary(volume.domain());
 	for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
-		if (volume(*it) >= thresholdMin && volume(*it) <= thresholdMax) 
+		if (volume(*it) >= thresholdMin && volume(*it) <= thresholdMax)
 			volumeBinary.setValue(*it, 255);
 		else
 			volumeBinary.setValue(*it, 0);
 	}
 
 	vector<Point> vPoints;
-	Z3i::DigitalSet skeletonPoints(domainVolume);  
+	Z3i::DigitalSet skeletonPoints(domainVolume);
 	ThresholdedImage binarizer(volume, thresholdMin-1, thresholdMax);
 	BackgroundPredicate backgroundPredicate(binarizer);
 	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
@@ -941,40 +989,50 @@ int main( int  argc, char**  argv )
 		if (value > 0) {
 			setVolumeWeighted.insert(new WeightedPointCount(*it, value));
 			checkPointForMedialAxis(dt, vPoints, *it);
-		}		
+		}
 	}
 
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	SaddleComputer<DTL2, BackgroundPredicate> saddleComputer(setVolume, dt, backgroundPredicate, R, r, delta);
 	Z3i::DigitalSet saddlePoints = saddleComputer.extractSaddlePoints(setVolume);
-	Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(saddlePoints);
+	vector<Z3i::Object26_6> objSaddle = saddleComputer.saddleConnectedComponents(saddlePoints);
+	Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(objSaddle);
 
-	Z3i::Point dummy;
-	for (const Z3i::Point& b : branchingPoints) {
 		
-		map<Z3i::Point, Z3i::RealPoint> mapPointToNormal = constructSubVolumeWithPlanes<VCM, KernelFunction>(dummy, hierarchicalGraph, setVolumeWeighted, b, saddlePoints);
+	Z3i::Point dummy;
+	for (const Z3i::Object26_6& s : objSaddle) {
+		Z3i::DigitalSet saddleCurrentCC = s.pointSet();
+		map<Z3i::Point, Z3i::RealPoint> mapPointToNormal = constructSubVolumeWithPlanes<VCM, KernelFunction>(hierarchicalGraph, setVolumeWeighted, domainVolume, saddleCurrentCC);
 	    for (const auto& pair : mapPointToNormal) {
 			Z3i::Point currentP = pair.first;
 			Z3i::RealPoint normalP = pair.second;
 			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << currentP;
-			viewer.addLine(currentP, currentP+(normalP*6));
+			vector<Z3i::RealPoint> plane = SliceUtils::computePlaneFromNormalVector(normalP, currentP);
+		 	viewer.setFillColor(Color::Red);
+		 	double factor = 20;
+		 	viewer.addQuad(currentP+(plane[0]-currentP)*factor, currentP+(plane[1]-currentP)*factor, currentP+(plane[2]-currentP)*factor, currentP+(plane[3]-currentP)*factor);
+			viewer << Viewer3D<>::updateDisplay;
+			qApp->processEvents();
+			
+//			viewer.addLine(currentP, currentP+(normalP*6));
 		}
 	}
 	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
 	viewer << Viewer3D<>::updateDisplay;
 	application.exec();
 	return 0;
-	
+
 	//Construct VCM surface
 	Metric l2;
 	VCM vcmSurface(R, ceil(r), l2, false);
 	KernelFunction chiSurface(1.0, r);
 	vcmSurface.init(setVolume.begin(), setVolume.end());
-		
+
 	KernelFunction chi( 1.0, r );
 
 	int i = 0;
-	
+
 	Z3i::RealPoint normal(0,0,1);
 	Z3i::RealPoint previousNormal=normal;
 
@@ -985,12 +1043,12 @@ int main( int  argc, char**  argv )
 	double distanceMax = dt(*max_element(existingSkeleton.begin(), existingSkeleton.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
 				return dt(one) < dt(two);
 			}));
-	
+
 	trace.beginBlock("Computing skeleton");
 
 	for (GraphEdge* graphEdge : hierarchicalGraph) {
 		Z3i::DigitalSet edge = graphEdge->pointSet();
-		trace.progressBar(i, edgeGraph.size());	
+		trace.progressBar(i, edgeGraph.size());
 		if (edge.size() == 0) continue;
 		VCM vcm(R, ceil(r), l2, false);
 		vcm.init(edge.begin(), edge.end());
@@ -1000,7 +1058,7 @@ int main( int  argc, char**  argv )
 		Z3i::DigitalSet smoothedEdge(edge.domain());
 		for (const Z3i::Point& s : edge)
 		{
-				
+
 			double radius = r;
 
 			//Distance transform value for VCM radius
@@ -1011,7 +1069,7 @@ int main( int  argc, char**  argv )
 					chi = KernelFunction( 1.0, radius);
 				}
 			}
-			
+
 			// Compute discrete plane
 			radius = edge.size() * 0.4;
 			set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> subVolumeWeighted;
@@ -1021,7 +1079,7 @@ int main( int  argc, char**  argv )
 																				   setVolumeWeighted,
 																				   branchingPoints,
 																				   saddlePoints,
-																				   saddleComputer.getSurface(domainVolume));
+																				   saddleComputer.getSurface());
 
 			if (subVolume.size() < setVolumeWeighted.size()) {
 				for (auto it = subVolume.begin(), ite=  subVolume.end(); it != ite; ++it) {
@@ -1035,11 +1093,11 @@ int main( int  argc, char**  argv )
 			//Z3i::DigitalSet surfelSet = extractRelevantSurfacePointsForVolVCM(connectedComponent3D, dt, s);
 			Z3i::DigitalSet surfelSet = extractSurfacePointsWithEigenVectors(connectedComponent3D, dt, s, dt(s));
 		    vector<Z3i::Point> surfels(surfelSet.begin(), surfelSet.end());
-		   
+
 			chiSurface = KernelFunction(1.0, radius);
 			vcmSurface.setMySmallR(radius);
 
-			
+
 			double radiusSurface = dt(s) + delta;
 			Z3i::RealPoint normalSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
 			double dot = std::abs(normalSurface.dot(normal));
@@ -1062,7 +1120,7 @@ int main( int  argc, char**  argv )
 //				centerOfMass = findMaxDTInSet(connectedComponent3D, dt, s);
 
 				//Pruning
-				if (graphEdge->getLabel() == 1 && !keep) {				    
+				if (graphEdge->getLabel() == 1 && !keep) {
 					//viewer << CustomColors3D(Color::Yellow, Color::Yellow) << s;
 					viewer << CustomColors3D(Color::Red, Color::Red);
 					viewer.addLine(s, s+normal*6);
@@ -1071,9 +1129,9 @@ int main( int  argc, char**  argv )
 					// viewer << surfelSet;
 					cpt++;
 				}
-				else				   
-					smoothedEdge.insert(centerOfMass);				
-													
+				else
+					smoothedEdge.insert(centerOfMass);
+
 			}
 			else {
 				viewer << CustomColors3D(Color::Red, Color::Red) << s;
@@ -1085,18 +1143,18 @@ int main( int  argc, char**  argv )
 			viewer << CustomColors3D(Color::Red, Color::Red) << smoothedEdge;
 		viewer << Viewer3D<>::updateDisplay;
 		qApp->processEvents();
-				
+
 		i++;
 	}
-		
-	trace.endBlock();	   
+
+	trace.endBlock();
 //	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-	
+
 	//second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
 	    viewer << CustomColors3D(Color(0,0,120,30), Color(0,0,120,30)) << (*it)->myPoint;
 	}
-   
+
 	Image outImage(volume.domain());
 	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
 	VolWriter<Image>::exportVol(outFilename, outImage);

@@ -294,13 +294,13 @@ vector<Z3i::DigitalSet> constructGraph(const vector<Z3i::Point>& orderedCurve,
 	int index = 0;
 	graph.push_back(Z3i::DigitalSet(constraint.domain()));
 	for (int i = 0, end = orderedCurve.size(); i < end; i++) {
-		Z3i::Point current = orderedCurve[i];
-		graph[index].insert(current);
+		Z3i::Point current = orderedCurve[i];		
 		if (constraint.find(current) != constraint.end()) {
 			index++;
 			graph.push_back(Z3i::DigitalSet(constraint.domain()));
 			graph[index].insert(current);
-		}					
+		}
+		graph[index].insert(current);
 	}
 	return graph;
 }
@@ -427,6 +427,17 @@ double amountInformationLostRatio(const DTL2& dt,
 	double qratio = length * (d - delta) / Rh;
 	return qratio;
 }
+
+bool sameSet(const Z3i::DigitalSet& first, const Z3i::DigitalSet& second) {
+	if (first.size() != second.size()) return false;
+	unsigned int cpt = 0;
+	for (const Z3i::Point& f : first) {
+		if (second.find(f) != second.end())
+			cpt++;
+	}
+	return (cpt == first.size());
+}
+
 vector<GraphEdge*> neighboringEdges(const vector<GraphEdge*>& edges,
 									const Z3i::DigitalSet& currentEdge,
 									const Z3i::DigitalSet& branchingPoints) {
@@ -435,7 +446,7 @@ vector<GraphEdge*> neighboringEdges(const vector<GraphEdge*>& edges,
 	vector<GraphEdge*> neighbors;
 	Z3i::Point branchPoint;
 	for (const Z3i::Point& b : branchingPoints) {
-		if (currentEdge.find(b) != currentEdge.end()) {
+		if (currentEdge.find(b) != currentEdge.end() ) {
 			branchPoint = b;
 		}
 	}
@@ -446,6 +457,7 @@ vector<GraphEdge*> neighboringEdges(const vector<GraphEdge*>& edges,
 	
 	for (GraphEdge* edge : edges) {
 		Z3i::DigitalSet setEdge = edge->pointSet();
+		if (sameSet(setEdge, currentEdge)) continue;
 		for (const Z3i::Point& n : nb) {
 			if (setEdge.find(n) != setEdge.end())
 				neighbors.push_back(edge);
@@ -628,6 +640,7 @@ int main( int  argc, char**  argv )
 	Visitor visitor( graph, p );
 	MyNode node;
 
+	Z3i::DigitalSet branchingPoints(domainVolume);
     unsigned int previous = 0;
 	while ( !visitor.finished() ) 
 	{
@@ -637,11 +650,19 @@ int main( int  argc, char**  argv )
 				vector<Z3i::Point> neighbors;
 				back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
 				MetricAdjacency::writeNeighbors(inserter, node.first);
+				double minDistance = std::numeric_limits<double>::max();
+				Z3i::Point cand;
 				for (const Z3i::Point& n : neighbors) {
-					if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {
-						existingSkeletonOrdered.push_back(n);
+					if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {				   
+						double currentDistance = Z3i::l2Metric(n, node.first);
+						if (currentDistance < minDistance) {
+							minDistance = currentDistance;
+							cand = n;
+						}
 					}
 				}
+				branchingPoints.insert(cand);
+				existingSkeletonOrdered.push_back(cand);
 			}
 			previous = node.second;
 			existingSkeletonOrdered.push_back(node.first);
@@ -656,8 +677,8 @@ int main( int  argc, char**  argv )
 	typename Segmentation::SegmentComputerIterator itseg = s.begin();
 	typename Segmentation::SegmentComputerIterator end = s.end();
 //	Z3i::DigitalSet branchingPoints = branchingPointDetection(s, existingSkeletonOrdered, domainVolume);
-	Z3i::DigitalSet branchingPoints = detectCriticalPoints(existingSkeleton);
-//	branchingPoints = reduceClustersToCenters(branchingPoints);
+	// Z3i::DigitalSet branchingPoints = detectCriticalPoints(existingSkeleton);
+	// branchingPoints = reduceClustersToCenters(branchingPoints);
 	
 	vector<Z3i::DigitalSet> edgeGraph = constructGraph(existingSkeletonOrdered, branchingPoints);
 	vector<Z3i::Point> endPoints = findEndPoints(existingSkeleton);
@@ -666,22 +687,38 @@ int main( int  argc, char**  argv )
 	vector<GraphEdge*> hierarchicalGraph = hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
 																	
 	//Display points
-//	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << branchingPoints;
-	// for (const Z3i::Point& p : endPoints) {
-	// 	viewer << CustomColors3D(Color::Green, Color::Green) << p;
-	// }
-//	 viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-	// for (GraphEdge* edge : hierarchicalGraph) {
-	// 	int label = edge->getLabel();
-		
-	// 	int r = (label * 64) % 256;
-	// 	int g = (label* 128)%256;
-	// 	int b = (label* 192)%256;
-	// 	viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << edge->pointSet();
-	// }
+	//  for (const Z3i::Point& p : endPoints) {
+	//  	viewer << CustomColors3D(Color::Green, Color::Green) << p;
+	//  }
+	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	//  for (GraphEdge* edge : hierarchicalGraph) {
+	// 	 int label = edge->getLabel();
+	// 	 if (label > 3) {
+	// 		 int r = (label * 64) % 256;
+	// 		 int g = (label* 128)%256;
+	// 		 int b = (label* 192)%256;
+	// 		 viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << edge->pointSet();
+	// 	 }
+	// 	 else {
+	// 		 viewer << CustomColors3D(Color::Red, Color::Red)  << edge->pointSet();
+	// 	 }
+	//  }
+
 	// viewer << Viewer3D<>::updateDisplay;
 	// application.exec();
-	// return 0;
+
+	// for (GraphEdge* edge : hierarchicalGraph) {
+	// 	if (edge->getLabel() == 1) {
+	// 		viewer << CustomColors3D(Color::Yellow, Color::Yellow);
+	// 	}
+	// 	else
+	// 		viewer << CustomColors3D(Color::Red, Color::Red);
+	// 	viewer << edge->pointSet();
+	// }
+	
+     // viewer << Viewer3D<>::updateDisplay;
+     // application.exec();
+	 // return 0;
 
 	
 	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;
@@ -740,18 +777,18 @@ int main( int  argc, char**  argv )
 	std::function<double(const Z3i::DigitalSet& aSet)> qRatioFunction = [&](const Z3i::DigitalSet& aSet) {
 		return amountInformationLostRatio(dt, aSet, branchingPoints, endPointSet);
 	};
-	
+
+
 	vector<LevelConcatenation> groupConcatenations;
 	for (int level = 1; level <= maxLabel; level++) {
-		int cptExtremity = 0;
 		vector<Concatenation> concatenations;
 		for (GraphEdge* graphEdge : hierarchicalGraph) {
 			if (graphEdge->getLabel() == 1) { // Extremity
-				cptExtremity++;
 				vector<Z3i::DigitalSet> edges;
 				Z3i::DigitalSet currentEdge = graphEdge->pointSet();
-				edges.push_back(graphEdge->pointSet());
-				vector<GraphEdge*> neighborEdges = neighboringEdges(hierarchicalGraph, currentEdge, branchingPoints);
+				edges.push_back(currentEdge);
+				
+				vector<GraphEdge*> neighborEdges= neighboringEdges(hierarchicalGraph, currentEdge, branchingPoints);
 				int localMaxLabel = 0;
 				for (GraphEdge* g : neighborEdges) {
 					int currentLabel = g->getLabel();
@@ -799,9 +836,10 @@ int main( int  argc, char**  argv )
 		double lengthH = concat.computeAverageFunction(lengthFunction);
 		double nLocMaxH = concat.computeAverageFunction(numberLocMaxFunction);
 		double deltaH = concat.computeAverageFunction(deltaFunction);
-		if (deltaH > -10 && nLocMaxH < 0.3 * nLocMax1 &&
-			(lengthH < criterionLength || nLocMaxH <= nLocMax0)) {
-			for (const Z3i::DigitalSet aSet : concat.myEdges)
+		if ( deltaH > -10 && nLocMaxH < 0.3 * nLocMax1 &&
+			 (lengthH < criterionLength || nLocMaxH <= nLocMax0)
+			) {
+			for (const Z3i::DigitalSet& aSet : concat.myEdges)
 				toPrune.insert(aSet.begin(), aSet.end());			
 		}
 	
