@@ -720,16 +720,22 @@ vector<GraphEdge*> edgesAssociatedWithPoints(const std::set<Z3i::Point>& point,
 }
 
 template <typename VCM, typename KernelFunction, typename Container, typename Domain>
-map<Z3i::Point, Z3i::RealPoint> constructSubVolumeWithPlanes(const vector<GraphEdge*>& graph,
+map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint> > > constructSubVolumeWithPlanes(const vector<GraphEdge*>& graph,
 															 const Container& setVolume,
 															 const Domain& domain,
-															 const Z3i::DigitalSet& saddlePoints) {
+															 const vector<Z3i::Object26_6>& saddlePoints) {
 	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
 	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
 
+	map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint>>> saddlesToPlanes;
+	for (const Z3i::Object26_6& o : saddlePoints) {
+		Z3i::Point saddleCC = *(o.pointSet().begin());
+		saddlesToPlanes[saddleCC] = vector<pair<Z3i::Point, Z3i::RealPoint>>();
+	}
+
 	Metric l2;
 	int cpt = 0;
-	map<Z3i::Point, Z3i::RealPoint> pointToVectors;
+
 	for (GraphEdge* edge : graph) {
 		Z3i::DigitalSet setEdge = edge->pointSet();
 		if (setEdge.size() <= 2) continue;
@@ -744,54 +750,62 @@ map<Z3i::Point, Z3i::RealPoint> constructSubVolumeWithPlanes(const vector<GraphE
 			Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
 																				 p, normal,
 																				 0, radius, radius*2, false);
-			for (const Z3i::Point& sp : saddlePoints) {
-				if (connectedComponent3D.find(sp) != connectedComponent3D.end()) {
-					cpt++;
-					pointToVectors[p] = normal;
-					found = true;
-					break;
+			for (const Z3i::Object26_6& o : saddlePoints) {
+				Z3i::DigitalSet saddleCC = o.pointSet();
+				if (found) break;
+				for (const Z3i::Point& sp : saddleCC) {
+					if (connectedComponent3D.find(sp) != connectedComponent3D.end()) {
+
+						saddlesToPlanes[*saddleCC.begin()].push_back(make_pair(p, normal));
+						found  = true;
+						break;
+					}
 				}
 			}
 		}
 	}
 
-	if (cpt == 2) {
-		Z3i::Point p1 = (*(pointToVectors.begin())).first;
-		Z3i::RealPoint p2 =  (*(++pointToVectors.begin())).first;
-		Z3i::RealPoint n1 = (*(pointToVectors.begin())).second;
-		Z3i::RealPoint n2 =  (*(++pointToVectors.begin())).second;
-		Z3i::RealPoint nrot = n1.crossProduct(n2);
-		Z3i::RealPoint nrot2 = n2.crossProduct(n1);
-		double alpha = acos(n1.dot(n2));
-		float angleRotation = M_PI/2 - alpha;
-		Eigen::Affine3f t(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot[0], nrot[1], nrot[2])));
-		Eigen::Affine3f t2(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot2[0], nrot2[1], nrot2[2])));
-		Eigen::Vector3f n1e(n1[0], n1[1], n1[2]);
-		Eigen::Vector3f n2e(n2[0], n2[1], n2[2]);
-		Eigen::Vector3f rotn1e = t2.linear() * n1e;
-		Eigen::Vector3f rotn2e = t.linear() * n2e;
-		Z3i::RealPoint rotn1(rotn1e[0], rotn1e[1], rotn1e[2]);
-		Z3i::RealPoint rotn2(rotn2e[0], rotn2e[1], rotn2e[2]);
-		pointToVectors[p1] = rotn1;
-		pointToVectors[p2] = rotn2;
+	for (auto it = saddlesToPlanes.begin(), ite = saddlesToPlanes.end(); it != ite; ++it) {
+		vector<pair<Z3i::Point, Z3i::RealPoint>> pointToVectors = it->second;
+		trace.info() << pointToVectors.size() << endl;
+		if (pointToVectors.size() == 2) {
+			Z3i::Point p1 = (*(pointToVectors.begin())).first;
+			Z3i::RealPoint p2 =  (*(++pointToVectors.begin())).first;
+			Z3i::RealPoint n1 = (*(pointToVectors.begin())).second;
+			Z3i::RealPoint n2 =  (*(++pointToVectors.begin())).second;
+			Z3i::RealPoint nrot = n1.crossProduct(n2);
+			Z3i::RealPoint nrot2 = n2.crossProduct(n1);
+			double alpha = acos(n1.dot(n2));
+			float angleRotation = std::abs(M_PI/2 - alpha);
+			Eigen::Affine3f t(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot[0], nrot[1], nrot[2])));
+			Eigen::Affine3f t2(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot2[0], nrot2[1], nrot2[2])));
+			Eigen::Vector3f n1e(n1[0], n1[1], n1[2]);
+			Eigen::Vector3f n2e(n2[0], n2[1], n2[2]);
+			Eigen::Vector3f rotn1e = t.linear() * n1e;
+			Eigen::Vector3f rotn2e = t2.linear() * n2e;
+			Eigen::Vector3f otherRotn1e = t2.linear() * n1e;
+			Eigen::Vector3f otherRotn2e = t.linear() * n2e;
+			Z3i::RealPoint rotn1(rotn1e[0], rotn1e[1], rotn1e[2]);
+			Z3i::RealPoint rotn2(rotn2e[0], rotn2e[1], rotn2e[2]);
+			Z3i::RealPoint otherRotn1(otherRotn1e[0], otherRotn1e[1], otherRotn1e[2]);
+			Z3i::RealPoint otherRotn2(otherRotn2e[0], otherRotn2e[1], otherRotn2e[2]);
+			if (std::abs(otherRotn1.dot(otherRotn2)) < std::abs(rotn1.dot(rotn2))) {
+				rotn1 = otherRotn1;
+				rotn2 = otherRotn2;
+			}
+
+			pointToVectors.clear();
+			pointToVectors.push_back(make_pair(p1, rotn1));
+			pointToVectors.push_back(make_pair(p2, rotn2));
+			saddlesToPlanes[it->first] = pointToVectors;
+		}
+		else {
+			saddlesToPlanes[it->first].clear();
+		}
 	}
 
-	// vector<Z3i::Point> directionVectors;
-	// vector<Z3i::Point> neighbors;
-	// back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
-	// MAdj::writeNeighbors(inserter, b);
-	// for (const Z3i::Point& n : neighbors) {
-	// 	Z3i::Point directionVector = (b - n);
-	// 	directionVectors.push_back(directionVector);
-	// }
 
-	// set<Z3i::Point> sameOrientationVectors = vectorsToCompare(directionVectors);
-	// set<Z3i::Point> pointsToAnalyse = vectorsToPoint(sameOrientationVectors, b);
-	// vector<GraphEdge*> edges = edgesAssociatedWithPoints(pointsToAnalyse, graph);
-	// double distance = distanceToDelineateSubVolume<VCM, KernelFunction>(current, b, edges, setVolume, saddlePoints);
-	// map<Z3i::Point, Z3i::RealPoint> normals = computePlanesForSubVolume<VCM, KernelFunction>(b, edges, distance);
-	trace.info() << cpt << endl;
-	return pointToVectors;
+	return saddlesToPlanes;
 }
 
 
@@ -998,25 +1012,27 @@ int main( int  argc, char**  argv )
 	vector<Z3i::Object26_6> objSaddle = saddleComputer.saddleConnectedComponents(saddlePoints);
 	Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(objSaddle);
 
-		
+
 	Z3i::Point dummy;
-	for (const Z3i::Object26_6& s : objSaddle) {
-		Z3i::DigitalSet saddleCurrentCC = s.pointSet();
-		map<Z3i::Point, Z3i::RealPoint> mapPointToNormal = constructSubVolumeWithPlanes<VCM, KernelFunction>(hierarchicalGraph, setVolumeWeighted, domainVolume, saddleCurrentCC);
-	    for (const auto& pair : mapPointToNormal) {
-			Z3i::Point currentP = pair.first;
-			Z3i::RealPoint normalP = pair.second;
+
+	//Z3i::DigitalSet saddleCurrentCC = s.pointSet();
+	map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint>>> saddleToPlane = constructSubVolumeWithPlanes<VCM, KernelFunction>(hierarchicalGraph, setVolumeWeighted, domainVolume, objSaddle);
+	for (const auto& pairS : saddleToPlane) {
+		vector<pair<Z3i::Point, Z3i::RealPoint>> mapPointToNormal = pairS.second;
+		for (const auto & pair2 : mapPointToNormal) {
+			Z3i::Point currentP = pair2.first;
+			Z3i::RealPoint normalP = pair2.second;
 			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << currentP;
 			vector<Z3i::RealPoint> plane = SliceUtils::computePlaneFromNormalVector(normalP, currentP);
-		 	viewer.setFillColor(Color::Red);
-		 	double factor = 20;
-		 	viewer.addQuad(currentP+(plane[0]-currentP)*factor, currentP+(plane[1]-currentP)*factor, currentP+(plane[2]-currentP)*factor, currentP+(plane[3]-currentP)*factor);
+			viewer.setFillColor(Color::Red);
+			double factor = 15;
+			viewer.addQuad(currentP+(plane[0]-currentP)*factor, currentP+(plane[1]-currentP)*factor, currentP+(plane[2]-currentP)*factor, currentP+(plane[3]-currentP)*factor);
 			viewer << Viewer3D<>::updateDisplay;
 			qApp->processEvents();
-			
-//			viewer.addLine(currentP, currentP+(normalP*6));
 		}
+//			viewer.addLine(currentP, currentP+(normalP*6));
 	}
+
 	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
 	viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
 	viewer << Viewer3D<>::updateDisplay;
