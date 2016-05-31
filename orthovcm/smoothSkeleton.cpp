@@ -85,21 +85,14 @@
 #include "ReverseHatPointFunction.h"
 
 
+#include "graph/GraphEdge.h"
+#include "geometry/CurveAnalyzer.h"
 
 using namespace std;
 using namespace DGtal;
 namespace po = boost::program_options;
 
-class GraphEdge {
-public:
-	GraphEdge(Z3i::DigitalSet points, int label) : myPoints(points), myLabel(label) {}
-	int getLabel() const { return myLabel; }
-	void setLabel(int label) { myLabel = label; }
-	Z3i::DigitalSet pointSet() const { return myPoints; }
-private:
-	Z3i::DigitalSet myPoints;
-	int myLabel;
-};
+
 
 Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, const Z3i::RealPoint& aPoint) {
 	double distanceMin = numeric_limits<double>::max();
@@ -112,20 +105,6 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 		}
 	}
 	return toReturn;
-}
-
-Z3i::DigitalSet detectCriticalPoints(const Z3i::DigitalSet& skeleton) {
-	Z3i::Object26_6 obj(Z3i::dt26_6, skeleton);
-	Z3i::DigitalSet criticalPoints(skeleton.domain());
-	for (const Z3i::Point& s : skeleton) {
-		vector<Z3i::Point> neighbors;
-		back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
-		obj.writeNeighbors(inserter, s);
-		if (neighbors.size() > 2) {
-			criticalPoints.insert(s);
-		}
-	}
-	return criticalPoints;
 }
 
 Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters) {
@@ -147,119 +126,6 @@ Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters) {
 		}
 	}
 	return newClusters;
-}
-
-double computeAngle(const Z3i::Point& b,
-			 const Z3i::Point& m,
-			 const Z3i::Point& e) {
-	Z3i::RealVector v1 = (b - m).getNormalized();
-	Z3i::RealVector v2 = (e - m).getNormalized();
-    double dot = v1.dot(v2);
-	double angle = acos(dot);
-	return angle;
-}
-
-template <typename Segmentation, typename Domain>
-Z3i::DigitalSet dominantPointDetection(const Segmentation& segmentation,
-									   const vector<Z3i::Point>& skeletonOrdered,
-									   const Domain& domain) {
-
-	typedef typename Segmentation::SegmentComputerIterator DSS;
-
-	Z3i::DigitalSet dominantPoints(domain);
-	DSS q = (segmentation.begin());
-	DSS p = (++segmentation.begin());
-	while (p != segmentation.end()) {
-		Z3i::Point endQ = *(--(q->end()));
-		Z3i::Point beginP = *(p->begin());
-		int posP = find(skeletonOrdered.begin(), skeletonOrdered.end(), beginP) - skeletonOrdered.begin();
-		int posQ = find(skeletonOrdered.begin(), skeletonOrdered.end(), endQ) - skeletonOrdered.begin();
-	    if (posP < posQ) {
-			Z3i::Point beginQ = *(q->begin());
-			Z3i::Point endP = *(--(p->end()));
-			double min = numeric_limits<double>::max();
-			Z3i::Point dominantCandidate;
-			for (int i = posP; i < posQ; i++) {
-				Z3i::Point pointI = skeletonOrdered[i];
-				double angle = computeAngle(beginQ, pointI, endP);
-				if (angle < min) {
-					min = angle;
-					dominantCandidate = pointI;
-				}
-			}
-			dominantPoints.insert(dominantCandidate);
-		}
-		++p;
-		++q;
-	}
-	return dominantPoints;
-}
-
-template <typename Segmentation, typename Domain>
-Z3i::DigitalSet branchingPointDetection(const Segmentation& segmentation,
-										const vector<Z3i::Point>& skeletonOrdered,
-										const Domain& domain) {
-
-	typedef typename Segmentation::SegmentComputerIterator DSSIterator;
-	typedef typename Segmentation::SegmentComputer DSS;
-
-	Z3i::DigitalSet branchingPoints(domain);
-
-	for (const Z3i::Point& s : skeletonOrdered) {
-
-		vector<DSS> segments;
-
-		for (DSSIterator p = segmentation.begin(), q = segmentation.end(); p != q; ++p) {
-			DSS segment(*p);
-			for (auto it = segment.begin(), ite = segment.end(); it != ite; ++it) {
-				if (*it == s) {
-					segments.push_back(segment);
-					break;
-				}
-			}
-		}
-
-		int nb = 0;
-		for (int i = 0; i < segments.size(); i++) {
-			for (int j = i+1; j < segments.size(); j++) {
-				DSS si = segments[i];
-				DSS sj = segments[j];
-				Z3i::Point beginI = *(si.begin());
-				Z3i::Point endI = *(--(si.end()));
-				Z3i::Point beginJ = *(sj.begin());
-				Z3i::Point endJ = *(--(sj.end()));
-				int posBI = find(skeletonOrdered.begin(), skeletonOrdered.end(), beginI) - skeletonOrdered.begin();
-				int posEI = find(skeletonOrdered.begin(), skeletonOrdered.end(), endI) - skeletonOrdered.begin();
-				int posBJ = find(skeletonOrdered.begin(), skeletonOrdered.end(), beginJ) - skeletonOrdered.begin();
-				int posEJ = find(skeletonOrdered.begin(), skeletonOrdered.end(), endJ) - skeletonOrdered.begin();
-				if (posBJ < posEI || posBI < posEJ) {
-					nb++;
-				}
-			}
-		}
-		if (nb >= 2) {
-			branchingPoints.insert(s);
-		}
-	}
-	return branchingPoints;
-}
-
-
-vector<Z3i::DigitalSet> constructGraph(const vector<Z3i::Point>& orderedCurve,
-									   const Z3i::DigitalSet& constraint) {
-	vector<Z3i::DigitalSet> graph;
-	int index = 0;
-	graph.push_back(Z3i::DigitalSet(constraint.domain()));
-	for (int i = 0, end = orderedCurve.size(); i < end; i++) {
-		Z3i::Point current = orderedCurve[i];
-		graph[index].insert(current);
-		if (constraint.find(current) != constraint.end()) {
-			index++;
-			graph.push_back(Z3i::DigitalSet(constraint.domain()));
-			graph[index].insert(current);
-		}
-	}
-	return graph;
 }
 
 template <typename DTL2>
@@ -402,109 +268,7 @@ Z3i::DigitalSet extractSurfacePointsWithEigenVectors(const Z3i::DigitalSet& inte
 	return surfelSet;
 }
 
-vector<Z3i::Point> findEndPoints(const Z3i::DigitalSet& set) {
-	Z3i::Object26_6 objectSet(Z3i::dt26_6, set);
-	vector<Z3i::Point> endPoints;
-	for (auto it = set.begin(), ite = set.end(); it != ite; ++it) {
-		vector<Z3i::Point> neighbors;
-		back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
-		objectSet.writeNeighbors(inserter, *it);
-		if (neighbors.size() == 1)
-			endPoints.push_back(*it);
-	}
-	return endPoints;
-}
 
-bool sameSet(const Z3i::DigitalSet& first, const Z3i::DigitalSet& second) {
-	if (first.size() != second.size()) return false;
-	unsigned int cpt = 0;
-	for (const Z3i::Point& f : first) {
-		if (second.find(f) != second.end())
-			cpt++;
-	}
-	return (cpt == first.size());
-}
-
-vector<GraphEdge*> neighboringEdges(const vector<GraphEdge*>& edges,
-									const Z3i::DigitalSet& currentEdge,
-									const Z3i::DigitalSet& branchingPoints) {
-	typedef MetricAdjacency<Z3i::Space, 3> MetricAdjacency;
-
-	vector<GraphEdge*> neighbors;
-	Z3i::Point branchPoint;
-	for (const Z3i::Point& b : branchingPoints) {
-		if (currentEdge.find(b) != currentEdge.end()) {
-			branchPoint = b;
-		}
-	}
-
-	vector<Z3i::Point> nb;
-	back_insert_iterator<vector<Z3i::Point>> inserter(nb);
-	MetricAdjacency::writeNeighbors(inserter, branchPoint);
-
-	for (GraphEdge* edge : edges) {
-		Z3i::DigitalSet setEdge = edge->pointSet();
-		if (sameSet(setEdge, currentEdge)) continue;
-		for (const Z3i::Point& n : nb) {
-			if (setEdge.find(n) != setEdge.end())
-				neighbors.push_back(edge);
-		}
-	}
-
-	return neighbors;
-}
-
-vector<GraphEdge*> hierarchicalDecomposition(const vector<Z3i::DigitalSet>& edges,
-											const vector<Z3i::Point>& endPoints,
-											const Z3i::DigitalSet& branchingPoints) {
-
-	queue<GraphEdge*> edgeQueue;
-	vector<GraphEdge*> hierarchyGraph;
-	for (const Z3i::DigitalSet& edge : edges) {
-		GraphEdge* levelEdge = new GraphEdge(edge, std::numeric_limits<int>::max());
-
-		for (const Z3i::Point& e : endPoints) {
-			if (edge.find(e) != edge.end()) {
-				levelEdge->setLabel(1);
-				edgeQueue.push(levelEdge);
-				break;
-			}
-		}
-		hierarchyGraph.push_back(levelEdge);
-	}
-
-	while (!edgeQueue.empty()) {
-		GraphEdge* edgeCurrent  = edgeQueue.front();
-		Z3i::DigitalSet edgeCurrentSet = edgeCurrent->pointSet();
-		edgeQueue.pop();
-		vector<GraphEdge*> neighborEdges = neighboringEdges(hierarchyGraph, edgeCurrentSet, branchingPoints);
-		for (GraphEdge* neighCurrent : neighborEdges) {
-			int label = edgeCurrent->getLabel()+1;
-			if (neighCurrent->getLabel() > label) {
-				neighCurrent->setLabel(label);
-				edgeQueue.push(neighCurrent);
-			}
-		}
-	}
-
-	return hierarchyGraph;
-
-}
-
-Z3i::DigitalSet ensureConnexity(const Z3i::DigitalSet& set) {
-	Z3i::DigitalSet cleanSet(set.domain());
-	Z3i::Object26_6 obj(Z3i::dt26_6, set);
-	Z3i::DigitalSet & S = obj.pointSet();
-	cleanSet = S;
-	for (auto it = S.begin(), ite = S.end(); it != ite; ++it) {
-		Z3i::Object26_6 obj(Z3i::dt26_6, cleanSet);
-		if (obj.isSimple(*it)) {
-		    cleanSet.erase(*it);
-		}
-	}
-
-	return cleanSet;
-}
 
 template <typename VCM, typename KernelFunction, typename Container>
 double distanceToDelineateSubVolume(const Z3i::Point& current,
@@ -595,7 +359,7 @@ Container constructSubVolume(const Z3i::Point& current,
 	if (b == Z3i::Point())
 		return setVolume;
 
-	vector<GraphEdge*> neighborEdge = neighboringEdges(graph,
+	vector<GraphEdge*> neighborEdge = CurveAnalyzer::neighboringEdges(graph,
 													   currentEdge,
 													   branchingPoints);
 
@@ -653,7 +417,7 @@ Z3i::DigitalSet constructSubVolumeWithTangent(const Z3i::Point& current,
 		return digitalSetVolume;
 
 
-	vector<GraphEdge*> neighborEdge = neighboringEdges(graph,
+	vector<GraphEdge*> neighborEdge = CurveAnalyzer::neighboringEdges(graph,
 													   currentEdge,
 													   branchingPoints);
 	double radius = currentEdge.size() * 0.4;
@@ -913,7 +677,7 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet branchingPoints(domainSkeleton);
 	SetFromImage<Z3i::DigitalSet>::append<Image>(setSkeleton, skeleton, thresholdMin-1, thresholdMax);
 
-	Z3i::DigitalSet existingSkeleton = ensureConnexity(setSkeleton);
+	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
 	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
 	vector<Point> existingSkeletonOrdered;
@@ -961,9 +725,9 @@ int main( int  argc, char**  argv )
 //	Z3i::DigitalSet branchingPoints = branchingPointDetection(s, existingSkeletonOrdered, domainVolume);
 //	Z3i::DigitalSet branchingPoints = detectCriticalPoints(existingSkeleton);
 
-	vector<Z3i::DigitalSet> edgeGraph = constructGraph(existingSkeletonOrdered, branchingPoints);
-	vector<Z3i::Point> endPoints = findEndPoints(existingSkeleton);
-	vector<GraphEdge*> hierarchicalGraph = hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
+	vector<Z3i::DigitalSet> edgeGraph = CurveAnalyzer::constructGraph(existingSkeletonOrdered, branchingPoints);
+	vector<Z3i::Point> endPoints = CurveAnalyzer::findEndPoints(existingSkeleton);
+	vector<GraphEdge*> hierarchicalGraph = CurveAnalyzer::hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
 
 	//Display points
 //	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << branchingPoints;
