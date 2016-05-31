@@ -1,0 +1,51 @@
+#ifndef VCM_UTIL_H
+#define VCM_UTIL_H
+
+template <typename VCM, typename KernelFunction>
+Z3i::RealPoint computeNormalFromVCM(const Z3i::Point& currentPoint, VCM& vcm, KernelFunction& chi, int coordinate) {
+
+	typedef EigenDecomposition<3,double> LinearAlgebraTool;
+	LinearAlgebraTool::Matrix vcm_r, evec;
+	Z3i::RealVector eval;
+	// Compute VCM and diagonalize it.
+	vcm_r = vcm.measure( chi, currentPoint );
+	LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
+	
+	// // Display normal
+	Z3i::RealVector normal = evec.column(coordinate);
+	return normal;
+}
+
+
+
+template <typename Domain, typename WeightedPoint>
+Z3i::DigitalSet extractConnectedComponent3D(const Domain & domain, const set<WeightedPoint*, WeightedPointCountComparator>& volume, const Z3i::RealPoint& normal, const Z3i::Point& referencePoint, double d, double omega, double distanceMax) {
+	typedef Z3i::Object26_6 ObjectType;
+
+	Z3i::DigitalSet intersection(domain);
+	for (auto it = volume.begin(), ite = volume.end(); it != ite; ++it) {
+		double valueToCheckForPlane = (*it)->myPoint[0] * normal[0] + (*it)->myPoint[1] * normal[1] + (*it)->myPoint[2] * normal[2];
+		if (valueToCheckForPlane >= d && valueToCheckForPlane < d + omega && Z3i::l2Metric((*it)->myPoint, referencePoint) <= distanceMax) {
+			intersection.insert((*it)->myPoint);
+		}
+	}
+
+	ObjectType objectIntersection(Z3i::dt26_6, intersection);
+	vector<ObjectType> objects;
+	back_insert_iterator<vector<ObjectType>> inserter(objects);
+	unsigned int nbConnectedComponents = objectIntersection.writeComponents(inserter);
+	if (nbConnectedComponents > 1) {
+		for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
+			Z3i::DigitalSet ccSet = it->pointSet();
+			if (ccSet.find(referencePoint) != ccSet.end()) {
+				
+			    return ccSet;
+			}
+		}
+		return Z3i::DigitalSet(domain);
+	}
+   
+	return intersection;
+}
+
+#endif

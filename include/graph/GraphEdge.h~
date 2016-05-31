@@ -1,0 +1,10 @@
+class GraphEdge {
+public:
+	GraphEdge(Z3i::DigitalSet points, int label) : myPoints(points), myLabel(label) {}
+	int getLabel() const { return myLabel; }
+	void setLabel(int label) { myLabel = label; }
+	Z3i::DigitalSet pointSet() const { return myPoints; }
+private:
+	Z3i::DigitalSet myPoints;
+	int myLabel;
+};

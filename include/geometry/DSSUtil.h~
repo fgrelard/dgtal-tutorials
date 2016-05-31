@@ -1,0 +1,27 @@
+#ifndef DSS_UTIL_H
+#define DSS_UTIL_H
+
+#include <vector>
+#include "DGtal/geometry/curves/StandardDSS6Computer.h"
+#include "DGtal/base/Common.h"
+#include "DGtal/geometry/curves/SaturatedSegmentation.h"
+#include "DGtal/helpers/StdDefs.h"
+
+namespace DSSUtil {
+
+template <typename Segmentation>
+std::vector<typename Segmentation::SegmentComputer> computeDSSPassingThrough(const DGtal::Z3i::Point& point, const Segmentation& segmentation);
+}
+
+template <typename Segmentation>
+std::vector<typename Segmentation::SegmentComputer> computeDSSPassingThrough(const DGtal::Z3i::Point& point, const Segmentation& segmentation) {
+typedef typename Segmentation::SegmentComputer;
+for (auto it = segmentation.begin(), ite = segmentation.end(); it != ite; ++it) {
+for (auto itP = it->begin(), itPe = it->end(); itP != itPe;++itP) {
+
+}
+}
+
+}
+
+#endif

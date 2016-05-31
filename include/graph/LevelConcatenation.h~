@@ -1,0 +1,11 @@
+#ifndef CONCATENATION_H
+#define CONCATENATION_H
+
+#include <vector>
+#include <functional>
+#include "DGtal/base/Common.h"
+#include "DGtal/helpers/StdDefs.h"
+
+
+
+#endif
