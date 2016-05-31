@@ -572,6 +572,29 @@ map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint> > > constructSubVolumeWi
 	return saddlesToPlanes;
 }
 
+template <typename VCM, typename KernelFunction, typename Container>
+double areaAnalysis(const Z3i::DigitalSet& setEdge, const Container& setVolume) {
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
+	Metric l2;
+	
+	Z3i::Object26_6 objEdge(Z3i::dt26_6, setEdge);
+	auto domain = setEdge.domain();
+
+    auto itP = setEdge.begin();
+	while (itP != setEdge.end()) {
+		Z3i::Point p = *itP;
+		double radius = setEdge.size() * 0.4;
+		VCM vcm(20, ceil(radius), l2, false);
+		vcm.init(setEdge.begin(), setEdge.end());
+		KernelFunction chi(1.0, radius);
+		Z3i::RealPoint normal;
+		Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
+																			 p, normal,
+																			 0, radius, radius*2, false);
+	}
+		
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
