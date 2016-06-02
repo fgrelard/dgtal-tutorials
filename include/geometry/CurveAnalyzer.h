@@ -45,7 +45,7 @@ namespace CurveAnalyzer {
 													   const DGtal::Z3i::DigitalSet& constraint);
 	
 	
-										
+	std::vector<DGtal::Z3i::Point> convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge);
 };
 
 
@@ -157,7 +157,7 @@ std::vector<DGtal::Z3i::Point> CurveAnalyzer::findEndPoints(const DGtal::Z3i::Di
 		std::vector<DGtal::Z3i::Point> neighbors;
 		std::back_insert_iterator<std::vector<DGtal::Z3i::Point>> inserter(neighbors);
 		objectSet.writeNeighbors(inserter, *it);
-		if (neighbors.size() == 1)
+		if (neighbors.size() <= 1)
 			endPoints.push_back(*it);
 	}
 	return endPoints;
@@ -278,6 +278,38 @@ DGtal::Z3i::DigitalSet CurveAnalyzer::detectCriticalPoints(const DGtal::Z3i::Dig
 		}
 	}
 	return criticalPoints;
+}
+
+
+std::vector<DGtal::Z3i::Point> CurveAnalyzer::convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge) {
+	std::vector<DGtal::Z3i::Point> orientedEdge;
+	if (edge.size() == 0) return orientedEdge;
+	
+	DGtal::Z3i::Object26_6 objEdge(DGtal::Z3i::dt26_6, edge);
+//	DGtal::Z3i::DigitalSet thinEdge = ensureConnexity(edge);
+	std::vector<DGtal::Z3i::Point> endPoints = findEndPoints(edge);
+	DGtal::Z3i::Point start = *(endPoints.begin());
+	
+	orientedEdge.push_back(start);
+   	
+	bool toAdd = true;
+	while (toAdd) {
+		std::vector<DGtal::Z3i::Point> neighbors;
+		std::back_insert_iterator<std::vector<DGtal::Z3i::Point>> inserter(neighbors);
+		objEdge.writeNeighbors(inserter, start);
+		unsigned int cpt = 0;
+		for (const DGtal::Z3i::Point& n : neighbors) {
+			if (std::find(orientedEdge.begin(), orientedEdge.end(), n) == orientedEdge.end()) {
+				orientedEdge.push_back(n);
+				start = n;
+			}
+			else
+				cpt++;
+		}
+		if (cpt == neighbors.size())
+			toAdd = false;
+	}
+	return orientedEdge;		 
 }
 
 

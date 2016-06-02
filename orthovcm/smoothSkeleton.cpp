@@ -573,15 +573,16 @@ map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint> > > constructSubVolumeWi
 }
 
 template <typename VCM, typename KernelFunction, typename Container>
-double areaAnalysis(const Z3i::DigitalSet& setEdge, const Container& setVolume) {
+vector<pair<Z3i::Point, double>> areaProfile(const Z3i::DigitalSet& setEdge, const Container& setVolume) {
 	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
 	Metric l2;
-	
-	Z3i::Object26_6 objEdge(Z3i::dt26_6, setEdge);
+   
 	auto domain = setEdge.domain();
+	vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(setEdge);
 
-    auto itP = setEdge.begin();
-	while (itP != setEdge.end()) {
+	vector<pair<Z3i::Point, double>> areasEdge;
+    auto itP = orientedEdge.begin();
+	while (itP != orientedEdge.end()) {
 		Z3i::Point p = *itP;
 		double radius = setEdge.size() * 0.4;
 		VCM vcm(20, ceil(radius), l2, false);
@@ -591,8 +592,198 @@ double areaAnalysis(const Z3i::DigitalSet& setEdge, const Container& setVolume) 
 		Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
 																			 p, normal,
 																			 0, radius, radius*2, false);
+
+		double area = connectedComponent3D.size();
+		areasEdge.push_back(make_pair(*itP, area));
+		++itP;
 	}
-		
+	return areasEdge;
+}
+
+
+template <typename VCM, typename KernelFunction, typename Domain, typename WeightedContainer>
+pair<Z3i::Point, Z3i::RealPoint> pointToNormal(const Z3i::Point&  point, const Z3i::DigitalSet& setVCM, const Domain& domain,
+											  const WeightedContainer& setVolume) {
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
+	Metric l2;
+
+	map<Z3i::Point, Z3i::RealPoint> aMap;
+	double radius = setVCM.size() * 0.4;
+	radius = (radius < 2) ? 2 : radius;
+	VCM vcm(20, ceil(radius), l2, false);
+	vcm.init(setVCM.begin(), setVCM.end());
+	KernelFunction chi(1.0, radius);
+	Z3i::RealPoint normal;
+	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
+																		 point, normal,
+																		 0, radius, radius*2, false);
+	return make_pair(point, normal);
+	
+}
+
+template <typename VCM, typename KernelFunction, typename Domain, typename WeightedContainer>
+Z3i::DigitalSet associatedPlane(const Z3i::Point& point, const Z3i::DigitalSet& setVCM, const Domain& domain,
+											  const WeightedContainer& setVolume) {
+	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
+	Metric l2;
+
+	map<Z3i::Point, Z3i::RealPoint> aMap;
+	double radius = setVCM.size() * 0.4;
+	VCM vcm(20, ceil(radius), l2, false);
+	vcm.init(setVCM.begin(), setVCM.end());
+	KernelFunction chi(1.0, radius);
+	Z3i::RealPoint normal;
+	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
+																		 point, normal,
+																		 0, radius, radius*2, false);
+	return connectedComponent3D;
+}
+
+vector<Z3i::Point> pointsAboveAverage(const map<Z3i::Point, double>& pointToAreas) {
+	vector<double> areas;
+	for (auto it = pointToAreas.begin(), ite = pointToAreas.end(); it != ite; ++it) {
+		areas.push_back(it->second);
+	}
+
+	vector<Z3i::Point> points;
+	double mean = Statistics::mean(areas);
+	for (auto it = pointToAreas.begin(), ite = pointToAreas.end(); it!=ite; ++it) {
+		Z3i::Point currentPoint = it->first;
+		double currentArea = it->second;
+		if (currentArea > mean) {
+			points.push_back(currentPoint);
+		}
+	}
+	return points;
+}
+
+Z3i::Point pointsVaryingNeighborhood(const vector<pair<Z3i::Point, double>>& pointToAreas) {
+	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
+	
+	Z3i::Point candidate;
+	double previousFactor = 0;
+	for (const auto& pair : pointToAreas) {
+		Z3i::Point p = pair.first;
+		double currentValue = pair.second;
+		double radius = sqrt(currentValue / M_PI);
+		double currentArea = currentValue + 2 * radius * M_PI + M_PI;
+		vector<Z3i::Point> neighbors;
+		back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
+	    MAdj::writeNeighbors(inserter, p);
+		for (const Z3i::Point& n : neighbors) {
+			auto nInMap = find_if(pointToAreas.begin(),pointToAreas.end(), [&](const std::pair<Z3i::Point, double>& pair) {
+					return pair.first == n;
+				});
+			if (nInMap != pointToAreas.end()) {
+				double valueNeighbor = nInMap->second;
+				double factor = valueNeighbor / currentArea;
+				if (factor > previousFactor) {
+					previousFactor = factor;
+					candidate = p;
+				}				
+			}
+		}	   
+	}
+	return candidate;
+}
+
+
+vector<Z3i::DigitalSet> computeSubVolumes(const Z3i::DigitalSet& volume,
+								   const vector<Z3i::DigitalSet>& planes) {
+	vector<Z3i::DigitalSet> subVolumes;
+
+	subVolumes.push_back(volume);
+	for (const Z3i::DigitalSet& plane : planes) {
+		for (auto it = subVolumes.begin(), ite = subVolumes.end(); it!=ite; ++it) {
+			Z3i::DigitalSet subVol = *it;
+			set<Z3i::Point> subVolSet(subVol.begin(), subVol.end());
+			set<Z3i::Point> planeSet(plane.begin(), plane.end());
+			
+			set<Z3i::Point> difference;
+			set_difference(subVolSet.begin(), subVolSet.end(),
+						   planeSet.begin(), planeSet.end(),
+						   std::inserter(difference, difference.end()));
+			Z3i::DigitalSet diffDigitalSet(subVol.domain());
+			diffDigitalSet.insert(difference.begin(), difference.end());
+			Z3i::Object6_26 objDiff(Z3i::dt6_26, diffDigitalSet);
+			vector<Z3i::Object6_26> cc;
+			back_insert_iterator< vector<Z3i::Object6_26> > iterator( cc );
+			unsigned nbcc = objDiff.writeComponents(iterator);
+			if (nbcc >= 2) {
+				subVolumes.erase(it);
+				for (auto itCC = cc.begin(), itCCe = cc.end();
+					 itCC != itCCe; ++itCC) {
+					Z3i::DigitalSet part = itCC->pointSet();
+//					part.insert(plane.begin(), plane.end());
+					subVolumes.push_back(part);
+				}
+				break;
+			}
+		}
+	}
+	return subVolumes;
+}
+
+
+vector<Z3i::DigitalSet> delineatingPlanes(const Z3i::DigitalSet& subVolume, const vector<Z3i::DigitalSet>& setOfAllPlanes) {
+	vector<Z3i::DigitalSet> delineating;
+	for (const Z3i::DigitalSet& plane : setOfAllPlanes) {
+		Z3i::DigitalSet dilatedPlane(plane.domain());
+		for (const Z3i::Point& pointPlane : plane) {
+			dilatedPlane.insert(pointPlane);
+			vector<Z3i::Point> neighbors;
+			back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
+			MetricAdjacency<Z3i::Space, 3>::writeNeighbors(inserter, pointPlane);
+			for (const Z3i::Point& n : neighbors) {
+				dilatedPlane.insert(n);
+			}
+		}
+		for (const Z3i::Point& p : subVolume) {
+				
+			if (dilatedPlane.find(p) != dilatedPlane.end()) {
+				delineating.push_back(plane);
+				break;
+			}
+		}
+	}
+	return delineating;
+}
+
+
+vector<Z3i::DigitalSet> twoClosestPlanesHausdorff(const vector<Z3i::DigitalSet>& delineatingPlanes) {
+	double distanceMin = numeric_limits<double>::max();
+	vector<Z3i::DigitalSet> pairPlanes;
+	for (size_t i = 0; i < delineatingPlanes.size(); i++) {
+		for (size_t j = i+1; j < delineatingPlanes.size(); j++) {
+			Z3i::DigitalSet first = delineatingPlanes[i];
+			Z3i::DigitalSet second = delineatingPlanes[j];
+			double dh = hausdorffDistance(first, second);
+			if (dh < distanceMin) {
+				vector<Z3i::DigitalSet> currentPair;
+				currentPair.push_back(first);
+				currentPair.push_back(second);
+				pairPlanes = currentPair;
+			}
+		}
+	}
+	return pairPlanes;
+}
+
+
+template <typename VCM, typename KernelFunction, typename Container>
+void areaProfileToStdout(const vector<Z3i::DigitalSet>& edgeGraph,
+						 const Container& setVolumeWeighted) {
+	int loop = 0;
+	for (const Z3i::DigitalSet& edge : edgeGraph) {
+		if (edge.size() < 10) continue;
+		vector<pair<Z3i::Point, double>> pointToAreas = areaProfile<VCM, KernelFunction>(edge, setVolumeWeighted);
+		int j = 0;
+		for (const auto& pair : pointToAreas) {			
+			cout << j << " " << pair.second << endl;
+			j++;
+		}
+		loop++;
+	}
 }
 
 
@@ -752,6 +943,7 @@ int main( int  argc, char**  argv )
 	vector<Z3i::Point> endPoints = CurveAnalyzer::findEndPoints(existingSkeleton);
 	vector<GraphEdge*> hierarchicalGraph = CurveAnalyzer::hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
 
+
 	//Display points
 //	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << branchingPoints;
 	// for (const Z3i::Point& p : endPoints) {
@@ -793,6 +985,73 @@ int main( int  argc, char**  argv )
 		}
 	}
 
+	vector<Z3i::DigitalSet> planes;
+	for (const Z3i::DigitalSet& edge : edgeGraph) {
+		if (edge.size() == 0) continue;
+		vector<pair<Z3i::Point, double>> pointToAreas = areaProfile<VCM, KernelFunction>(edge, setVolumeWeighted);
+		Z3i::Point point = pointsVaryingNeighborhood(pointToAreas);
+		if (point == Z3i::Point()) continue;
+		Z3i::DigitalSet plane = associatedPlane<VCM, KernelFunction>(point, edge, domainVolume, setVolumeWeighted);
+		planes.push_back(plane);
+	}
+	vector<Z3i::DigitalSet> subVolumes = computeSubVolumes(setVolume, planes);
+	trace.info() << subVolumes.size() << endl;
+	for (auto it = subVolumes.begin(), ite = subVolumes.end(); it != ite; ++it) {
+		int r = rand() % 256, g = rand() % 256, b = rand() % 256;
+		viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << *it;
+	}
+
+	for (const Z3i::DigitalSet& sub : subVolumes) {
+		vector<Z3i::DigitalSet> delineating = delineatingPlanes(sub, planes);
+		vector<Z3i::DigitalSet> pairPlanes = twoClosestPlanesHausdorff(delineating);
+		trace.info() << pairPlanes.size() << endl;
+		for (const Z3i::DigitalSet& plane : pairPlanes) {
+			viewer << CustomColors3D(Color::Black, Color::Black) << plane;
+		}
+	}
+	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	// viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
+	viewer << Viewer3D<>::updateDisplay;
+	application.exec();
+	return 0;
+
+
+	// for (const Z3i::DigitalSet& edge : edgeGraph) {
+	// 	if (edge.size() == 0) continue;
+	// 	map<Z3i::Point, double> pointToAreas = areaProfile<VCM, KernelFunction>(edge, setVolumeWeighted);
+	// 	double minArea = min_element(pointToAreas.begin(), pointToAreas.end(), [&](const pair<Z3i::Point, double>& pair1, const pair<Z3i::Point, double>& pair2) {
+	// 			return pair1.second < pair2.second;
+	// 		})->second;
+		
+	// 	double maxArea = max_element(pointToAreas.begin(), pointToAreas.end(), [&](const pair<Z3i::Point, double>& pair1, const pair<Z3i::Point, double>& pair2) {
+	// 			return pair1.second < pair2.second;
+	// 		})->second;
+
+	// 	GradientColorMap<double> gradient( minArea, maxArea);
+	// 	gradient.addColor(DGtal::Color::Blue);
+	// 	gradient.addColor(DGtal::Color::Green);
+	// 	gradient.addColor(DGtal::Color::Yellow);
+	// 	gradient.addColor(DGtal::Color::Red);
+	// 	Z3i::Point point = pointsVaryingNeighborhood(pointToAreas);
+	// 	pair<Z3i::Point, Z3i::RealPoint> pair2 = pointToNormal<VCM, KernelFunction>(point, edge, domainVolume, setVolumeWeighted);
+	// 	Z3i::Point currentP = pair2.first;
+	// 	Z3i::RealPoint normalP = pair2.second;
+	// 	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << currentP;
+	// 	vector<Z3i::RealPoint> plane = SliceUtils::computePlaneFromNormalVector(normalP, currentP);
+	// 	viewer.setFillColor(Color::Red);
+	// 	double factor = 15;
+	// 	viewer.addQuad(currentP+(plane[0]-currentP)*factor, currentP+(plane[1]-currentP)*factor, currentP+(plane[2]-currentP)*factor, currentP+(plane[3]-currentP)*factor);
+	// 	viewer << Viewer3D<>::updateDisplay;
+	// 	qApp->processEvents();		 
+	// }
+	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	// viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
+	// viewer << Viewer3D<>::updateDisplay;
+	// application.exec();
+	// return 0;
+
+	
+	
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	SaddleComputer<DTL2, BackgroundPredicate> saddleComputer(setVolume, dt, backgroundPredicate, R, r, delta);
 	Z3i::DigitalSet saddlePoints = saddleComputer.extractSaddlePoints(setVolume);
@@ -905,17 +1164,7 @@ int main( int  argc, char**  argv )
 			Z3i::RealPoint normalSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
 			double dot = std::abs(normalSurface.dot(normal));
 			bool keep = (dot > angleThreshold);
-			// if (!keep) {
-			// 	Z3i::DigitalSet planeSurface = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume,
-			// 																 setVolumeWeighted, s, normalSurface,
-			// 																 0, radiusSurface, distanceMax, false, Z3i::RealVector(),
-			// 																 surfels);
-			// 	Z3i::DigitalSet surfelSetSurface = extractSurfacePointsWithEigenVectors(planeSurface, dt, s, dt(s));
-			// 	vector<Z3i::Point> surfelsSurface(surfelSetSurface.begin(), surfelSetSurface.end());
-			// 	Z3i::RealPoint normalFromSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfelsSurface);
-			// 	dot = std::abs(normal.dot(normalFromSurface));
-			// 	keep = (dot > angleThreshold);
-			// }
+
 			realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 			//Center of mass computation
