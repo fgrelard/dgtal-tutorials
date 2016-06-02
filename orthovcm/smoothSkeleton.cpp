@@ -538,29 +538,29 @@ map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint> > > constructSubVolumeWi
 			Z3i::RealPoint n1 = (*(pointToVectors.begin())).second;
 			Z3i::RealPoint n2 =  (*(++pointToVectors.begin())).second;
 			Z3i::RealPoint nrot = n1.crossProduct(n2);
-			Z3i::RealPoint nrot2 = n2.crossProduct(n1);
-			double alpha = acos(n1.dot(n2));
-			float angleRotation = std::abs(M_PI/2 - alpha);
-			Eigen::Affine3f t(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot[0], nrot[1], nrot[2])));
-			Eigen::Affine3f t2(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot2[0], nrot2[1], nrot2[2])));
-			Eigen::Vector3f n1e(n1[0], n1[1], n1[2]);
-			Eigen::Vector3f n2e(n2[0], n2[1], n2[2]);
-			Eigen::Vector3f rotn1e = t.linear() * n1e;
-			Eigen::Vector3f rotn2e = t2.linear() * n2e;
-			Eigen::Vector3f otherRotn1e = t2.linear() * n1e;
-			Eigen::Vector3f otherRotn2e = t.linear() * n2e;
-			Z3i::RealPoint rotn1(rotn1e[0], rotn1e[1], rotn1e[2]);
-			Z3i::RealPoint rotn2(rotn2e[0], rotn2e[1], rotn2e[2]);
-			Z3i::RealPoint otherRotn1(otherRotn1e[0], otherRotn1e[1], otherRotn1e[2]);
-			Z3i::RealPoint otherRotn2(otherRotn2e[0], otherRotn2e[1], otherRotn2e[2]);
-			if (std::abs(otherRotn1.dot(otherRotn2)) < std::abs(rotn1.dot(rotn2))) {
-				rotn1 = otherRotn1;
-				rotn2 = otherRotn2;
-			}
+			// Z3i::RealPoint nrot2 = n2.crossProduct(n1);			
+			// double alpha = acos(n1.dot(n2));
+			// float angleRotation = std::abs(M_PI/2 - alpha);
+			// Eigen::Affine3f t(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot[0], nrot[1], nrot[2])));
+			// Eigen::Affine3f t2(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot2[0], nrot2[1], nrot2[2])));
+			// Eigen::Vector3f n1e(n1[0], n1[1], n1[2]);
+			// Eigen::Vector3f n2e(n2[0], n2[1], n2[2]);
+			// Eigen::Vector3f rotn1e = t.linear() * n1e;
+			// Eigen::Vector3f rotn2e = t2.linear() * n2e;
+			// Eigen::Vector3f otherRotn1e = t2.linear() * n1e;
+			// Eigen::Vector3f otherRotn2e = t.linear() * n2e;
+			// Z3i::RealPoint rotn1(rotn1e[0], rotn1e[1], rotn1e[2]);
+			// Z3i::RealPoint rotn2(rotn2e[0], rotn2e[1], rotn2e[2]);
+			// Z3i::RealPoint otherRotn1(otherRotn1e[0], otherRotn1e[1], otherRotn1e[2]);
+			// Z3i::RealPoint otherRotn2(otherRotn2e[0], otherRotn2e[1], otherRotn2e[2]);
+			// if (std::abs(otherRotn1.dot(otherRotn2)) < std::abs(rotn1.dot(rotn2))) {
+			// 	rotn1 = otherRotn1;
+			// 	rotn2 = otherRotn2;
+			// }
 
 			pointToVectors.clear();
-			pointToVectors.push_back(make_pair(p1, rotn1));
-			pointToVectors.push_back(make_pair(p2, rotn2));
+			pointToVectors.push_back(make_pair(p1, n2.crossProduct(nrot)));
+			pointToVectors.push_back(make_pair(p2, n1.crossProduct(nrot)));
 			saddlesToPlanes[it->first] = pointToVectors;
 		}
 		else {
@@ -985,67 +985,32 @@ int main( int  argc, char**  argv )
 		}
 	}
 
-	vector<Z3i::DigitalSet> planes;
-	for (const Z3i::DigitalSet& edge : edgeGraph) {
-		if (edge.size() == 0) continue;
-		vector<pair<Z3i::Point, double>> pointToAreas = areaProfile<VCM, KernelFunction>(edge, setVolumeWeighted);
-		Z3i::Point point = pointsVaryingNeighborhood(pointToAreas);
-		if (point == Z3i::Point()) continue;
-		Z3i::DigitalSet plane = associatedPlane<VCM, KernelFunction>(point, edge, domainVolume, setVolumeWeighted);
-		planes.push_back(plane);
-	}
-	vector<Z3i::DigitalSet> subVolumes = computeSubVolumes(setVolume, planes);
-	trace.info() << subVolumes.size() << endl;
-	for (auto it = subVolumes.begin(), ite = subVolumes.end(); it != ite; ++it) {
-		int r = rand() % 256, g = rand() % 256, b = rand() % 256;
-		viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << *it;
-	}
-
-	for (const Z3i::DigitalSet& sub : subVolumes) {
-		vector<Z3i::DigitalSet> delineating = delineatingPlanes(sub, planes);
-		vector<Z3i::DigitalSet> pairPlanes = twoClosestPlanesHausdorff(delineating);
-		trace.info() << pairPlanes.size() << endl;
-		for (const Z3i::DigitalSet& plane : pairPlanes) {
-			viewer << CustomColors3D(Color::Black, Color::Black) << plane;
-		}
-	}
-	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-	// viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
-	viewer << Viewer3D<>::updateDisplay;
-	application.exec();
-	return 0;
-
-
+	// vector<Z3i::DigitalSet> planes;
 	// for (const Z3i::DigitalSet& edge : edgeGraph) {
 	// 	if (edge.size() == 0) continue;
-	// 	map<Z3i::Point, double> pointToAreas = areaProfile<VCM, KernelFunction>(edge, setVolumeWeighted);
-	// 	double minArea = min_element(pointToAreas.begin(), pointToAreas.end(), [&](const pair<Z3i::Point, double>& pair1, const pair<Z3i::Point, double>& pair2) {
-	// 			return pair1.second < pair2.second;
-	// 		})->second;
-		
-	// 	double maxArea = max_element(pointToAreas.begin(), pointToAreas.end(), [&](const pair<Z3i::Point, double>& pair1, const pair<Z3i::Point, double>& pair2) {
-	// 			return pair1.second < pair2.second;
-	// 		})->second;
-
-	// 	GradientColorMap<double> gradient( minArea, maxArea);
-	// 	gradient.addColor(DGtal::Color::Blue);
-	// 	gradient.addColor(DGtal::Color::Green);
-	// 	gradient.addColor(DGtal::Color::Yellow);
-	// 	gradient.addColor(DGtal::Color::Red);
+	// 	vector<pair<Z3i::Point, double>> pointToAreas = areaProfile<VCM, KernelFunction>(edge, setVolumeWeighted);
 	// 	Z3i::Point point = pointsVaryingNeighborhood(pointToAreas);
-	// 	pair<Z3i::Point, Z3i::RealPoint> pair2 = pointToNormal<VCM, KernelFunction>(point, edge, domainVolume, setVolumeWeighted);
-	// 	Z3i::Point currentP = pair2.first;
-	// 	Z3i::RealPoint normalP = pair2.second;
-	// 	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << currentP;
-	// 	vector<Z3i::RealPoint> plane = SliceUtils::computePlaneFromNormalVector(normalP, currentP);
-	// 	viewer.setFillColor(Color::Red);
-	// 	double factor = 15;
-	// 	viewer.addQuad(currentP+(plane[0]-currentP)*factor, currentP+(plane[1]-currentP)*factor, currentP+(plane[2]-currentP)*factor, currentP+(plane[3]-currentP)*factor);
-	// 	viewer << Viewer3D<>::updateDisplay;
-	// 	qApp->processEvents();		 
+	// 	if (point == Z3i::Point()) continue;
+	// 	Z3i::DigitalSet plane = associatedPlane<VCM, KernelFunction>(point, edge, domainVolume, setVolumeWeighted);
+	// 	planes.push_back(plane);
 	// }
-	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-	// viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
+	// vector<Z3i::DigitalSet> subVolumes = computeSubVolumes(setVolume, planes);
+	// trace.info() << subVolumes.size() << endl;
+	// for (auto it = subVolumes.begin(), ite = subVolumes.end(); it != ite; ++it) {
+	// 	int r = rand() % 256, g = rand() % 256, b = rand() % 256;
+	// 	viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << *it;
+	// }
+
+	// for (const Z3i::DigitalSet& sub : subVolumes) {
+	// 	vector<Z3i::DigitalSet> delineating = delineatingPlanes(sub, planes);
+	// 	vector<Z3i::DigitalSet> pairPlanes = twoClosestPlanesHausdorff(delineating);
+	// 	trace.info() << pairPlanes.size() << endl;
+	// 	for (const Z3i::DigitalSet& plane : pairPlanes) {
+	// 		viewer << CustomColors3D(Color::Black, Color::Black) << plane;
+	// 	}
+	// }
+	// // viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	// // viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
 	// viewer << Viewer3D<>::updateDisplay;
 	// application.exec();
 	// return 0;
