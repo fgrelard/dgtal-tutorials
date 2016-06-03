@@ -109,7 +109,7 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 
 Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters) {
 	Z3i::DigitalSet newClusters(clusters.domain());
-	
+
 	Z3i::Object26_6 obj(Z3i::dt26_6, clusters);
 	vector<Z3i::Object26_6> objects;
 	back_insert_iterator<vector<Z3i::Object26_6>> inserter(objects);
@@ -118,7 +118,7 @@ Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters) {
 		Z3i::DigitalSet currentPointSet = o.pointSet();
 		if (currentPointSet.size() > 1) {
 			Z3i::RealPoint center = Statistics::extractCenterOfMass3D(currentPointSet);
-			Z3i::Point centerInSet = extractNearestNeighborInSetFromPoint(currentPointSet, center); 
+			Z3i::Point centerInSet = extractNearestNeighborInSetFromPoint(currentPointSet, center);
 			newClusters.insert(centerInSet);
 		}
 		else {
@@ -149,7 +149,7 @@ Z3i::Point findMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const Z3i::
 	return maxDTPoint;
 }
 
-							 
+
 
 template <typename DTL2>
 Z3i::Point projectionPoint(const DTL2& dt,
@@ -166,7 +166,7 @@ Z3i::Point projectionPoint(const DTL2& dt,
 
 template <typename DTL2>
 Z3i::RealVector signVector(const DTL2& dt,
-						   const Z3i::Point& center, 
+						   const Z3i::Point& center,
 						   const Z3i::RealVector& direction) {
 	Z3i::Point projCenter = projectionPoint(dt, center, direction);
 	Z3i::Point otherProjCenter = projectionPoint(dt,center, -direction);
@@ -190,7 +190,7 @@ double deltaEdge(const DTL2& dt,
 		if (branch.find(e) != branch.end())
 			b = e;
 		if (endPoints.find(e) != endPoints.end())
-			end = e;		
+			end = e;
 	}
 	double delta = dt(b) - dt(end);
 	return delta;
@@ -200,9 +200,9 @@ template <typename DTL2>
 int numberOfLocalMaximaDT(const DTL2& dt,
 						  const Z3i::DigitalSet& aSet) {
 	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
-	
+
 	int localMax = 0;
-	
+
 	for (const Z3i::Point& p : aSet) {
 		vector<Z3i::Point> neighbors;
 		back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
@@ -232,7 +232,7 @@ double amountInformationLostRatio(const DTL2& dt,
 		if (branch.find(e) != branch.end())
 			b = e;
 		if (endPoints.find(e) != endPoints.end())
-			end = e;		
+			end = e;
 	}
 	double length = lengthEdge(edge);
 	double delta = deltaEdge(dt, edge, branch, endPoints);
@@ -247,7 +247,7 @@ double amountInformationLostRatio(const DTL2& dt,
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
 {
-	
+
 
 	typedef Z3i::Space Space;
 	typedef Z3i::Point Point;
@@ -260,7 +260,7 @@ int main( int  argc, char**  argv )
 	typedef ImageSelector<Domain, unsigned char>::Type Image;
 	typedef VoronoiCovarianceMeasure<Space,Metric> VCM;
 
-	
+
 	typedef MSTTangent<Point> Tangent;
 	typedef Pencil<Point, Tangent, RealPoint> Pencil;
 
@@ -281,7 +281,7 @@ int main( int  argc, char**  argv )
 	typedef KSpace::Surfel Surfel;
 	typedef VoronoiMap<Space, NotPointPredicate, Metric> VoronoiMap;
 	typedef Eigen::MatrixXd MatrixXd;
-	
+
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
 		("help,h", "display this message")
@@ -290,30 +290,30 @@ int main( int  argc, char**  argv )
 		("skeleton,s", po::value<std::string>(), "vol file (medial axis)")
 		("thresholdMin,m", po::value<int>()->default_value(0), "minimum threshold for binarization")
 		("thresholdMax,M", po::value<int>()->default_value(255), "maximum threshold for binarization")
-		; 
+		;
 
 	bool parseOK=true;
 	po::variables_map vm;
 	try{
-		po::store(po::parse_command_line(argc, argv, general_opt), vm);  
+		po::store(po::parse_command_line(argc, argv, general_opt), vm);
 	} catch(const std::exception& ex){
 		parseOK=false;
 		trace.info()<< "Error checking program options: "<< ex.what()<< endl;
 	}
-	po::notify(vm);    
+	po::notify(vm);
 	if( !parseOK || vm.count("help")||argc<=1)
 	{
 		std::cout << "Usage: " << argv[0] << " [input]\n"
 				  << "Display volume file as a voxel set by using QGLviewer"<< endl
 				  << general_opt << "\n";
 		return 0;
-	}  
+	}
 	if(!vm.count("input"))
 	{
-		trace.error() << " The file name was not defined" << endl;      
+		trace.error() << " The file name was not defined" << endl;
 		return 0;
 	}
-	
+
 	string outFilename = vm["output"].as<std::string>();
 	string inputFilename = vm["input"].as<std::string>();
 	string skeletonFilename = vm["skeleton"].as<std::string>();
@@ -324,11 +324,11 @@ int main( int  argc, char**  argv )
 	QApplication application(argc,argv);
 	Viewer3D<> viewer;
 	viewer.show();
-	
+
 	Image volume = VolReader<Image>::importVol(inputFilename);
 	Z3i::Domain domainVolume = volume.domain();
 	Z3i::DigitalSet setVolume(domainVolume);
-	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume, 
+	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume,
 												  thresholdMin-1, thresholdMax);
 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
 
@@ -338,9 +338,9 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet setSkeleton(domainSkeleton);
 
 	SetFromImage<Z3i::DigitalSet>::append<Image>(setSkeleton, skeleton, thresholdMin-1, thresholdMax);
-	
+
 	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
-	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;  
+	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
 	vector<Point> existingSkeletonOrdered;
 	Z3i::Point p = (*existingSkeleton.begin());
@@ -358,10 +358,10 @@ int main( int  argc, char**  argv )
 
 	Z3i::DigitalSet branchingPoints(domainVolume);
     unsigned int previous = 0;
-	while ( !visitor.finished() ) 
+	while ( !visitor.finished() )
 	{
   		node = visitor.current();
-		if ( existingSkeleton.find(node.first) != existingSkeleton.end() ) { //is inside domain			
+		if ( existingSkeleton.find(node.first) != existingSkeleton.end() ) { //is inside domain
 		    if (node.second <= previous) {
 				vector<Z3i::Point> neighbors;
 				back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
@@ -369,7 +369,7 @@ int main( int  argc, char**  argv )
 				double minDistance = std::numeric_limits<double>::max();
 				Z3i::Point cand;
 				for (const Z3i::Point& n : neighbors) {
-					if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {				   
+					if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {
 						double currentDistance = Z3i::l2Metric(n, node.first);
 						if (currentDistance < minDistance) {
 							minDistance = currentDistance;
@@ -395,13 +395,13 @@ int main( int  argc, char**  argv )
 //	Z3i::DigitalSet branchingPoints = branchingPointDetection(s, existingSkeletonOrdered, domainVolume);
 	// Z3i::DigitalSet branchingPoints = detectCriticalPoints(existingSkeleton);
 	// branchingPoints = reduceClustersToCenters(branchingPoints);
-	
+
 	vector<Z3i::DigitalSet> edgeGraph = CurveAnalyzer::constructGraph(existingSkeletonOrdered, branchingPoints);
 	vector<Z3i::Point> endPoints = CurveAnalyzer::findEndPoints(existingSkeleton);
 	Z3i::DigitalSet endPointSet(domainSkeleton);
 	endPointSet.insert(endPoints.begin(), endPoints.end());
 	vector<GraphEdge*> hierarchicalGraph = CurveAnalyzer::hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
-																	
+
 	//Display points
 	//  for (const Z3i::Point& p : endPoints) {
 	//  	viewer << CustomColors3D(Color::Green, Color::Green) << p;
@@ -431,23 +431,23 @@ int main( int  argc, char**  argv )
 	// 		viewer << CustomColors3D(Color::Red, Color::Red);
 	// 	viewer << edge->pointSet();
 	// }
-	
+
      // viewer << Viewer3D<>::updateDisplay;
      // application.exec();
 	 // return 0;
 
-	
+
 	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;
 	Image volumeBinary(volume.domain());
 	for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
-		if (volume(*it) >= thresholdMin && volume(*it) <= thresholdMax) 
+		if (volume(*it) >= thresholdMin && volume(*it) <= thresholdMax)
 			volumeBinary.setValue(*it, 255);
 		else
 			volumeBinary.setValue(*it, 0);
 	}
 
 	vector<Point> vPoints;
-	Z3i::DigitalSet skeletonPoints(domainVolume);  
+	Z3i::DigitalSet skeletonPoints(domainVolume);
 	ThresholdedImage binarizer(volume, thresholdMin-1, thresholdMax);
 	BackgroundPredicate backgroundPredicate(binarizer);
 	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
@@ -457,13 +457,13 @@ int main( int  argc, char**  argv )
 		if (value > 0) {
 			setVolumeWeighted.insert(new WeightedPointCount(*it, value));
 			checkPointForMedialAxis(dt, vPoints, *it);
-		}		
+		}
 	}
 
 
- 
+
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
-	
+
 	trace.beginBlock("Pruning skeleton");
 	int maxLabel = 0;
 	for (GraphEdge* graphEdge : hierarchicalGraph) {
@@ -472,7 +472,7 @@ int main( int  argc, char**  argv )
 			maxLabel = currentLabel;
 	}
 	trace.info() << maxLabel << endl;
-	
+
 	std::function<double(const Z3i::DigitalSet& aSet)> deltaFunction = [&](const Z3i::DigitalSet& aSet) {
 		return deltaEdge(dt, aSet, branchingPoints, endPointSet);
 	};
@@ -496,7 +496,7 @@ int main( int  argc, char**  argv )
 				vector<Z3i::DigitalSet> edges;
 				Z3i::DigitalSet currentEdge = graphEdge->pointSet();
 				edges.push_back(currentEdge);
-				
+
 				vector<GraphEdge*> neighborEdges= CurveAnalyzer::neighboringEdges(hierarchicalGraph, currentEdge, branchingPoints);
 				int localMaxLabel = 0;
 				for (GraphEdge* g : neighborEdges) {
@@ -505,16 +505,16 @@ int main( int  argc, char**  argv )
 					if (currentLabel > localMaxLabel && currentLabel <= level)
 						localMaxLabel = currentLabel;
 				}
-				
+
 				for (GraphEdge* g : neighborEdges) {
 					if (g->getLabel() != 1 && g->getLabel() == localMaxLabel) {
 						edges.push_back(g->pointSet());
 					}
 				}
-				
+
 				Concatenation concat(edges, level);
 				concatenations.push_back(concat);
-				
+
 			}
 		}
 		LevelConcatenation levelConcat(concatenations, level);
@@ -549,25 +549,25 @@ int main( int  argc, char**  argv )
 			 (lengthH < criterionLength || nLocMaxH <= nLocMax0)
 			) {
 			for (const Z3i::DigitalSet& aSet : concat.myEdges)
-				toPrune.insert(aSet.begin(), aSet.end());			
+				toPrune.insert(aSet.begin(), aSet.end());
 		}
-	
+
 	}
 
 
 	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << toPrune;
 	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-	
+
 	trace.endBlock();
-	   
+
 	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-	
+
 	//second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
 	    viewer << CustomColors3D(Color(0,0,120,30), Color(0,0,120,30)) << (*it)->myPoint;
 	}
 
-	
+
 	Image outImage(volume.domain());
 	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
 	VolWriter<Image>::exportVol(outFilename, outImage);
