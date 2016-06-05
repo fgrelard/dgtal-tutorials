@@ -20,10 +20,10 @@ namespace CurveAnalyzer {
 											 const DGtal::Z3i::DigitalSet& currentEdge,
 											 const DGtal::Z3i::DigitalSet& branchingPoints);
 
-	std::vector<GraphEdge*> hierarchicalDecomposition(const std::vector<DGtal::Z3i::DigitalSet>& edges,											
+	std::vector<GraphEdge*> hierarchicalDecomposition(const std::vector<DGtal::Z3i::DigitalSet>& edges,
 													  const std::vector<DGtal::Z3i::Point>& endPoints,
 													  const DGtal::Z3i::DigitalSet& branchingPoints);
-	
+
 	DGtal::Z3i::DigitalSet ensureConnexity(const DGtal::Z3i::DigitalSet& set);
 
 	std::vector<DGtal::Z3i::Point> findEndPoints(const DGtal::Z3i::DigitalSet& set);
@@ -33,18 +33,18 @@ namespace CurveAnalyzer {
 												  const std::vector<DGtal::Z3i::Point>& skeletonOrdered,
 												  const Domain& domain);
 
-	
+
 	DGtal::Z3i::DigitalSet detectCriticalPoints(const DGtal::Z3i::DigitalSet& skeleton);
 
 	template <typename Segmentation, typename Domain>
 	DGtal::Z3i::DigitalSet branchingPointDetection(const Segmentation& segmentation,
 												   const std::vector<DGtal::Z3i::Point>& skeletonOrdered,
 												   const Domain& domain);
-	
+
 	std::vector<DGtal::Z3i::DigitalSet> constructGraph(const std::vector<DGtal::Z3i::Point>& orderedCurve,
 													   const DGtal::Z3i::DigitalSet& constraint);
-	
-	
+
+
 	std::vector<DGtal::Z3i::Point> convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge);
 };
 
@@ -73,7 +73,7 @@ std::vector<GraphEdge*> CurveAnalyzer::neighboringEdges(const std::vector<GraphE
 									const DGtal::Z3i::DigitalSet& currentEdge,
 									const DGtal::Z3i::DigitalSet& branchingPoints) {
 	typedef DGtal::MetricAdjacency<DGtal::Z3i::Space, 3> MetricAdjacency;
-	
+
 	std::vector<GraphEdge*> neighbors;
 	DGtal::Z3i::Point branchPoint;
 	for (const DGtal::Z3i::Point& b : branchingPoints) {
@@ -85,7 +85,7 @@ std::vector<GraphEdge*> CurveAnalyzer::neighboringEdges(const std::vector<GraphE
 	std::vector<DGtal::Z3i::Point> nb;
 	std::back_insert_iterator<std::vector<DGtal::Z3i::Point>> inserter(nb);
 	MetricAdjacency::writeNeighbors(inserter, branchPoint);
-	
+
 	for (GraphEdge* edge : edges) {
 		DGtal::Z3i::DigitalSet setEdge = edge->pointSet();
 		if (sameSet(setEdge, currentEdge)) continue;
@@ -94,11 +94,11 @@ std::vector<GraphEdge*> CurveAnalyzer::neighboringEdges(const std::vector<GraphE
 				neighbors.push_back(edge);
 		}
 	}
-	
+
 	return neighbors;
 }
 
-std::vector<GraphEdge*> CurveAnalyzer::hierarchicalDecomposition(const std::vector<DGtal::Z3i::DigitalSet>& edges,											
+std::vector<GraphEdge*> CurveAnalyzer::hierarchicalDecomposition(const std::vector<DGtal::Z3i::DigitalSet>& edges,
 											const std::vector<DGtal::Z3i::Point>& endPoints,
 											const DGtal::Z3i::DigitalSet& branchingPoints) {
 
@@ -106,7 +106,7 @@ std::vector<GraphEdge*> CurveAnalyzer::hierarchicalDecomposition(const std::vect
 	std::vector<GraphEdge*> hierarchyGraph;
 	for (const DGtal::Z3i::DigitalSet& edge : edges) {
 		GraphEdge* levelEdge = new GraphEdge(edge, std::numeric_limits<int>::max());
-	
+
 		for (const DGtal::Z3i::Point& e : endPoints) {
 			if (edge.find(e) != edge.end()) {
 				levelEdge->setLabel(1);
@@ -132,7 +132,7 @@ std::vector<GraphEdge*> CurveAnalyzer::hierarchicalDecomposition(const std::vect
 	}
 
 	return hierarchyGraph;
-	
+
 }
 
 DGtal::Z3i::DigitalSet CurveAnalyzer::ensureConnexity(const DGtal::Z3i::DigitalSet& set) {
@@ -169,8 +169,8 @@ DGtal::Z3i::DigitalSet CurveAnalyzer::dominantPointDetection(const Segmentation&
 									   const Domain& domain) {
 
 	typedef typename Segmentation::SegmentComputerIterator DSS;
-	
-	DGtal::Z3i::DigitalSet dominantPoints(domain);	
+
+	DGtal::Z3i::DigitalSet dominantPoints(domain);
 	DSS q = (segmentation.begin());
 	DSS p = (++segmentation.begin());
 	while (p != segmentation.end()) {
@@ -205,14 +205,14 @@ DGtal::Z3i::DigitalSet CurveAnalyzer::branchingPointDetection(const Segmentation
 										const Domain& domain) {
 
 	typedef typename Segmentation::SegmentComputerIterator DSSIterator;
-	typedef typename Segmentation::SegmentComputer DSS; 
+	typedef typename Segmentation::SegmentComputer DSS;
 
-	DGtal::Z3i::DigitalSet branchingPoints(domain);	
+	DGtal::Z3i::DigitalSet branchingPoints(domain);
 
 	for (const DGtal::Z3i::Point& s : skeletonOrdered) {
 
 		std::vector<DSS> segments;
-		
+
 		for (DSSIterator p = segmentation.begin(), q = segmentation.end(); p != q; ++p) {
 			DSS segment(*p);
 			for (auto it = segment.begin(), ite = segment.end(); it != ite; ++it) {
@@ -235,7 +235,7 @@ DGtal::Z3i::DigitalSet CurveAnalyzer::branchingPointDetection(const Segmentation
 				int posBI = find(skeletonOrdered.begin(), skeletonOrdered.end(), beginI) - skeletonOrdered.begin();
 				int posEI = find(skeletonOrdered.begin(), skeletonOrdered.end(), endI) - skeletonOrdered.begin();
 				int posBJ = find(skeletonOrdered.begin(), skeletonOrdered.end(), beginJ) - skeletonOrdered.begin();
-				int posEJ = find(skeletonOrdered.begin(), skeletonOrdered.end(), endJ) - skeletonOrdered.begin();				
+				int posEJ = find(skeletonOrdered.begin(), skeletonOrdered.end(), endJ) - skeletonOrdered.begin();
 				if (posBJ < posEI || posBI < posEJ) {
 					nb++;
 				}
@@ -243,7 +243,7 @@ DGtal::Z3i::DigitalSet CurveAnalyzer::branchingPointDetection(const Segmentation
 		}
 		if (nb >= 2) {
 			branchingPoints.insert(s);
-		}	
+		}
 	}
 	return branchingPoints;
 }
@@ -254,14 +254,17 @@ std::vector<DGtal::Z3i::DigitalSet> CurveAnalyzer::constructGraph(const std::vec
 	std::vector<DGtal::Z3i::DigitalSet> graph;
 	int index = 0;
 	graph.push_back(DGtal::Z3i::DigitalSet(constraint.domain()));
+	DGtal::Z3i::Point previous;
 	for (int i = 0, end = orderedCurve.size(); i < end; i++) {
-		DGtal::Z3i::Point current = orderedCurve[i];		
+		DGtal::Z3i::Point current = orderedCurve[i];
+		if (DGtal::Z3i::l2Metric(previous,current) <= sqrt(3) || previous == DGtal::Z3i::Point())
+			graph[index].insert(current);
 		if (constraint.find(current) != constraint.end()) {
 			index++;
 			graph.push_back(DGtal::Z3i::DigitalSet(constraint.domain()));
 			graph[index].insert(current);
 		}
-		graph[index].insert(current);
+		previous = current;
 	}
 	return graph;
 }
@@ -284,14 +287,14 @@ DGtal::Z3i::DigitalSet CurveAnalyzer::detectCriticalPoints(const DGtal::Z3i::Dig
 std::vector<DGtal::Z3i::Point> CurveAnalyzer::convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge) {
 	std::vector<DGtal::Z3i::Point> orientedEdge;
 	if (edge.size() == 0) return orientedEdge;
-	
+
 	DGtal::Z3i::Object26_6 objEdge(DGtal::Z3i::dt26_6, edge);
 //	DGtal::Z3i::DigitalSet thinEdge = ensureConnexity(edge);
 	std::vector<DGtal::Z3i::Point> endPoints = findEndPoints(edge);
 	DGtal::Z3i::Point start = *(endPoints.begin());
-	
+
 	orientedEdge.push_back(start);
-   	
+
 	bool toAdd = true;
 	while (toAdd) {
 		std::vector<DGtal::Z3i::Point> neighbors;
@@ -309,7 +312,7 @@ std::vector<DGtal::Z3i::Point> CurveAnalyzer::convertToOrientedEdge(const DGtal:
 		if (cpt == neighbors.size())
 			toAdd = false;
 	}
-	return orientedEdge;		 
+	return orientedEdge;
 }
 
 

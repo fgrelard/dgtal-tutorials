@@ -107,7 +107,7 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 	return toReturn;
 }
 
-Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters) {
+Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters, const Z3i::DigitalSet& skeleton) {
 	Z3i::DigitalSet newClusters(clusters.domain());
 
 	Z3i::Object26_6 obj(Z3i::dt26_6, clusters);
@@ -117,9 +117,21 @@ Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters) {
 	for (const Z3i::Object26_6& o : objects) {
 		Z3i::DigitalSet currentPointSet = o.pointSet();
 		if (currentPointSet.size() > 1) {
-			Z3i::RealPoint center = Statistics::extractCenterOfMass3D(currentPointSet);
-			Z3i::Point centerInSet = extractNearestNeighborInSetFromPoint(currentPointSet, center);
-			newClusters.insert(centerInSet);
+			Z3i::Point candidate;
+			int previous=0;
+			for (const Z3i::Point& b : currentPointSet) {
+				Z3i::DigitalSet difference = skeleton;
+				difference.erase(b);
+				Z3i::Object26_6 differenceObj(Z3i::dt26_6, difference);
+				vector<Z3i::Object26_6> objectsDifference;
+				back_insert_iterator<vector<Z3i::Object26_6>> inserterDiff(objectsDifference);
+				unsigned int nbCC = differenceObj.writeComponents(inserterDiff);
+				if (nbCC > previous) {
+					previous = nbCC;
+					candidate = b;
+				}
+			}
+			newClusters.insert(candidate);
 		}
 		else {
 			newClusters.insert(currentPointSet.begin(), currentPointSet.end());
@@ -912,23 +924,25 @@ int main( int  argc, char**  argv )
 	Image skeleton = VolReader<Image>::importVol(skeletonFilename);
 	Z3i::Domain domainSkeleton = skeleton.domain();
 	Z3i::DigitalSet setSkeleton(domainSkeleton);
-	Z3i::DigitalSet branchingPoints(domainSkeleton);
+//	Z3i::DigitalSet branchingPoints(domainSkeleton);
 	SetFromImage<Z3i::DigitalSet>::append<Image>(setSkeleton, skeleton, thresholdMin-1, thresholdMax);
 
 	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
 	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
 	vector<Point> existingSkeletonOrdered;
+	Z3i::DigitalSet branchingPoints = CurveAnalyzer::detectCriticalPoints(existingSkeleton);
+	branchingPoints = reduceClustersToCenters(branchingPoints, existingSkeleton);
 	Z3i::Point p = (*existingSkeleton.begin());
 	// We have to visit the direct neighbours in order to have a container with voxels
 	// ordered sequentially by their connexity
 	// Otherwise we have a point container with points which are not neighbours
 	// and this impairs maximal segment recognition
-	typedef MetricAdjacency Graph;
+	typedef Z3i::Object26_6 Graph;
 	typedef DepthFirstVisitor<Graph, set<Point> > Visitor;
 	typedef typename Visitor::Node MyNode;
 	typedef GraphVisitorRange<Visitor> VisitorRange;
-	Graph graph;
+	Graph graph(Z3i::dt26_6, existingSkeleton);
 	Visitor visitor( graph, p );
 	MyNode node;
 
@@ -936,31 +950,20 @@ int main( int  argc, char**  argv )
 	while ( !visitor.finished() )
 	{
   		node = visitor.current();
-		if ( existingSkeleton.find(node.first) != existingSkeleton.end() ) { //is inside domain
-		    if (node.second <= previous) {
-				vector<Z3i::Point> neighbors;
-				back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
-				MetricAdjacency::writeNeighbors(inserter, node.first);
-				for (const Z3i::Point& n : neighbors) {
-					if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {
-						branchingPoints.insert(n);
-						existingSkeletonOrdered.push_back(n);
-					}
+		if (std::abs(node.second - previous) >= 2) {
+			vector<Z3i::Point> neighbors;
+			back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
+			graph.writeNeighbors(inserter, node.first);
+			for (const Z3i::Point& n : neighbors) {
+				if (branchingPoints.find(n) != branchingPoints.end()) {
+					existingSkeletonOrdered.push_back(n);
 				}
 			}
-			previous = node.second;
-			existingSkeletonOrdered.push_back(node.first);
-			visitor.expand();
 		}
-		else
-			visitor.ignore();
+		previous = node.second;
+		existingSkeletonOrdered.push_back(node.first);
+		visitor.expand();
 	}
-	SegmentComputer algo;
-	Segmentation s(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), algo);
-	s.setMode("MostCentered++");
-	typename Segmentation::SegmentComputerIterator itseg = s.begin();
-	typename Segmentation::SegmentComputerIterator end = s.end();
-//	Z3i::DigitalSet branchingPoints = branchingPointDetection(s, existingSkeletonOrdered, domainVolume);
 //	Z3i::DigitalSet branchingPoints = detectCriticalPoints(existingSkeleton);
 
 	vector<Z3i::DigitalSet> edgeGraph = CurveAnalyzer::constructGraph(existingSkeletonOrdered, branchingPoints);
@@ -973,7 +976,7 @@ int main( int  argc, char**  argv )
 	// for (const Z3i::Point& p : endPoints) {
 	// 	viewer << CustomColors3D(Color::Green, Color::Green) << p;
 	// }
-//	 viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
 	// for (GraphEdge* edge : hierarchicalGraph) {
 	// 	int label = edge->getLabel();
 	// 	int r = (label * 64) % 256;
@@ -981,9 +984,9 @@ int main( int  argc, char**  argv )
 	// 	int b = (label* 192)%256;
 	// 	viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << edge->pointSet();
 	// }
-	// viewer << Viewer3D<>::updateDisplay;
-	// application.exec();
-	// return 0;
+//	 viewer << Viewer3D<>::updateDisplay;
+//	 application.exec();
+//	 return 0;
 
 
 	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;
@@ -1024,7 +1027,17 @@ int main( int  argc, char**  argv )
 	for (const Z3i::Point& b : branchingPoints) {
 		vector<Z3i::DigitalSet> adjacentEdges = adjacentEdgesToBranchPoint(edgeGraph, b);
 		trace.info() << adjacentEdges.size() << endl;
+		if (adjacentEdges.size() == 4) {
+			for (int i = 0; i < 4; i++) {
+				if (adjacentEdges[i].size() == 80) {
+					viewer << CustomColors3D(Color::Green, Color::Green) << b;
+					viewer << CustomColors3D(Color::Magenta, Color::Magenta) << adjacentEdges[i];
+				}
+			}
+
+		}
 		if (adjacentEdges.size() > 0) {
+
 			Z3i::DigitalSet firstEdge = *adjacentEdges.begin();
 			Z3i::DigitalSet planeB = associatedPlane<VCM, KernelFunction>(b, firstEdge, domainVolume, setVolumeWeighted);
 			double radius = dt(b)*2;
@@ -1043,7 +1056,7 @@ int main( int  argc, char**  argv )
 				Z3i::DigitalSet plane = associatedPlane<VCM, KernelFunction>(point, restrictEdge, domainVolume, setVolumeWeighted);
 				planes.push_back(plane);
 				viewer << CustomColors3D(Color::Yellow, Color::Yellow);
-				viewer << point;
+				//viewer << point;
 			}
 		}
 	}
