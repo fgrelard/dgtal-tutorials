@@ -76,7 +76,7 @@ bool allSigns(const Vector& v1, const Vector& v2, unsigned int dir) {
 template <typename Point>
 Point pointCorrespondingToMinDistance(const Point& pSkeleton, const set<Point>& surfacePointSet) {
 	Point minimumDistPoint = *(std::min_element(surfacePointSet.begin(), surfacePointSet.end(), [&](const Point& one, const Point& two) {
-				return euclideanDistance(one, pSkeleton) < euclideanDistance(two, pSkeleton);
+				return Distance::euclideanDistance(one, pSkeleton) < Distance::euclideanDistance(two, pSkeleton);
 			}));
 	return minimumDistPoint;
 }
@@ -132,7 +132,7 @@ Point computeProjection(const Point& initialPoint, const Point& pivot, const Dig
 	double mini = std::numeric_limits<double>::max();
 	Point p;
 	for (auto it = points.begin(), ite = points.end(); it != ite; ++it) {
-		double distanceToProjected = euclideanDistance(*it, projected);
+		double distanceToProjected = Distance::euclideanDistance(*it, projected);
 		if (distanceToProjected < mini) {
 			mini = distanceToProjected;
 			p = *it;

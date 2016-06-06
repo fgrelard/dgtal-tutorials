@@ -193,7 +193,7 @@ template <typename Point>
 vector<Point> nearestPointsFromCenter(const vector<Point> & points, const Point & center, double radius) {
 	vector<Point> nearestPointV;
 	for (const Point& point : points) {
-		if (euclideanDistance(point, center) <= radius) {
+		if (Distance::euclideanDistance(point, center) <= radius) {
 			nearestPointV.push_back(point);
 		}
 	}
@@ -245,7 +245,7 @@ double estimateDSSLength(const vector<Point>& points) {
 //		current.getParameters(direction, intercept, thickness);
 		if (direction != Z3i::Point::zero) {
 			cpt++;
-			length += euclideanDistance(*(current.end()-1), *(current.begin()));
+			length += Distance::euclideanDistance(*(current.end()-1), *(current.begin()));
 		}
 	}
 	return length;

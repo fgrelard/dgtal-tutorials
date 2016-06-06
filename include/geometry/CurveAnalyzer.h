@@ -154,11 +154,30 @@ std::vector<DGtal::Z3i::Point> CurveAnalyzer::findEndPoints(const DGtal::Z3i::Di
 	DGtal::Z3i::Object26_6 objectSet(DGtal::Z3i::dt26_6, set);
 	std::vector<DGtal::Z3i::Point> endPoints;
 	for (auto it = set.begin(), ite = set.end(); it != ite; ++it) {
+		Z3i::Point p = *it;
 		std::vector<DGtal::Z3i::Point> neighbors;
 		std::back_insert_iterator<std::vector<DGtal::Z3i::Point>> inserter(neighbors);
-		objectSet.writeNeighbors(inserter, *it);
+		objectSet.writeNeighbors(inserter, p);
 		if (neighbors.size() <= 1)
-			endPoints.push_back(*it);
+			endPoints.push_back(p);
+
+		//Is it in same half plane: case connectivity != 26
+		else {
+			Z3i::RealVector previous;
+			bool isEndPoint = true;
+			for (const Z3i::Point& n : neighbors) {
+				Z3i::RealVector dir = (n - p).getNormalized();
+				if (previous != Z3i::RealVector()) {
+					double dot = dir.dot(previous);
+					if (dot < 0) {
+						isEndPoint = false;
+					}
+				}
+				previous = dir;
+			}
+			if (isEndPoint)
+				endPoints.push_back(p);
+		}
 	}
 	return endPoints;
 }
@@ -289,7 +308,7 @@ std::vector<DGtal::Z3i::Point> CurveAnalyzer::convertToOrientedEdge(const DGtal:
 	if (edge.size() == 0) return orientedEdge;
 
 	DGtal::Z3i::Object26_6 objEdge(DGtal::Z3i::dt26_6, edge);
-//	DGtal::Z3i::DigitalSet thinEdge = ensureConnexity(edge);
+	//DGtal::Z3i::DigitalSet thinEdge = ensureConnexity(edge);
 	std::vector<DGtal::Z3i::Point> endPoints = findEndPoints(edge);
 	DGtal::Z3i::Point start = *(endPoints.begin());
 

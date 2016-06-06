@@ -93,7 +93,7 @@ template <typename Point>
 void drawEllipse(vector<Point>& vectorPoints, float a, float b, float cx, float cy, float cz, float increment) {
 	for (float x = cx - a, xend = cx + a + 1; x < xend; x+=increment) {
 		for (float y = cy - b, yend = cy + b +  1; y < yend; y+=increment) {
-			if (euclideanDistance(x/a, y/b, cx/a, cy/b) <= 1) {
+			if (Distance::euclideanDistance(x/a, y/b, cx/a, cy/b) <= 1) {
 				add(Point(x, y, cz), vectorPoints);
 			}
 		}
@@ -107,8 +107,8 @@ void drawEllipsoid(set<Point>& vectorPoints, float a, float b, float c, float cx
 		for (float y = cy - b, yend = cy + b +  1; y < yend; y+=increment) {
 			for (float z = cz - c, zend = cz + c +  1; z < zend; z+=increment) {
 				Point current(x/a, y/b, z/c);
-//				std::cout << euclideanDistance(center, current) << std::endl;
-				if (euclideanDistance(center, current) <= 1) {
+//				std::cout << Distance::euclideanDistance(center, current) << std::endl;
+				if (Distance::euclideanDistance(center, current) <= 1) {
 					vectorPoints.insert(Point(x,y,z));
 				}
 			}
@@ -120,7 +120,7 @@ void drawEllipsoid(set<Point>& vectorPoints, float a, float b, float c, float cx
 void drawDisk(Eigen::Matrix<double, Eigen::Dynamic, 4> & m, double radius, double cx, double cy, double cz, long int &row, float increment) {
 	for (float x = cx - radius, xend = cx + radius + 1; x < xend; x+=increment) {
 		for (float y = cy - radius, yend = cy + radius +  1; y < yend; y+=increment) {
-			if (euclideanDistance(x, y, cx, cy) <= radius) {
+			if (Distance::euclideanDistance(x, y, cx, cy) <= radius) {
 				m(row, 0) = x;
 				m(row, 1) = y;
 				m(row, 2) = cz;
@@ -136,7 +136,7 @@ template <typename Point>
 void drawDisk(vector<Point>& v, float radius, float cx, float cy, float cz, float increment) {
 	for (float x = cx - radius, xend = cx + radius + 1; x < xend; x+=increment) {
 		for (float y = cy - radius, yend = cy + radius +  1; y < yend; y+=increment) {
-			if (euclideanDistance(x, y, cx, cy) <= radius) {
+			if (Distance::euclideanDistance(x, y, cx, cy) <= radius) {
 				add(Point(x, y, cz), v);
 			}
 		}
@@ -404,7 +404,7 @@ void thinVolume(const vector<Point>& curve, set<Point>& volume, double radius) {
 			Point pointCurve = tangentAtPoint.getPoint();
 			double d = tangent.dot((pointVolume - pointCurve));
 			if (d==0.0) {
-				if (euclideanDistance(pointCurve, pointVolume) > radius) {
+				if (Distance::euclideanDistance(pointCurve, pointVolume) > radius) {
 					volume.erase(pointVolume);
 				}
 			}

@@ -14,7 +14,7 @@ public:
 	Ball() : myRadius(0.0), myCenter({0,0,0}) {}
 	Ball(const Point& center, double radius) : myCenter(center), myRadius(radius) {}
 	Ball(const Ball& other) : myCenter(other.myCenter), myRadius(other.myRadius) {}
-	bool contains(const Point& point) const {return euclideanDistance(point, myCenter) <= myRadius;}
+	bool contains(const Point& point) const {return Distance::euclideanDistance(point, myCenter) <= myRadius;}
 	std::vector<Point> intersection(const DGtal::Z3i::DigitalSet& setPoint);
 	std::vector<Point> surfaceIntersection(const DGtal::Z3i::DigitalSet& setSurface);
 	std::vector<Point> pointsInBall() const;
@@ -37,7 +37,7 @@ template <typename Point>
 std::vector<Point> Ball<Point>::intersection(const DGtal::Z3i::DigitalSet& setPoint) {
 	std::vector<Point> intersection;
 	for (auto it = setPoint.begin(), ite = setPoint.end(); it != ite; ++it) {
-		double distance = euclideanDistance(*it, myCenter);
+		double distance = Distance::euclideanDistance(*it, myCenter);
 		if (distance <= myRadius) {
 			intersection.push_back(*it);
 		}
@@ -49,7 +49,7 @@ template <typename Point>
 std::vector<Point> Ball<Point>::surfaceIntersection(const DGtal::Z3i::DigitalSet& setSurface) {
 	std::vector<Point> intersection;
 	for (auto it = setSurface.begin(), ite = setSurface.end(); it != ite; ++it) {
-		double distance = euclideanDistance(*it, myCenter);
+		double distance = Distance::euclideanDistance(*it, myCenter);
 		if (distance >= myRadius-1 && distance <= myRadius) {
 			intersection.push_back(*it);
 		}
@@ -134,7 +134,7 @@ std::set<Point> Ball<Point>::pointsSurfaceBall() const {
 		for (typename Point::Scalar j = -myRadius + myCenter[1], jend = myRadius + myCenter[1] + 1; j < jend; j++) {
 			for (typename Point::Scalar k = -myRadius + myCenter[2], kend = myRadius + myCenter[2] + 1; k < kend; k++) {
 				Point p(i, j, k);
-				double distance = euclideanDistance(p, myCenter);
+				double distance = Distance::euclideanDistance(p, myCenter);
 				if (distance >= myRadius-1 && distance <= myRadius) {
 					points.insert(p);
 				}

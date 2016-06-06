@@ -317,7 +317,7 @@ double Statistics::unimodalThresholding(const Container& container) {
 
 		//Need to change basis (go back to true origin)
 		orthogonalProjection += maxPeak;
-		double currentOrthogonalDistance = euclideanDistance(orthogonalProjection, currentPoint);
+		double currentOrthogonalDistance = Distance::euclideanDistance(orthogonalProjection, currentPoint);
 		if (currentOrthogonalDistance > maxDistanceOrthogonal) {
 			maxDistanceOrthogonal = currentOrthogonalDistance;
 			threshold = currentPoint[0];

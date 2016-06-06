@@ -107,30 +107,6 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 }
 
 
-Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters) {
-	Z3i::DigitalSet newClusters(clusters.domain());
-
-	Z3i::Object26_6 obj(Z3i::dt26_6, clusters);
-	vector<Z3i::Object26_6> objects;
-	back_insert_iterator<vector<Z3i::Object26_6>> inserter(objects);
-    obj.writeComponents(inserter);
-	for (const Z3i::Object26_6& o : objects) {
-		Z3i::DigitalSet currentPointSet = o.pointSet();
-		if (currentPointSet.size() > 1) {
-			Z3i::RealPoint center = Statistics::extractCenterOfMass3D(currentPointSet);
-			Z3i::Point centerInSet = extractNearestNeighborInSetFromPoint(currentPointSet, center);
-			newClusters.insert(centerInSet);
-		}
-		else {
-			newClusters.insert(currentPointSet.begin(), currentPointSet.end());
-		}
-	}
-	return newClusters;
-}
-
-
-
-
 template <typename DTL2>
 Z3i::Point findMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const Z3i::Point& junctionPoint) {
 	double maxDT = 0.0;

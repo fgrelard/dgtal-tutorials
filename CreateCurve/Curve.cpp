@@ -42,9 +42,7 @@ public:
 typedef Z3i::DigitalSet DigitalSet;
 typedef Z3i::Space Space;
 typedef Z3i::KSpace KSpace;
-typedef Z3i::Curve::ArrowsRange Range;
 typedef PointDeletable<Z3i::Point> Point;
-typedef Range::ConstIterator ConstIterator;
 typedef vector<Point>::const_iterator PointIterator;
 
 
