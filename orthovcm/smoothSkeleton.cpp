@@ -599,8 +599,8 @@ map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint> > > constructSubVolumeWi
 	return saddlesToPlanes;
 }
 
-template <typename VCM, typename KernelFunction, typename Container, typename Viewer3D>
-vector<pair<Z3i::Point, double> > areaProfile(const Z3i::DigitalSet& setEdge, const Container& setVolume, Viewer3D& viewer) {
+template <typename VCM, typename KernelFunction, typename Container>
+vector<pair<Z3i::Point, double> > areaProfile(const Z3i::DigitalSet& setEdge, const Container& setVolume) {
 	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
 	Metric l2;
 
@@ -1113,7 +1113,7 @@ int main( int  argc, char**  argv )
 	for (const Z3i::Point& b : branchingPoints) {
 		vector<Z3i::DigitalSet> adjacentEdges = adjacentEdgesToBranchPoint(edgeGraph, b, existingSkeleton);
 		vector<Z3i::DigitalSet> junctions;
-		if (adjacentEdges.size() > 0) {
+		if (adjacentEdges.size() == 3) {
 			vector<Z3i::DigitalSet> restrictedAdjacentEdges;
 			double radius = max_element(adjacentEdges.begin(), adjacentEdges.end(), [&](const Z3i::DigitalSet& e1,
 																						const Z3i::DigitalSet& e2) {
@@ -1126,20 +1126,24 @@ int main( int  argc, char**  argv )
 			vector<pair<Z3i::Point, double>> pointsVarying;
 			for (const Z3i::DigitalSet& restrictEdge : restrictedAdjacentEdges) {
 				if (restrictEdge.size() == 0) continue;
-				vector< pair< Z3i::Point, double > > pointToAreas = areaProfile< VCM, KernelFunction > (restrictEdge, setVolumeWeighted, viewer);
+				vector< pair< Z3i::Point, double > > pointToAreas = areaProfile< VCM, KernelFunction > (restrictEdge, setVolumeWeighted);
 				pair<Z3i::Point, double> point = pointsVaryingNeighborhood(pointToAreas);
+				pair<Z3i::Point, Z3i::RealPoint> ptoNPlane = pointToNormal<VCM, KernelFunction>(point.first, restrictEdge, domainVolume, setVolumeWeighted);
 				pointsVarying.push_back(point);
 			}
 
 			//Find two max :  two planes
-			pair<Z3i::Point, double> maxiVarying = *max_element(pointsVarying.begin(), pointsVarying.end(), [&](const pair<Z3i::Point, double>& pair1, const pair<Z3i::Point, double>& pair2) {
-					return pair1.second < pair2.second;
-				});
-			pair<Z3i::Point, double> maxiVarying2 = *max_element(pointsVarying.begin(), pointsVarying.end(), [&](const pair<Z3i::Point, double>& pair1, const pair<Z3i::Point, double>& pair2) {
-					return (pair1.second < pair2.second||
-							(pair1.first == maxiVarying.first ||
-							 pair2.first == maxiVarying.first));
-				});
+			pair<Z3i::Point, double> maxiVarying;
+			pair<Z3i::Point, double> maxiVarying2;
+			double currentMax = 0.0;
+			double secondMax=0.0;
+
+			for( int i = 0; i< pointsVarying.size(); i++) {
+				pair<Z3i::Point, Z3i::RealPoint> ptoNPlane = pointToNormal<VCM, KernelFunction>(pointsVarying[i].first, restrictEdge, domainVolume, setVolumeWeighted);
+
+			}
+			if (maxiVarying.first == Z3i::Point() || maxiVarying2.first == Z3i::Point()) continue;
+
 
 			Z3i::DigitalSet restrictEdge = *find_if(restrictedAdjacentEdges.begin(), restrictedAdjacentEdges.end(), [&](const Z3i::DigitalSet& restrictedSet) {
 					return restrictedSet.find(maxiVarying.first) != restrictedSet.end();
@@ -1151,8 +1155,8 @@ int main( int  argc, char**  argv )
 
 			Z3i::DigitalSet restrictEdgeB(domainVolume);
 		    for (const Z3i::DigitalSet& rEdge : restrictedAdjacentEdges) {
-				if (CurveAnalyzer::sameSet(rEdge, restrictEdge) ||
-					CurveAnalyzer::sameSet(rEdge, restrictEdge2))
+				if (!(CurveAnalyzer::sameSet(rEdge, restrictEdge) ||
+					  CurveAnalyzer::sameSet(rEdge, restrictEdge2)))
 					restrictEdgeB = rEdge;
 			}
 
@@ -1160,10 +1164,12 @@ int main( int  argc, char**  argv )
 			Z3i::DigitalSet plane = associatedPlane<VCM, KernelFunction>(maxiVarying.first, restrictEdge, domainVolume, setVolumeWeighted);
 			Z3i::DigitalSet plane2 = associatedPlane<VCM, KernelFunction>(maxiVarying2.first, restrictEdge2, domainVolume, setVolumeWeighted);
 			Z3i::DigitalSet planeToProject = associatedPlane<VCM, KernelFunction>(b, restrictEdgeB, domainVolume, setVolumeWeighted);
+			if (plane.size() == 0 || plane2.size() == 0 || planeToProject.size() == 0)
+				continue;
 
-			viewer << CustomColors3D(Color::Yellow, Color::Yellow);
 			viewer << maxiVarying2.first << maxiVarying.first;
-			trace.info() << maxiVarying.first << " " <<maxiVarying2.first << endl;
+
+
 
 			// vector<Z3i::DigitalSet> subVolumes = computeSubVolumes(setVolume, junctions);
 			// size_t ref = std::numeric_limits<size_t>::max();
@@ -1179,6 +1185,9 @@ int main( int  argc, char**  argv )
 			pair<Z3i::Point, Z3i::Point> closestPointsPlane2 = twoClosestPoints(plane2, planeToProject);
 			pair<Z3i::Point, Z3i::Point> closestPointsInter = twoClosestPoints(plane, plane2);
 
+			Z3i::Point current = closestPointsInter.first;
+			Z3i::Point current2 = closestPointsInter.second;
+
 			Z3i::RealVector dirVectorPlane = (closestPointsPlane.first - closestPointsInter.first).getNormalized();
 			Z3i::RealVector newDirVectorPlane = (closestPointsPlane.second - closestPointsInter.first).getNormalized();
 
@@ -1192,13 +1201,36 @@ int main( int  argc, char**  argv )
 			Z3i::RealPoint normalPlane = normalRot.crossProduct(newDirVectorPlane);
 			Z3i::RealPoint normalPlane2 = normalRot.crossProduct(newDirVectorPlane2);
 
-			vector<Z3i::RealPoint> planeToDisplay = SliceUtils::computePlaneFromNormalVector(normalPlane, closestPointsInter.first);
-			vector<Z3i::RealPoint> planeToDisplay2 = SliceUtils::computePlaneFromNormalVector(normalPlane2, closestPointsInter.second);
-	 		viewer.setFillColor(Color::Red);
-			double factor = 15;
-			//viewer.addLine(closestPointsInter.first, dirVectorPlane*factor);
-		    viewer << CustomColors3D(Color::Green, Color::Green);
-			viewer.addLine(closestPointsInter.second, dirVectorPlane2*factor);
+			Z3i::DigitalSet newPlane(domainVolume), newPlane2(domainVolume);
+			double d = normalPlane[0] * current[0] + normalPlane[1] * current[1] + normalPlane[2] * current[2];
+			double omega = std::max(std::abs(normalPlane[0]), std::max(std::abs(normalPlane[1]), std::abs(normalPlane[2])));
+			VCMUtil::extractConnectedComponent3D(newPlane, domainVolume, setVolumeWeighted, normalPlane, current, d, omega);
+
+			d = normalPlane2[0] * current2[0] + normalPlane2[1] * current2[1] + normalPlane2[2] * current2[2];
+			omega = std::max(std::abs(normalPlane2[0]), std::max(std::abs(normalPlane2[1]), std::abs(normalPlane2[2])));
+			VCMUtil::extractConnectedComponent3D(newPlane2, domainVolume, setVolumeWeighted, normalPlane2, current2, d, omega);
+
+			Z3i::RealVector delineatePlane = (b - current).getNormalized();
+			Z3i::RealVector delineatePlane2 = (b -current2).getNormalized();
+
+			Z3i::DigitalSet delineatedNewPlane(newPlane.domain());
+			for (const Z3i::Point& p : newPlane) {
+				if (VCMUtil::abovePlane(p, delineatePlane, current))
+					delineatedNewPlane.insert(p);
+			}
+
+
+			Z3i::DigitalSet delineatedNewPlane2(newPlane2.domain());
+			for (const Z3i::Point& p : newPlane2) {
+				if (VCMUtil::abovePlane(p, delineatePlane2, current2))
+					delineatedNewPlane.insert(p);
+			}
+
+			viewer << CustomColors3D(Color::Red, Color::Red) << delineatedNewPlane << delineatedNewPlane2;
+			// vector<Z3i::RealPoint> planeToDisplay = SliceUtils::computePlaneFromNormalVector(normalPlane, closestPointsInter.first);
+			// vector<Z3i::RealPoint> planeToDisplay2 = SliceUtils::computePlaneFromNormalVector(normalPlane2, closestPointsInter.second);
+	 		// viewer.setFillColor(Color::Red);
+			// double factor = 15;
 
 	 		// viewer.addQuad(closestPointsInter.first+(planeToDisplay[0]-closestPointsInter.first)*factor, closestPointsInter.first+(planeToDisplay[1]-closestPointsInter.first)*factor, closestPointsInter.first+(planeToDisplay[2]-closestPointsInter.first)*factor, closestPointsInter.first+(planeToDisplay[3]-closestPointsInter.first)*factor);
 
