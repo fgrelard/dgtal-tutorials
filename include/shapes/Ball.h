@@ -20,7 +20,7 @@ public:
 	std::vector<Point> pointsInBall() const;
 	std::vector<Point> pointsInHalfBall() const;
 	DGtal::Z3i::DigitalSet pointsInBallSet() const;
-	
+
 	template <typename RealPoint>
 	std::vector<Point> pointsInHalfBall(const RealPoint& normal) const;
 

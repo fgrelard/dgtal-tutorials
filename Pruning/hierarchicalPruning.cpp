@@ -338,7 +338,7 @@ int main( int  argc, char**  argv )
 	{
   		node = visitor.current();
 		if ( existingSkeleton.find(node.first) != existingSkeleton.end() ) { //is inside domain
-		    if (node.second <= previous) {
+		    if (std::abs(node.second - previous) >= 2) {
 				vector<Z3i::Point> neighbors;
 				back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
 				MetricAdjacency::writeNeighbors(inserter, node.first);
@@ -517,6 +517,7 @@ int main( int  argc, char**  argv )
 
 	Z3i::DigitalSet toPrune(domainSkeleton);
 	double criterionLength = (la0 + la1) / 2.;
+	Z3i::DigitalSet resultingSkeleton(existingSkeleton.domain());
 	for (const Concatenation& concat : levelConcat1.myConcatenations) {
 		double lengthH = concat.computeAverageFunction(lengthFunction);
 		double nLocMaxH = concat.computeAverageFunction(numberLocMaxFunction);
@@ -524,28 +525,30 @@ int main( int  argc, char**  argv )
 		if ( deltaH > -10 && nLocMaxH < 0.3 * nLocMax1 &&
 			 (lengthH < criterionLength || nLocMaxH <= nLocMax0)
 			) {
-			for (const Z3i::DigitalSet& aSet : concat.myEdges)
+			for (const Z3i::DigitalSet& aSet : concat.myEdges) {
 				toPrune.insert(aSet.begin(), aSet.end());
+			}
 		}
-
 	}
 
+	for (const Z3i::Point& p : existingSkeleton) {
+		if (toPrune.find(p) == toPrune.end() || branchingPoints.find(p) != branchingPoints.end())
+			resultingSkeleton.insert(p);
+	}
 
 	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << toPrune;
 	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
 
 	trace.endBlock();
 
-	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-
 	//second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
-	    viewer << CustomColors3D(Color(0,0,120,30), Color(0,0,120,30)) << (*it)->myPoint;
+	    viewer << CustomColors3D(Color(0,0,120,10), Color(0,0,120,10)) << (*it)->myPoint;
 	}
 
 
 	Image outImage(volume.domain());
-	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
+	DGtal::imageFromRangeAndValue(resultingSkeleton.begin(), resultingSkeleton.end(), outImage, 10);
 	VolWriter<Image>::exportVol(outFilename, outImage);
 	viewer << Viewer3D<>::updateDisplay;
 	application.exec();
