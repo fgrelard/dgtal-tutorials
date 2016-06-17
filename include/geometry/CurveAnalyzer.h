@@ -46,6 +46,8 @@ namespace CurveAnalyzer {
 
 
 	std::vector<DGtal::Z3i::Point> convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge);
+
+	std::vector<DGtal::Z3i::Point> convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge, const DGtal::Z3i::Point& startingPoint);
 };
 
 
@@ -309,11 +311,20 @@ std::vector<DGtal::Z3i::Point> CurveAnalyzer::convertToOrientedEdge(const DGtal:
 	std::vector<DGtal::Z3i::Point> orientedEdge;
 	if (edge.size() == 0) return orientedEdge;
 
-	DGtal::Z3i::Object26_6 objEdge(DGtal::Z3i::dt26_6, edge);
 	//DGtal::Z3i::DigitalSet thinEdge = ensureConnexity(edge);
 	std::vector<DGtal::Z3i::Point> endPoints = findEndPoints(edge);
 	DGtal::Z3i::Point start = *(endPoints.begin());
+	return convertToOrientedEdge(edge, start);
 
+}
+
+
+std::vector<DGtal::Z3i::Point> CurveAnalyzer::convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge, const DGtal::Z3i::Point& startingPoint) {
+	std::vector<DGtal::Z3i::Point> orientedEdge;
+	if (edge.size() == 0) return orientedEdge;
+
+	DGtal::Z3i::Object26_6 objEdge(DGtal::Z3i::dt26_6, edge);
+	DGtal::Z3i::Point start = startingPoint;
 	orientedEdge.push_back(start);
 	bool toAdd = true;
 	while (toAdd) {
