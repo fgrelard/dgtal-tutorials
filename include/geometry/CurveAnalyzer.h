@@ -28,6 +28,7 @@ namespace CurveAnalyzer {
 
 	std::vector<DGtal::Z3i::Point> findEndPoints(const DGtal::Z3i::DigitalSet& set);
 
+
 	template <typename Segmentation, typename Domain>
 	DGtal::Z3i::DigitalSet dominantPointDetection(const Segmentation& segmentation,
 												  const std::vector<DGtal::Z3i::Point>& skeletonOrdered,
@@ -163,21 +164,21 @@ std::vector<DGtal::Z3i::Point> CurveAnalyzer::findEndPoints(const DGtal::Z3i::Di
 		if (neighbors.size() <= 1)
 			endPoints.push_back(p);
 
-		//Is it in same half plane: case connectivity != 26
+		//Is it in same quadrant: case connectivity != 26
 		else {
 			DGtal::Z3i::RealVector previous;
 			bool isEndPoint = true;
+			vector<DGtal::Z3i::RealVector> vectors;
 			for (const DGtal::Z3i::Point& n : neighbors) {
 				DGtal::Z3i::RealVector dir = (n - p).getNormalized();
-				if (previous != DGtal::Z3i::RealVector()) {
-				    bool differentOrientation = (dir[0] * previous[0] < 0 ||
-												 dir[1] * previous[1] < 0 ||
-												 dir[2] * previous[2] < 0);
-					if (differentOrientation) {
+				vectors.push_back(dir);
+			}
+			//Min angle (resp max dot product) determined by two points with one varying coordinate
+			for (int i = 0; i < vectors.size(); i++) {
+				for (int j = i+1; j < vectors.size(); j++) {
+					if (vectors[i].dot(vectors[j]) <= (1/(1+sqrt(2))) )
 						isEndPoint = false;
-					}
 				}
-				previous = dir;
 			}
 			if (isEndPoint)
 				endPoints.push_back(p);
@@ -185,6 +186,8 @@ std::vector<DGtal::Z3i::Point> CurveAnalyzer::findEndPoints(const DGtal::Z3i::Di
 	}
 	return endPoints;
 }
+
+
 
 template <typename Segmentation, typename Domain>
 DGtal::Z3i::DigitalSet CurveAnalyzer::dominantPointDetection(const Segmentation& segmentation,

@@ -382,7 +382,7 @@ int main( int  argc, char**  argv )
 	//  for (const Z3i::Point& p : endPoints) {
 	//  	viewer << CustomColors3D(Color::Green, Color::Green) << p;
 	//  }
-	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	//viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
 	//  for (GraphEdge* edge : hierarchicalGraph) {
 	// 	 int label = edge->getLabel();
 	// 	 if (label > 3) {

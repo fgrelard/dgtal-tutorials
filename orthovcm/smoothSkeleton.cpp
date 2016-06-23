@@ -599,14 +599,10 @@ map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint> > > constructSubVolumeWi
 	return saddlesToPlanes;
 }
 
-template <typename VCM, typename KernelFunction, typename Container>
-vector<pair<Z3i::Point, double> > areaProfile(const Z3i::DigitalSet& setEdge, const Container& setVolume) {
+template <typename VCM, typename KernelFunction, typename Container, typename Domain>
+vector<pair<Z3i::Point, double> > computeArea(const vector<Z3i::Point>& orientedEdge, const Container& setVolume, const Domain& domain) {
 	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
 	Metric l2;
-
-	auto domain = setEdge.domain();
-	vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(setEdge);
-
 	vector<pair<Z3i::Point, double>> areasEdge;
     auto itP = orientedEdge.begin();
 	Z3i::Point start = *itP;
@@ -614,9 +610,9 @@ vector<pair<Z3i::Point, double> > areaProfile(const Z3i::DigitalSet& setEdge, co
 	while (itP != orientedEdge.end()) {
 		if (*itP == start || *itP == end) {++itP;continue;} //End point effect
 		Z3i::Point p = *itP;
-		double radius = setEdge.size() * 0.4;
+		double radius = orientedEdge.size() * 0.4;
 		VCM vcm(20, ceil(radius), l2, false);
-		vcm.init(setEdge.begin(), setEdge.end());
+		vcm.init(orientedEdge.begin(), orientedEdge.end());
 		KernelFunction chi(1.0, radius);
 		Z3i::RealPoint normal;
 		Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
@@ -629,6 +625,15 @@ vector<pair<Z3i::Point, double> > areaProfile(const Z3i::DigitalSet& setEdge, co
 	}
 	return areasEdge;
 }
+
+
+template <typename VCM, typename KernelFunction, typename Container>
+vector<pair<Z3i::Point, double> > areaProfile(const Z3i::DigitalSet& setEdge, const Container& setVolume) {
+	auto domain = setEdge.domain();
+	vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(setEdge);
+	return computeArea<VCM, KernelFunction>(orientedEdge, setVolume, domain);
+}
+
 
 
 template <typename VCM, typename KernelFunction, typename Domain, typename WeightedContainer>
@@ -829,19 +834,41 @@ pair<Z3i::Point, Z3i::Point> twoClosestPoints(const Z3i::DigitalSet& one, const 
 
 }
 
+double gaussianDiff(double x, double sigma) {
+	double diff = (-x/(pow(sigma, 3)*sqrt(2*M_PI)) * exp((-pow(x,2)/(2*pow(sigma, 2)))));
+	return diff;
+}
 
-template <typename VCM, typename KernelFunction, typename Container>
-void areaProfileToStdout(const vector<Z3i::DigitalSet>& edgeGraph,
-						 const Container& setVolumeWeighted) {
+
+
+template <typename VCM, typename KernelFunction, typename Container, typename WeightedContainer, typename Domain>
+void areaProfileToStdout(const vector<Container>& edgeGraph,
+						 const WeightedContainer& setVolumeWeighted,
+						 const Domain& domain) {
 	int loop = 0;
-	for (const Z3i::DigitalSet& edge : edgeGraph) {
+	double sigma = 1;
+	double w = 3*sigma;
+	for (const Container& edge : edgeGraph) {
 		if (edge.size() < 10) continue;
-		vector<pair<Z3i::Point, double>> pointToAreas = areaProfile<VCM, KernelFunction>(edge, setVolumeWeighted);
+		vector<pair<Z3i::Point, double>> pointToAreas = computeArea<VCM, KernelFunction>(edge, setVolumeWeighted, domain);
 		int j = 0;
-		for (const auto& pair : pointToAreas) {
-			cout << j << " " << pair.second << endl;
+		ofstream myfile;
+		string outputname = "histos/histo" + to_string(loop) + ".csv";
+		myfile.open (outputname);
+		for (int i = 0+w; i < pointToAreas.size()-w; i++) {
+			double area = pointToAreas[i].second;
+			double sumDiffGaussian = 0;
+			double mean = 0;
+			for (int k = -w; k <= w; k++) {
+				double currentArea = pointToAreas[i-k].second;
+				mean += currentArea;
+				sumDiffGaussian += currentArea * gaussianDiff(k, sigma);
+			}
+			mean /= (2 * w + 1);
+			myfile << j << " " << area << " " << mean-area << " " << sumDiffGaussian << endl;
 			j++;
 		}
+		myfile.close();
 		loop++;
 	}
 }
@@ -963,6 +990,63 @@ Z3i::DigitalSet smoothedSkeletonPoints(const Z3i::DigitalSet& subVolume,
 	}
 	return smoothSkeleton;
 }
+
+GraphEdge* firstEdge(const vector<GraphEdge*>& edgeGraph) {
+	size_t maxSize = 0;
+	GraphEdge* maxEdge;
+	for (GraphEdge* edge : edgeGraph) {
+		size_t currentSize = edge->pointSet().size();
+		if (currentSize > maxSize) {
+			maxSize = currentSize;
+			maxEdge = edge;
+		}
+	}
+	return maxEdge;
+}
+
+vector<vector<Z3i::Point> > sortedEdges(const vector<GraphEdge*>& unsortedEdges,
+										GraphEdge* firstEdge,
+										const Z3i::DigitalSet& branchingPoints) {
+
+	vector<vector<Z3i::Point> > sortedEdges;
+	Z3i::DigitalSet setEdge = firstEdge->pointSet();
+	vector<Z3i::Point> endPoints = CurveAnalyzer::findEndPoints(setEdge);
+	Z3i::Point start;
+	for (const Z3i::Point& e : endPoints) {
+		if (branchingPoints.find(e) == branchingPoints.end()) {
+			start = e;
+		}
+	}
+	queue<Z3i::Point> currentBranchingPoints;
+	currentBranchingPoints.push(start);
+
+	vector<GraphEdge*> neighbors;
+	while (sortedEdges.size() < unsortedEdges.size()) {
+		Z3i::Point b = currentBranchingPoints.front();
+		currentBranchingPoints.pop();
+
+		for (GraphEdge* edge : unsortedEdges) {
+			if (find(neighbors.begin(), neighbors.end(), edge) != neighbors.end()) continue;
+			Z3i::DigitalSet currentSet = edge->pointSet();
+			if (currentSet.find(b) != currentSet.end()) {
+				vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(currentSet, b);
+				sortedEdges.push_back(orientedEdge);
+				neighbors.push_back(edge);
+				Z3i::Point end = *(--orientedEdge.end());
+				for (GraphEdge* edge : unsortedEdges) {
+					Z3i::DigitalSet currentSet = edge->pointSet();
+					if (currentSet.find(end) != currentSet.end()) {
+						currentBranchingPoints.push(end);
+					}
+				}
+			}
+		}
+	}
+	return sortedEdges;
+}
+
+
+
 
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
@@ -1093,7 +1177,7 @@ int main( int  argc, char**  argv )
 	while ( !visitor.finished() )
 	{
   		node = visitor.current();
-		if (std::abs(node.second - previous) >= 2) {
+		if  (node.second != 0 && (node.second - previous) < 1) {
 			vector<Z3i::Point> neighbors;
 			back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
 			MetricAdjacency::writeNeighbors(inserter, node.first);
@@ -1169,6 +1253,20 @@ int main( int  argc, char**  argv )
 		}
 	}
 
+	// GraphEdge* firstE = firstEdge(hierarchicalGraph);
+	// vector<vector<Z3i::Point>> orderedEdges = sortedEdges (hierarchicalGraph, firstE, branchingPoints);
+	// areaProfileToStdout<VCM, KernelFunction>(orderedEdges, setVolumeWeighted, domainVolume);
+	// for (const vector<Z3i::Point>& edge : orderedEdges) {
+	// 	int i = 0;
+	// 	for (const Z3i::Point& p : edge) {
+	// 		int r = i * 255. / edge.size();
+	// 		viewer << CustomColors3D(Color(r,0,0,255), Color(r,0,0,255)) << p;
+	// 		i++;
+	// 	}
+	// }
+	// viewer << Viewer3D<>::updateDisplay;
+	// application.exec();
+	// return 0;
 
 
 	vector<Z3i::DigitalSet> planes;
@@ -1204,6 +1302,7 @@ int main( int  argc, char**  argv )
 				if (restrictEdge.size() == 0) continue;
 				vector< pair< Z3i::Point, double > > pointToAreas = areaProfile< VCM, KernelFunction > (restrictEdge, setVolumeWeighted);
 				pair<Z3i::Point, double> point = pointsVaryingNeighborhood(pointToAreas);
+				trace.info() << point.first << " " << restrictEdge.size() << endl;
 				pair<Z3i::Point, Z3i::RealPoint> ptoNPlane = pointToNormal<VCM, KernelFunction>(point.first, restrictEdge, domainVolume, setVolumeWeighted);
 				pointsToNormals.push_back(ptoNPlane);
 				pointsVarying.push_back(point);
