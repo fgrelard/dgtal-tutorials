@@ -433,11 +433,11 @@ int main( int  argc, char**  argv )
 
 	Z3i::DigitalSet branchingPoints(domainVolume);
     pair<Z3i::Point, double> previous;
-	vector<Z3i::Point> endPoints = CurveAnalyzer::findEndPoints(existingSkeleton);
+	vector<Z3i::Point> endPointsV = CurveAnalyzer::findEndPoints(existingSkeleton);
 	while ( !visitor.finished() )
 	{
   		node = visitor.current();
-		if (node.second != 0 && node.second - previous.second < 1) {
+		if (node.second != 0 && (std::abs(node.second - previous.second) > 1 || node.second == previous.second)) {
 			vector<Z3i::Point> neighbors;
 			back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
 			MetricAdjacency::writeNeighbors(inserter, node.first);
@@ -460,7 +460,11 @@ int main( int  argc, char**  argv )
 		visitor.expand();
 	}
     //branchingPoints = CurveAnalyzer::detectCriticalPoints(existingSkeleton);
-
+	vector<Z3i::Point> endPoints;
+	for (const Z3i::Point& p : endPointsV) {
+		if (branchingPoints.find(p) == branchingPoints.end())
+			endPoints.push_back(p);
+	}
 	vector<Z3i::DigitalSet> edgeGraph = CurveAnalyzer::constructGraph(existingSkeletonOrdered, branchingPoints);
 	vector<GraphEdge*> hierarchicalGraph = CurveAnalyzer::hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
 
@@ -470,10 +474,12 @@ int main( int  argc, char**  argv )
 
 	//Display points
 	// viewer << CustomColors3D(Color::Magenta, Color::Magenta) << branchingPoints;
-	// for (const Z3i::Point& p : endPoints) {
-	//  	viewer << CustomColors3D(Color::Green, Color::Green) << p;
-	// }
-	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	//  for (const Z3i::Point& p : endPoints) {
+	//   	viewer << CustomColors3D(Color::Green, Color::Green) << p;
+	//  }
+	 // for (const Z3i::Point& p : existingSkeletonOrdered)
+	 // 	 viewer << CustomColors3D(Color::Red, Color::Red) << p;
+//	 viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
 	// for (GraphEdge* edge : hierarchicalGraph) {
 	// 	int label = edge->getLabel();
 	// 	int r = (label * 64) % 256;
@@ -486,17 +492,17 @@ int main( int  argc, char**  argv )
 	// 	int r = rand() % 256, g = rand() % 256, b = rand() % 256;
 	// 	viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << edge;
 	// }
-	// for (GraphEdge* edge : hierarchicalGraph) {
-	// 	if (edge->getLabel() == 1) {
-	//  		viewer << CustomColors3D(Color::Yellow, Color::Yellow);
-	//  	}
-	//  	else
-	//  		viewer << CustomColors3D(Color::Red, Color::Red);
-	//  	viewer << edge->pointSet();
-	//  }
-	//  viewer << Viewer3D<>::updateDisplay;
-	//  application.exec();
-	//  return 0;
+	for (GraphEdge* edge : hierarchicalGraph) {
+		if (edge->getLabel() == 1) {
+	 		viewer << CustomColors3D(Color::Yellow, Color::Yellow);
+	 	}
+	 	else
+	 		viewer << CustomColors3D(Color::Red, Color::Red);
+	 	viewer << edge->pointSet();
+	 }
+	 viewer << Viewer3D<>::updateDisplay;
+	 application.exec();
+	 return 0;
 
 
 	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;

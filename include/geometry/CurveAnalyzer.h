@@ -168,7 +168,7 @@ std::vector<DGtal::Z3i::Point> CurveAnalyzer::findEndPoints(const DGtal::Z3i::Di
 		else {
 			DGtal::Z3i::RealVector previous;
 			bool isEndPoint = true;
-			vector<DGtal::Z3i::RealVector> vectors;
+			std::vector<DGtal::Z3i::RealVector> vectors;
 			for (const DGtal::Z3i::Point& n : neighbors) {
 				DGtal::Z3i::RealVector dir = (n - p).getNormalized();
 				vectors.push_back(dir);
@@ -285,7 +285,7 @@ std::vector<DGtal::Z3i::DigitalSet> CurveAnalyzer::constructGraph(const std::vec
 		DGtal::Z3i::Point current = orderedCurve[i];
 		if (DGtal::Z3i::l2Metric(previous,current) <= sqrt(3) || previous == DGtal::Z3i::Point())
 			graph[index].insert(current);
-		if (constraint.find(current) != constraint.end()) {
+		if (constraint.find(current) != constraint.end() || DGtal::Z3i::l2Metric(previous,current) > sqrt(3)) {
 			index++;
 			graph.push_back(DGtal::Z3i::DigitalSet(constraint.domain()));
 			graph[index].insert(current);
