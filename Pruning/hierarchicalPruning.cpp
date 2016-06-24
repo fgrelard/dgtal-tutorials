@@ -319,49 +319,48 @@ int main( int  argc, char**  argv )
 	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
 	vector<Point> existingSkeletonOrdered;
-	Z3i::Point p = (*existingSkeleton.begin());
+		vector<Z3i::Point> endPointsV = CurveAnalyzer::findEndPoints(existingSkeleton);
+	Z3i::Point p = (*endPointsV.begin());
 	// We have to visit the direct neighbours in order to have a container with voxels
 	// ordered sequentially by their connexity
 	// Otherwise we have a point container with points which are not neighbours
 	// and this impairs maximal segment recognition
-	typedef MetricAdjacency Graph;
+	typedef Z3i::Object26_6 Graph;
 	typedef DepthFirstVisitor<Graph, set<Point> > Visitor;
 	typedef typename Visitor::Node MyNode;
 	typedef GraphVisitorRange<Visitor> VisitorRange;
-	Graph graph;
+	Graph graph(Z3i::dt26_6, existingSkeleton);
 	Visitor visitor( graph, p );
 	MyNode node;
 
 	Z3i::DigitalSet branchingPoints(domainVolume);
-    unsigned int previous = 0;
+    pair<Z3i::Point, double> previous;
+
 	while ( !visitor.finished() )
 	{
   		node = visitor.current();
-		if ( existingSkeleton.find(node.first) != existingSkeleton.end() ) { //is inside domain
-		    if (std::abs(node.second - previous) >= 2) {
-				vector<Z3i::Point> neighbors;
-				back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
-				MetricAdjacency::writeNeighbors(inserter, node.first);
-				double minDistance = std::numeric_limits<double>::max();
-				Z3i::Point cand;
-				for (const Z3i::Point& n : neighbors) {
-					if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {
-						double currentDistance = Z3i::l2Metric(n, node.first);
-						if (currentDistance < minDistance) {
-							minDistance = currentDistance;
-							cand = n;
-						}
+		if (node.second != 0 && ((int)node.second - previous.second) <= 0) {
+			vector<Z3i::Point> neighbors;
+			back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
+			MetricAdjacency::writeNeighbors(inserter, node.first);
+			double minDistance = std::numeric_limits<double>::max();
+			Z3i::Point cand;
+			for (const Z3i::Point& n : neighbors) {
+				if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {
+					double currentDistance = Z3i::l2Metric(n, node.first);
+					if (currentDistance < minDistance) {
+						minDistance = currentDistance;
+						cand = n;
 					}
 				}
-				branchingPoints.insert(cand);
-				existingSkeletonOrdered.push_back(cand);
 			}
-			previous = node.second;
-			existingSkeletonOrdered.push_back(node.first);
-			visitor.expand();
+			branchingPoints.insert(cand);
+			existingSkeletonOrdered.push_back(cand);
+
 		}
-		else
-			visitor.ignore();
+		previous = node;
+		existingSkeletonOrdered.push_back(node.first);
+		visitor.expand();
 	}
 	SegmentComputer algo;
 	Segmentation s(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), algo);

@@ -1159,7 +1159,8 @@ int main( int  argc, char**  argv )
 	Metric l2;
 	//Z3i::DigitalSet branchingPoints = CurveAnalyzer::detectCriticalPoints(existingSkeleton);
 
-	Z3i::Point p = (*existingSkeleton.begin());
+	vector<Z3i::Point> endPointsV = CurveAnalyzer::findEndPoints(existingSkeleton);
+	Z3i::Point p = (*endPointsV.begin());
 	// We have to visit the direct neighbours in order to have a container with voxels
 	// ordered sequentially by their connexity
 	// Otherwise we have a point container with points which are not neighbours
@@ -1173,12 +1174,12 @@ int main( int  argc, char**  argv )
 	MyNode node;
 
 	Z3i::DigitalSet branchingPoints(domainVolume);
-	pair<Z3i::Point, double> previous;
+    pair<Z3i::Point, double> previous;
+
 	while ( !visitor.finished() )
 	{
   		node = visitor.current();
-
-		if (node.second != 0 && std::abs(node.second - previous.second) > 1) {
+		if (node.second != 0 && ((int)node.second - previous.second) <= 0) {
 			vector<Z3i::Point> neighbors;
 			back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
 			MetricAdjacency::writeNeighbors(inserter, node.first);
@@ -1195,6 +1196,7 @@ int main( int  argc, char**  argv )
 			}
 			branchingPoints.insert(cand);
 			existingSkeletonOrdered.push_back(cand);
+
 		}
 		previous = node;
 		existingSkeletonOrdered.push_back(node.first);
