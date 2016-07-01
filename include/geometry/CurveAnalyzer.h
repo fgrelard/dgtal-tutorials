@@ -8,6 +8,8 @@
 #include "DGtal/base/Common.h"
 #include "DGtal/helpers/StdDefs.h"
 #include "DGtal/topology/MetricAdjacency.h"
+#include "DGtal/graph/DepthFirstVisitor.h"
+#include "DGtal/graph/GraphVisitorRange.h"
 
 namespace CurveAnalyzer {
 	bool sameSet(const DGtal::Z3i::DigitalSet& first, const DGtal::Z3i::DigitalSet& second);
@@ -49,6 +51,10 @@ namespace CurveAnalyzer {
 	std::vector<DGtal::Z3i::Point> convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge);
 
 	std::vector<DGtal::Z3i::Point> convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge, const DGtal::Z3i::Point& startingPoint);
+
+	std::vector<DGtal::Z3i::Point> curveTraversalForGraphDecomposition(Z3i::DigitalSet& branchingPointsFound,
+																	   const DGtal::Z3i::DigitalSet& existingSkeleton,
+																	   const DGtal::Z3i::Point& p);
 };
 
 
@@ -347,6 +353,51 @@ std::vector<DGtal::Z3i::Point> CurveAnalyzer::convertToOrientedEdge(const DGtal:
 			toAdd = false;
 	}
 	return orientedEdge;
+}
+
+
+std::vector<DGtal::Z3i::Point> CurveAnalyzer::curveTraversalForGraphDecomposition(DGtal::Z3i::DigitalSet& branchingPointsFound,
+																				  const DGtal::Z3i::DigitalSet& existingSkeleton,
+																				  const DGtal::Z3i::Point& p) {
+	typedef DGtal::Z3i::Object26_6 Graph;
+	typedef DGtal::DepthFirstVisitor<Graph, std::set<DGtal::Z3i::Point> > Visitor;
+	typedef typename Visitor::Node MyNode;
+	typedef DGtal::GraphVisitorRange<Visitor> VisitorRange;
+	std::vector<DGtal::Z3i::Point> existingSkeletonOrdered;
+	Graph graph(DGtal::Z3i::dt26_6, existingSkeleton);
+	Visitor visitor( graph, p );
+	MyNode node;
+
+
+	std::pair<DGtal::Z3i::Point, double> previous;
+
+	while ( !visitor.finished() )
+	{
+  		node = visitor.current();
+		if (node.second != 0 && ((int)node.second - previous.second) <= 0) {
+			std::vector<DGtal::Z3i::Point> neighbors;
+			std::back_insert_iterator<std::vector<DGtal::Z3i::Point>> inserter(neighbors);
+			graph.writeNeighbors(inserter, node.first);
+			double minDistance = std::numeric_limits<double>::max();
+			DGtal::Z3i::Point cand;
+			for (const DGtal::Z3i::Point& n : neighbors) {
+				if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {
+					double currentDistance = DGtal::Z3i::l2Metric(n, node.first);
+					if (currentDistance < minDistance) {
+						minDistance = currentDistance;
+						cand = n;
+					}
+				}
+			}
+			branchingPointsFound.insert(cand);
+			existingSkeletonOrdered.push_back(cand);
+
+		}
+		previous = node;
+		existingSkeletonOrdered.push_back(node.first);
+		visitor.expand();
+	}
+	return existingSkeletonOrdered;
 }
 
 

@@ -168,7 +168,9 @@ double deltaEdge(const DTL2& dt,
 		if (endPoints.find(e) != endPoints.end())
 			end = e;
 	}
-	double delta = dt(b) - dt(end);
+	double delta = 0;
+	if (b != Z3i::Point() && end != Z3i::Point())
+		delta = dt(b) - dt(end);
 	return delta;
 }
 
@@ -507,12 +509,7 @@ int main( int  argc, char**  argv )
 
 	double la0 = levelConcat1.computeAverageLevelFunction(lengthFunction, predicate);
 	double nLocMax0 = levelConcat1.computeAverageLevelFunction(numberLocMaxFunction, predicate);
-	double nLocMax1 = 0;
-	for (const LevelConcatenation& levelConcat : groupConcatenations) {
-		nLocMax1 = levelConcat.computeAverageLevelFunction(numberLocMaxFunction, predicate);
-	}
-	nLocMax1 /= groupConcatenations.size();
-
+	double nLocMax1 = levelConcat1.computeAverageLevelFunction(numberLocMaxFunction);
 
 	Z3i::DigitalSet toPrune(domainSkeleton);
 	double criterionLength = (la0 + la1) / 2.;
@@ -521,7 +518,7 @@ int main( int  argc, char**  argv )
 		double lengthH = concat.computeAverageFunction(lengthFunction);
 		double nLocMaxH = concat.computeAverageFunction(numberLocMaxFunction);
 		double deltaH = concat.computeAverageFunction(deltaFunction);
-		if ( deltaH > -10 && nLocMaxH < 0.3 * nLocMax1 &&
+		if (  deltaH > -10 && nLocMaxH < 0.3 * nLocMax1 &&
 			 (lengthH < criterionLength || nLocMaxH <= nLocMax0)
 			) {
 			for (const Z3i::DigitalSet& aSet : concat.myEdges) {

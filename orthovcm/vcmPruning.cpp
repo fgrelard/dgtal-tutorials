@@ -84,7 +84,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include "ReverseHatPointFunction.h"
 
-
 #include "graph/GraphEdge.h"
 #include "geometry/CurveAnalyzer.h"
 
@@ -281,6 +280,20 @@ Z3i::DigitalSet extractSurfacePointsWithEigenVectors(const Z3i::DigitalSet& inte
 }
 
 template <typename DTL2>
+Z3i::DigitalSet extractSurfacePointsWithDT( const Z3i::DigitalSet& setSurface,
+											const DTL2& dt,
+											const Z3i::Point& center, double radius) {
+	Z3i::DigitalSet surfelSet(setSurface.domain());
+	Z3i::Point closestPoint = *min_element(setSurface.begin(), setSurface.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
+			return (Z3i::l2Metric(one, center) < Z3i::l2Metric(two, center));
+		});
+	Ball<Z3i::Point> ball(closestPoint, radius);
+	vector<Z3i::Point> surfels = ball.intersection(setSurface);
+	surfelSet.insert(surfels.begin(), surfels.end());
+	return surfelSet;
+}
+
+template <typename DTL2>
 Z3i::DigitalSet restrictEdge(const Z3i::DigitalSet& edge,
 							 const Z3i::DigitalSet& branchingPoints,
 							 const DTL2& dt) {
@@ -393,6 +406,8 @@ int main( int  argc, char**  argv )
 //	bool isDT = vm["skeleton"].as<bool>();
 	bool isDT = true;
 
+	double thresholdInRadians = angleThreshold * M_PI / 180;
+
 	QApplication application(argc,argv);
 	Viewer3D<> viewer;
 	viewer.show();
@@ -414,54 +429,17 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
 	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
-	vector<Point> existingSkeletonOrdered;
 	Metric l2;
-	//Z3i::DigitalSet branchingPoints = CurveAnalyzer::detectCriticalPoints(existingSkeleton);
 
-	//Z3i::Point p = (*existingSkeleton.begin());
 	vector<Z3i::Point> endPointsV = CurveAnalyzer::findEndPoints(existingSkeleton);
 	Z3i::Point p = (*endPointsV.begin());
-	// We have to visit the direct neighbours in order to have a container with voxels
-	// ordered sequentially by their connexity
-	// Otherwise we have a point container with points which are not neighbours
-	// and this impairs maximal segment recognition
-	typedef Z3i::Object26_6 Graph;
-	typedef DepthFirstVisitor<Graph, set<Point> > Visitor;
-	typedef typename Visitor::Node MyNode;
-	typedef GraphVisitorRange<Visitor> VisitorRange;
-	Graph graph(Z3i::dt26_6, existingSkeleton);
-	Visitor visitor( graph, p );
-	MyNode node;
 
 	Z3i::DigitalSet branchingPoints(domainVolume);
-    pair<Z3i::Point, double> previous;
+	vector<Point> existingSkeletonOrdered = CurveAnalyzer::curveTraversalForGraphDecomposition(branchingPoints,
+																							   existingSkeleton,
+																							   p);
 
-	while ( !visitor.finished() )
-	{
-  		node = visitor.current();
-		if (node.second != 0 && ((int)node.second - previous.second) <= 0) {
-			vector<Z3i::Point> neighbors;
-			back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
-			MetricAdjacency::writeNeighbors(inserter, node.first);
-			double minDistance = std::numeric_limits<double>::max();
-			Z3i::Point cand;
-			for (const Z3i::Point& n : neighbors) {
-				if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {
-					double currentDistance = Z3i::l2Metric(n, node.first);
-					if (currentDistance < minDistance) {
-						minDistance = currentDistance;
-						cand = n;
-					}
-				}
-			}
-			branchingPoints.insert(cand);
-			existingSkeletonOrdered.push_back(cand);
 
-		}
-		previous = node;
-		existingSkeletonOrdered.push_back(node.first);
-		visitor.expand();
-	}
     //branchingPoints = CurveAnalyzer::detectCriticalPoints(existingSkeleton);
 	vector<Z3i::Point> endPoints;
 	for (const Z3i::Point& p : endPointsV) {
@@ -495,17 +473,17 @@ int main( int  argc, char**  argv )
 	// 	int r = rand() % 256, g = rand() % 256, b = rand() % 256;
 	// 	viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << edge;
 	// }
-	for (GraphEdge* edge : hierarchicalGraph) {
-		if (edge->getLabel() == 1) {
-	 		viewer << CustomColors3D(Color::Yellow, Color::Yellow);
-	 	}
-	 	else
-	 		viewer << CustomColors3D(Color::Red, Color::Red);
-	 	viewer << edge->pointSet();
-	 }
-	 viewer << Viewer3D<>::updateDisplay;
-	 application.exec();
-	 return 0;
+	// for (GraphEdge* edge : hierarchicalGraph) {
+	// 	if (edge->getLabel() == 1) {
+	//  		viewer << CustomColors3D(Color::Yellow, Color::Yellow);
+	//  	}
+	//  	else
+	//  		viewer << CustomColors3D(Color::Red, Color::Red);
+	//  	viewer << edge->pointSet();
+	//  }
+	//  viewer << Viewer3D<>::updateDisplay;
+	//  application.exec();
+	//  return 0;
 
 
 	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;
@@ -563,87 +541,135 @@ int main( int  argc, char**  argv )
 			}));
 
 	trace.beginBlock("Computing skeleton");
-
+	int maxLabel = 0;
 	for (GraphEdge* graphEdge : hierarchicalGraph) {
-		Z3i::DigitalSet edge = graphEdge->pointSet();
-		if (edge.size() == 0 || graphEdge->getLabel() != 1) continue;
-		Z3i::DigitalSet restrictedEdge = restrictEdge(edge, branchingPoints, dt);
+		int currentLabel = graphEdge->getLabel();
+		if (currentLabel > maxLabel && currentLabel != std::numeric_limits<int>::max())
+			maxLabel = currentLabel;
+	}
+	trace.info() << maxLabel << endl;
+	Z3i::DigitalSet newSkeleton(existingSkeleton.domain()), previousSkeleton = existingSkeleton;
+	for (int label = 1; label <= maxLabel; label++) {
+		Z3i::DigitalSet deletedEdges(existingSkeleton.domain());
+		trace.info() << hierarchicalGraph.size() << endl;
+		for (GraphEdge* graphEdge : hierarchicalGraph) {
+			Z3i::DigitalSet edge = graphEdge->pointSet();
+			if (edge.size() == 0 //|| graphEdge->getLabel() != 1
+				) continue;
+			Z3i::DigitalSet restrictedEdge = restrictEdge(edge, branchingPoints, dt);
 
-		trace.progressBar(i, edgeGraph.size());
+			trace.progressBar(i, edgeGraph.size());
 
-		VCM vcm(R, ceil(r), l2, false);
-		vcm.init(restrictedEdge.begin(), restrictedEdge.end());
-		bool add = true;
-		//Main loop to compute skeleton (stop when no vol points left to process)
-		int cpt = 0;
-		Z3i::DigitalSet smoothedEdge(edge.domain());
-		for (const Z3i::Point& s : restrictedEdge)
-		{
+			VCM vcm(R, ceil(r), l2, false);
+			vcm.init(restrictedEdge.begin(), restrictedEdge.end());
+			bool add = true;
+			//Main loop to compute skeleton (stop when no vol points left to process)
+			int cpt = 0;
+			Z3i::DigitalSet smoothedEdge(edge.domain());
+			double sumAngle = 0;
+			for (const Z3i::Point& s : restrictedEdge)
+			{
 
-			double radius = r;
+				double radius = r;
 
-			//Distance transform value for VCM radius
-			if (isDT) {
-				radius = dt(s);
-				radius += delta;
-				if (radius > 0) {
-					chi = KernelFunction( 1.0, radius);
+				//Distance transform value for VCM radius
+				if (isDT) {
+					radius = dt(s);
+					radius += delta;
+					if (radius > 0) {
+						chi = KernelFunction( 1.0, radius);
+					}
 				}
-			}
 
-			// Compute discrete plane
-			radius = edge.size()*0.4;
+				// Compute discrete plane
+				radius = edge.size()*0.4;
 
-			connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
-																 s, normal,
-																 0, radius, distanceMax, false);
+				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+																	 s, normal,
+																	 0, radius, distanceMax, false);
 
-			//Z3i::DigitalSet surfelSet = extractRelevantSurfacePointsForVolVCM(connectedComponent3D, dt, s);
+				//Z3i::DigitalSet surfelSet = extractRelevantSurfacePointsForVolVCM(connectedComponent3D, dt, s);
 
-			double distanceMaxEdge = dt(*max_element(edge.begin(), edge.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
-						return dt(one) < dt(two);
-					}))+1;
+				double distanceMaxEdge = dt(*max_element(edge.begin(), edge.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
+							return dt(one) < dt(two);
+						}))+1;
+				Z3i::DigitalSet surfelSet = extractSurfacePointsWithDT(setSurface, dt, s, distanceMaxEdge);
+				vector<Z3i::Point> surfels(surfelSet.begin(), surfelSet.end());
 
-			Z3i::DigitalSet surfelSet = extractSurfacePointsWithEigenVectors(connectedComponent3D, dt, s, distanceMaxEdge);
-		    vector<Z3i::Point> surfels(surfelSet.begin(), surfelSet.end());
-
-			chiSurface = KernelFunction(1.0, distanceMaxEdge);
-			vcmSurface.setMySmallR(distanceMaxEdge);
+				chiSurface = KernelFunction(1.0, distanceMaxEdge);
+				vcmSurface.setMySmallR(distanceMaxEdge);
 
 
-			double radiusSurface = dt(s) + delta;
-			Z3i::RealPoint normalSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
-			double angle = normalSurface.cosineSimilarity(normal);
-			double otherAngle = normalSurface.cosineSimilarity(-normal);
-			angle = (angle < otherAngle) ? angle : otherAngle;
-			double thresholdInRadians = angleThreshold * M_PI / 180;
-			bool keep = ((//angle < thresholdInRadians &&
-						  edge.size() >= 2 * distanceMaxEdge) || surfels.size() < 3 || distanceMaxEdge <= 3);
+				double radiusSurface = dt(s) + delta;
+				Z3i::RealPoint normalSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
+				double angle = normalSurface.cosineSimilarity(normal);
+				double otherAngle = normalSurface.cosineSimilarity(-normal);
+				angle = (angle < otherAngle) ? angle : otherAngle;
 
-			//Center of mass computation
-
-			//Pruning
-			if (graphEdge->getLabel() == 1 && !keep) {
-				// viewer << surfelSet;
-					viewer << CustomColors3D(Color::Red, Color::Red);
-				viewer.addLine(s, s+normalSurface*5);
-				viewer << CustomColors3D(Color::Green, Color::Green);
-				viewer.addLine(s, s+normal*5);
+				bool keep = ((angle < thresholdInRadians) // &&
+							 // edge.size() >= 2 * distanceMaxEdge)
+							 ||
+							 surfels.size() < 3 // || distanceMaxEdge <= 3
+					);
+				sumAngle += angle;
 				cpt++;
-			}
-		}
-		if (cpt >= 0.5 * restrictedEdge.size())
-			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << edge;
-		else
-			viewer << CustomColors3D(Color::Red, Color::Red) << edge;
-		viewer << Viewer3D<>::updateDisplay;
-		qApp->processEvents();
+				//Center of mass computation
 
-		i++;
+				//Pruning
+				if (graphEdge->getLabel() == 1 && !keep) {
+					// viewer << surfelSet;
+					// 	viewer << CustomColors3D(Color::Red, Color::Red);
+					// viewer.addLine(s, s+normalSurface*5);
+					// viewer << CustomColors3D(Color::Green, Color::Green);
+				// viewer.addLine(s, s+normal*5);
+				//cpt++;
+			}
+			}
+			sumAngle /= cpt;
+			if (sumAngle > thresholdInRadians) {
+				//	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << edge;
+				for (const Z3i::Point& p : edge) {
+					if (branchingPoints.find(p) == branchingPoints.end())
+						deletedEdges.insert(edge.begin(), edge.end());
+				}
+
+			}
+			else {
+				//viewer << CustomColors3D(Color::Red, Color::Red) << edge;
+			}
+			// viewer << Viewer3D<>::updateDisplay;
+			// qApp->processEvents();
+
+			i++;
+		}
+
+		//New graph representation after all edges at a given level are deleted
+	    newSkeleton = Z3i::DigitalSet(existingSkeleton.domain());
+		for (const Z3i::Point& p : previousSkeleton) {
+			if (deletedEdges.find(p) == deletedEdges.end() || branchingPoints.find(p) != branchingPoints.end())
+				newSkeleton.insert(p);
+		}
+		previousSkeleton = newSkeleton;
+
+	    endPointsV = CurveAnalyzer::findEndPoints(newSkeleton);
+		p = (*endPointsV.begin());
+
+	    branchingPoints = Z3i::DigitalSet(domainVolume);
+	    existingSkeletonOrdered = CurveAnalyzer::curveTraversalForGraphDecomposition(branchingPoints,
+																								   newSkeleton,
+																								   p);
+	    endPoints = vector<Z3i::Point>();
+		for (const Z3i::Point& p : endPointsV) {
+			if (branchingPoints.find(p) == branchingPoints.end())
+				endPoints.push_back(p);
+		}
+	    edgeGraph = CurveAnalyzer::constructGraph(existingSkeletonOrdered, branchingPoints);
+		hierarchicalGraph = CurveAnalyzer::hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
+
 	}
 
 	trace.endBlock();
-	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	viewer << CustomColors3D(Color::Red, Color::Red) << newSkeleton;
 
 	//second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {

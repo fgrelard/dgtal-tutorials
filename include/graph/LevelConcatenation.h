@@ -15,7 +15,7 @@ public:
 									   const std::function<bool(const DGtal::Z3i::DigitalSet& aSet)>& pred = {}) const {
 		double sumValue = 0;
 		for (const Concatenation& concat : myConcatenations) {
-			sumValue += concat.computeAverageFunction(func, pred);
+			sumValue += concat.computeSumFunction(func, pred);
 		}
 		return sumValue / myConcatenations.size();
 	}

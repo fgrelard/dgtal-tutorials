@@ -1202,17 +1202,14 @@ int main( int  argc, char**  argv )
 		existingSkeletonOrdered.push_back(node.first);
 		visitor.expand();
 	}
-//	Z3i::DigitalSet branchingPoints = detectCriticalPoints(existingSkeleton);
 
 	vector<Z3i::DigitalSet> edgeGraph = CurveAnalyzer::constructGraph(existingSkeletonOrdered, branchingPoints);
-	vector<Z3i::Point> endPointsV = CurveAnalyzer::findEndPoints(existingSkeleton);
 	vector<Z3i::Point> endPoints;
 	for (const Z3i::Point& p : endPointsV) {
 		if (branchingPoints.find(p) == branchingPoints.end())
 			endPoints.push_back(p);
 	}
 	vector<GraphEdge*> hierarchicalGraph = CurveAnalyzer::hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
-	//branchingPoints = reduceClustersToCenters(branchingPoints, existingSkeleton);
 
 
 
@@ -1302,7 +1299,7 @@ int main( int  argc, char**  argv )
 			DGtal::Z3i::DigitalSet restrictedAdj = restrictByDistanceToPoint(adjacentE, b, radius);
 			restrictedAdjacentEdges.push_back(restrictedAdj);
 		}
-		if (adjacentEdges.size() > 3) {
+		if (adjacentEdges.size() > 3 || dt(b) <= 3) {
 			for (const Z3i::DigitalSet& restrictedAdj : restrictedAdjacentEdges) {
 				processedEdges.insert(restrictedAdj.begin(), restrictedAdj.end());
 			}
