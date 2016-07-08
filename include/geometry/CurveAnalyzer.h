@@ -52,7 +52,7 @@ namespace CurveAnalyzer {
 
 	std::vector<DGtal::Z3i::Point> convertToOrientedEdge(const DGtal::Z3i::DigitalSet& edge, const DGtal::Z3i::Point& startingPoint);
 
-	std::vector<DGtal::Z3i::Point> curveTraversalForGraphDecomposition(Z3i::DigitalSet& branchingPointsFound,
+	std::vector<DGtal::Z3i::Point> curveTraversalForGraphDecomposition(DGtal::Z3i::DigitalSet& branchingPointsFound,
 																	   const DGtal::Z3i::DigitalSet& existingSkeleton,
 																	   const DGtal::Z3i::Point& p);
 };

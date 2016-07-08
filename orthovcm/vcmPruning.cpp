@@ -548,7 +548,7 @@ int main( int  argc, char**  argv )
 			maxLabel = currentLabel;
 	}
 	trace.info() << maxLabel << endl;
-	Z3i::DigitalSet newSkeleton(existingSkeleton.domain()), previousSkeleton = existingSkeleton;
+	Z3i::DigitalSet newSkeleton = existingSkeleton, previousSkeleton = existingSkeleton;
 	for (int label = 1; label <= maxLabel; label++) {
 		Z3i::DigitalSet deletedEdges(existingSkeleton.domain());
 		trace.info() << hierarchicalGraph.size() << endl;
@@ -556,7 +556,7 @@ int main( int  argc, char**  argv )
 			Z3i::DigitalSet edge = graphEdge->pointSet();
 			if (edge.size() == 0 //|| graphEdge->getLabel() != 1
 				) continue;
-			Z3i::DigitalSet restrictedEdge = restrictEdge(edge, branchingPoints, dt);
+			Z3i::DigitalSet restrictedEdge = edge;//restrictEdge(edge, branchingPoints, dt);
 
 			trace.progressBar(i, edgeGraph.size());
 
@@ -613,51 +613,42 @@ int main( int  argc, char**  argv )
 					);
 				sumAngle += angle;
 				cpt++;
-				//Center of mass computation
 
-				//Pruning
-				if (graphEdge->getLabel() == 1 && !keep) {
-					// viewer << surfelSet;
-					// 	viewer << CustomColors3D(Color::Red, Color::Red);
-					// viewer.addLine(s, s+normalSurface*5);
-					// viewer << CustomColors3D(Color::Green, Color::Green);
-				// viewer.addLine(s, s+normal*5);
-				//cpt++;
-			}
 			}
 			sumAngle /= cpt;
 			if (sumAngle > thresholdInRadians) {
 				//	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << edge;
-				for (const Z3i::Point& p : edge) {
-					if (branchingPoints.find(p) == branchingPoints.end())
-						deletedEdges.insert(edge.begin(), edge.end());
+				Z3i::DigitalSet difference(newSkeleton.domain());
+				for (const Z3i::Point& p : newSkeleton) {
+					bool found = false;
+					if (edge.find(p) != edge.end() &&
+						branchingPoints.find(p) == branchingPoints.end())
+						found = true;
+					if (!found) {
+						difference.insert(p);
+					}
 				}
+				Z3i::Object26_6 objDiff(Z3i::dt26_6, difference);
+				vector<Z3i::Object26_6> objects;
+				back_insert_iterator<vector<Z3i::Object26_6>> inserter(objects);
+				unsigned int nbCC = objDiff.writeComponents(inserter);
+				if (nbCC == 1
+					) {
+				    newSkeleton = (objects.begin())->pointSet();
 
+				}
 			}
-			else {
-				//viewer << CustomColors3D(Color::Red, Color::Red) << edge;
-			}
-			// viewer << Viewer3D<>::updateDisplay;
-			// qApp->processEvents();
 
 			i++;
 		}
-
-		//New graph representation after all edges at a given level are deleted
-	    newSkeleton = Z3i::DigitalSet(existingSkeleton.domain());
-		for (const Z3i::Point& p : previousSkeleton) {
-			if (deletedEdges.find(p) == deletedEdges.end() || branchingPoints.find(p) != branchingPoints.end())
-				newSkeleton.insert(p);
-		}
-		previousSkeleton = newSkeleton;
 
 	    endPointsV = CurveAnalyzer::findEndPoints(newSkeleton);
 		p = (*endPointsV.begin());
 
 	    branchingPoints = Z3i::DigitalSet(domainVolume);
 	    existingSkeletonOrdered = CurveAnalyzer::curveTraversalForGraphDecomposition(branchingPoints,
-																								   newSkeleton,
-																								   p);
+																					 newSkeleton,
+																					 p);
 	    endPoints = vector<Z3i::Point>();
 		for (const Z3i::Point& p : endPointsV) {
 			if (branchingPoints.find(p) == branchingPoints.end())
@@ -677,7 +668,7 @@ int main( int  argc, char**  argv )
 	}
 
 	Image outImage2(volume.domain());
-	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage2, 10);
+	DGtal::imageFromRangeAndValue(newSkeleton.begin(), newSkeleton.end(), outImage2, 10);
 	VolWriter<Image>::exportVol(outFilename, outImage2);
 	viewer << Viewer3D<>::updateDisplay;
 	application.exec();
