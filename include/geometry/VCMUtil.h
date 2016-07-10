@@ -32,7 +32,7 @@ namespace VCMUtil {
 	DGtal::Z3i::RealPoint computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi);
 
 
-	bool planeContains(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current);
+	bool planeContains(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current, int connexity=26);
 	bool abovePlane(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current);
 
 	double radiusForVCMSurface(const DGtal::Z3i::DigitalSet& setSurface, const DGtal::Z3i::Point& point, const std::vector<DGtal::Z3i::RealPoint>& normals);
@@ -156,10 +156,14 @@ DGtal::Z3i::DigitalSet VCMUtil::extractConnectedComponent3D(const Domain & domai
 	return connectedComponent;
 }
 
-bool VCMUtil::planeContains(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current) {
+bool VCMUtil::planeContains(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current, int connexity) {
+	double omega;
+	if (connexity == 26)
+		omega = std::max(std::abs(normal[0]), std::max(std::abs(normal[1]), std::abs(normal[2])));
+	else
+		omega = 2;
 	double d = -(-normal[0] * current[0] - normal[1] * current[1] - normal[2] * current[2]);
 	//Naive plane (26 connexity)
-	double omega = std::max(std::abs(normal[0]), std::max(std::abs(normal[1]), std::abs(normal[2])));
 	double valueToCheckForPlane = point[0] * normal[0] + point[1] * normal[1] + point[2] * normal[2];
 	if (valueToCheckForPlane >= d && valueToCheckForPlane < d + omega)
 		return true;

@@ -671,7 +671,7 @@ Z3i::DigitalSet associatedPlane(const Z3i::Point& point, const Container& setVCM
 	Z3i::RealPoint normal;
 	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
 																		 point, normal,
-																		 0, radius, radius*2, 6, false);
+																		 0, radius, radius*2, 26, false);
 	return connectedComponent3D;
 }
 
@@ -1123,6 +1123,50 @@ void twoClosestPlanesNonIntersecting(Z3i::DigitalSet& plane,
 
 }
 
+
+
+void lastPlaneNonIntersecting(Z3i::DigitalSet& plane,
+							  const vector<Z3i::DigitalSet>& planesEdge,
+							  const vector<Z3i::DigitalSet>& planesEdge2,
+							  const vector<Z3i::DigitalSet>& planesEdge3) {
+	double minDistance = std::numeric_limits<double>::max();
+	for (const Z3i::DigitalSet& firstPlane : planesEdge) {
+		Z3i::DigitalSet secondPlane(firstPlane.domain());
+		double sumDistance = 0;
+		vector<Z3i::DigitalSet> currentPlanesEdge2, newPlanesEdge2;
+		currentPlanesEdge2 = planesEdge2;
+		for (const Z3i::DigitalSet& secondPlane : planesEdge2) {
+
+			double firstSetDistance = Distance::distanceSet(firstPlane, secondPlane);
+			bool intersecting = planesIntersect(firstPlane, secondPlane);
+			if (!intersecting) {
+				newPlanesEdge2.push_back(secondPlane);
+			}
+		}
+		if (currentPlanesEdge2.size() == newPlanesEdge2.size()) {
+			plane = firstPlane;
+			break;
+		}
+		currentPlanesEdge2 = newPlanesEdge2;
+
+	}
+}
+
+void lastPlaneIntersecting(Z3i::DigitalSet& plane,
+							  const vector<Z3i::DigitalSet>& planesEdge,
+							  const vector<Z3i::DigitalSet>& planesEdge2) {
+	for (const Z3i::DigitalSet& firstPlane : planesEdge) {
+		Z3i::DigitalSet secondPlane(firstPlane.domain());
+		bool intersecting=false;
+		for (const Z3i::DigitalSet& secondPlane : planesEdge2) {
+			if (intersecting)
+				plane = secondPlane;
+			intersecting = planesIntersect(firstPlane, secondPlane);
+		}
+
+	}
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
 {
@@ -1384,9 +1428,32 @@ int main( int  argc, char**  argv )
 			continue;
 		}
 		if (adjacentEdges.size() == 3) {
+			Z3i::DigitalSet e1(domainVolume), e2(domainVolume);
+			vector<pair<Z3i::DigitalSet, Z3i::RealPoint>> edgesToNormals;
+			for (const Z3i::DigitalSet& restrictEdge : adjacentEdges) {
+				pair<Z3i::Point, Z3i::RealPoint> ptoNPlane = pointToNormal<VCM, KernelFunction>(b, restrictEdge, domainVolume, setVolumeWeighted);
+				Z3i::RealPoint normal = ptoNPlane.second;
+				edgesToNormals.push_back(make_pair(restrictEdge, normal));
+			}
+			double angleMax = 0.0;
+			for (size_t i = 0; i < edgesToNormals.size(); i++) {
+				Z3i::RealPoint ni = edgesToNormals[i].second;
+				for (size_t j = i+1; j < edgesToNormals.size(); j++) {
+					Z3i::RealPoint nj = edgesToNormals[j].second;
+					double angle = ni.cosineSimilarity(nj);
+					double otherAngle = ni.cosineSimilarity(-nj);
+					angle = (angle < otherAngle) ? angle : otherAngle;
+					if (angle > angleMax) {
+						angleMax = angle;
+						e1 = edgesToNormals[i].first;
+						e2 = edgesToNormals[j].first;
+					}
+				}
+			}
+
 			vector<vector<Z3i::DigitalSet> > planesRestrictedEdges;
-			for (const Z3i::DigitalSet& restrictEdge : restrictedAdjacentEdges) {
-				if (restrictEdge.size() == 0) continue;
+			for (const Z3i::DigitalSet& restrictEdge : adjacentEdges) {
+				if (restrictEdge.size() == 0 || (!CurveAnalyzer::sameSet(e1, restrictEdge) && !CurveAnalyzer::sameSet(e2, restrictEdge))) continue;
 
 				std::vector<Z3i::Point> eEdge = CurveAnalyzer::findEndPoints(restrictEdge);
 
@@ -1396,7 +1463,7 @@ int main( int  argc, char**  argv )
 						candEdge = p;
 				}
 
-				std::vector<Z3i::Point> restrictEdgeOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdge, candEdge);
+				std::vector<Z3i::Point> restrictEdgeOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdge, b);
 
 				std::vector<Z3i::DigitalSet> planesEdge = planesAlongEdge<VCM, KernelFunction> (restrictEdgeOriented, restrictEdge, domainVolume, setVolumeWeighted);
 				planesRestrictedEdges.push_back(planesEdge);
@@ -1404,27 +1471,16 @@ int main( int  argc, char**  argv )
 
 
 
-			Z3i::DigitalSet plane(domainVolume), plane2(domainVolume), plane3(domainVolume), plane4(domainVolume), plane5(domainVolume), plane6(domainVolume);
+			Z3i::DigitalSet plane(domainVolume), plane2(domainVolume), plane3(domainVolume);
 			double minDistance = numeric_limits<double>::max();
 			vector<Z3i::DigitalSet> planesEdge = planesRestrictedEdges[0];
 			vector<Z3i::DigitalSet> planesEdge2 = planesRestrictedEdges[1];
-			vector<Z3i::DigitalSet> planesEdge3 = planesRestrictedEdges[2];
-			twoClosestPlanesNonIntersecting(plane, plane2, planesEdge, planesEdge2);
-			twoClosestPlanesNonIntersecting(plane3, plane4, planesEdge2, planesEdge);
-			twoClosestPlanesNonIntersecting(plane5, plane6, planesEdge, planesEdge2);
-		    size_t sum1 = plane.size() + plane2.size();
-			size_t sum2 = plane3.size() + plane4.size();
-			size_t sum3 = plane5.size() + plane6.size();
-			if (sum2 < sum1 && sum2 < sum3) {
-				plane = plane3;
-				plane2 = plane4;
-			} else if (sum3 < sum1 && sum3 < sum2) {
-				plane = plane5;
-				plane2 = plane6;
-			}
-			viewer << CustomColors3D(Color::Red, Color::Red) << plane << plane2
-				   << CustomColors3D(Color::Yellow, Color::Yellow)<< plane3<< plane4
-				   << CustomColors3D(Color::Magenta, Color::Magenta)<< plane5 << plane6;
+
+
+			lastPlaneIntersecting(plane, planesEdge, planesEdge2);
+			lastPlaneIntersecting(plane2, planesEdge2, planesEdge);
+
+			viewer << CustomColors3D(Color::Red, Color::Red) << plane << plane2 << plane3;
 			//Find two max :  two planes
 			pair<Z3i::Point, double> maxiVarying;
 			pair<Z3i::Point, double> maxiVarying2;
