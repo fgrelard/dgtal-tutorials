@@ -93,7 +93,7 @@ int main( int  argc, char**  argv )
   typedef ImageContainerBySTLVector<Domain, unsigned char> Image;
   typedef VoronoiCovarianceMeasure<Space,Metric> VCM;
   typedef functors::BallConstantPointFunction<Point,double> KernelFunction;
-  
+
   typedef MSTTangent<Point> Tangent;
   typedef Pencil<Point, Tangent, RealPoint> Pencil;
   typedef DGtal::ConstImageAdapter<Image,Z2i::Domain,DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain>, Image::Value, DGtal::functors::Identity> ImageAdapterExtractor;
@@ -106,27 +106,27 @@ int main( int  argc, char**  argv )
 		("thresholdMax,M", po::value<int>()->default_value(255), "maximum threshold for binarization")
 		("radiusInside,R", po::value<double>()->default_value(10), "radius of the ball inside voronoi cell")
 		("radiusNeighbour,r", po::value<double>()->default_value(10), "radius of the ball for the neighbourhood")
-		; 
-  
+		;
+
 	bool parseOK=true;
 	po::variables_map vm;
 	try{
-		po::store(po::parse_command_line(argc, argv, general_opt), vm);  
+		po::store(po::parse_command_line(argc, argv, general_opt), vm);
 	} catch(const std::exception& ex){
 		parseOK=false;
 		trace.info()<< "Error checking program options: "<< ex.what()<< endl;
 	}
-	po::notify(vm);    
+	po::notify(vm);
 	if( !parseOK || vm.count("help")||argc<=1)
 	{
 		std::cout << "Usage: " << argv[0] << " [input]\n"
 				  << "Display volume file as a voxel set by using QGLviewer"<< endl
 				  << general_opt << "\n";
 		return 0;
-	}  
+	}
 	if(!vm.count("input"))
 	{
-		trace.error() << " The file name was not defined" << endl;      
+		trace.error() << " The file name was not defined" << endl;
 		return 0;
 	}
 	string skeletonFilename = vm["skeleton"].as<std::string>();
@@ -142,15 +142,18 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
 
 	Z3i::DigitalSet setVolume(domainVolume);
-	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume, 
+	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume,
 												  thresholdMin-1, thresholdMax);
-	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer; 
+	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer;
 	Binarizer binarizer(volume, thresholdMin-1, thresholdMax);
-	Image image = VolReader<Image>::importVol(skeletonFilename); 
+	Image image = VolReader<Image>::importVol(skeletonFilename);
+		Z3i::DigitalSet setSkeleton(domainVolume);
+	SetFromImage<Z3i::DigitalSet>::append<Image> (setSkeleton, image,
+												  thresholdMin-1, thresholdMax);
 	typedef DGtal::DistanceTransformation<Space, Binarizer, Z3i::L2Metric> DTL2;
-	
-	
-	Point p;	
+
+
+	Point p;
 	vector<Point> vPoints;
 	for (auto it = image.domain().begin(), itE = image.domain().end(); it != itE; ++it) {
 		if (image(*it) >= thresholdMin && image(*it) <= thresholdMax) {
@@ -160,7 +163,7 @@ int main( int  argc, char**  argv )
 
 	Metric l2;
 	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
-	
+
 	Viewer3D<> viewer;
 	viewer.show();
 
@@ -170,7 +173,7 @@ int main( int  argc, char**  argv )
 			setToProcess.insert(pv);
 	}
 
-	
+
 // We have to visit the direct neighbours in order to have a container with voxels
 // ordered sequentially by their connexity
 // Otherwise we have a point container with points which are not neighbours
@@ -178,13 +181,13 @@ int main( int  argc, char**  argv )
 	typedef MetricAdjacency<Space, 3> Graph;
 	typedef DepthFirstVisitor<Graph, set<Point> > Visitor;
 	typedef typename Visitor::Node MyNode;
-  
+
 	Graph graph;
 	Visitor visitor( graph, p );
 	MyNode node;
 
-    
-	while ( !visitor.finished() ) 
+
+	while ( !visitor.finished() )
 	{
 		node = visitor.current();
 		if ( image.domain().isInside(node.first) &&
@@ -197,16 +200,16 @@ int main( int  argc, char**  argv )
 			visitor.ignore();
 	}
 
-	
+
 	trace.info() << "Big radius   R = " << R << std::endl;
 	trace.info() << "Small radius r = " << r << std::endl;
-  
-	const double size = 20.0; // size of displayed normals
+
+	const double size = 10.0; // size of displayed normals
 
 
 //Computing lambda MST tangents
 	std::vector<Pencil> tangents = TangentUtils::theoreticalTangentsOnBoudin<Pencil>(vPoints.begin(), vPoints.end(), 20);
-  
+
 	VCM vcm( R, ceil( r ), l2, true );
 	vcm.init( setVolume.begin(), setVolume.end() );
 	Domain domain = vcm.domain();
@@ -217,75 +220,71 @@ int main( int  argc, char**  argv )
 	Matrix vcm_r, evec;
 	RealVector eval;
 
-	
- 
+
+
 	const int IMAGE_PATCH_WIDTH = 100;
 	Z3i::Domain domain3Dyup(volume.domain().lowerBound() + Z3i::Point(-IMAGE_PATCH_WIDTH, -IMAGE_PATCH_WIDTH, -IMAGE_PATCH_WIDTH), volume.domain().upperBound() + Z3i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH));
-	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0), 
+	DGtal::Z2i::Domain domainImage2D (DGtal::Z2i::Point(0,0),
 									  DGtal::Z2i::Point(IMAGE_PATCH_WIDTH, IMAGE_PATCH_WIDTH));
 	DGtal::functors::Identity idV;
 	int i = 0;
-	
+
 	// for ( auto it = ++tangents.begin(), itE = tangents.end();
 	// 	  it != itE; ++it )
 	// {
 	trace.info() << setToProcess.size() << endl;
-	for (int radiusVCM = 7; radiusVCM < 22; radiusVCM++) {
-		vcm.setMySmallR(radiusVCM);
-		chi = KernelFunction( 1.0, radiusVCM );
-		double sumDotProduct = 0;
-		int sliceNumber = 0;
-		for (auto it = setToProcess.begin(), ite = setToProcess.end();
-			 it != ite; ++it) {		
-			
-			// Compute VCM and diagonalize it.
-			viewer.setFillColor(Color::Gray);
-			viewer.setFillTransparency(255);
-		
-			//viewer << it->getPoint();
-			/*if (radius > 0) {
-			  vcm.updateProximityStructure(radius, vPoints.begin(), vPoints.end());
-			  chi = KernelFunction( 1.0, radius);
-			  }*/
-			Z3i::Point current= *it; //it->getPoint();
-			vcm_r = vcm.measure( chi, current );
-			LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
+	double radiusVCM = r;
+	vcm.setMySmallR(radiusVCM);
+	chi = KernelFunction( 1.0, radiusVCM );
+	int sliceNumber = 0;
+	for (auto it = setSkeleton.begin(), ite = setSkeleton.end();
+		 it != ite; ++it) {
 
-			// Display normal
-			RealVector n = evec.column( 2 );
-			n*=size;
-			RealPoint p( current[ 0 ], current[ 1 ], current[2] );
-			RealVector n2 = evec.column( 1 );
-			n2*=size;
+		// Compute VCM and diagonalize it.
+		viewer.setFillColor(Color::Gray);
+		viewer.setFillTransparency(255);
 
-			RealVector normal = evec.column(0).getNormalized();
-			Z3i::RealPoint otherNormal = correspondingTangentToPointInVol(current, tangents);//it->getTangent();
-			if (otherNormal == Z3i::RealPoint()) continue;
-			sumDotProduct += std::abs(normal.dot(otherNormal));
-			//if(sliceNumber > 2280 && sliceNumber < 2420 && sliceNumber % 10 ==0) {
-			if(sliceNumber % 10 ==0) {
-				viewer.setLineColor(Color::Blue);
-				viewer.setFillColor(Color::Blue);
-				viewer.setFillTransparency(150);
-				viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);		
-				i++;
-			}
-			//}
-			sliceNumber++;
+		//viewer << it->getPoint();
+		/*if (radius > 0) {
+		  vcm.updateProximityStructure(radius, vPoints.begin(), vPoints.end());
+		  chi = KernelFunction( 1.0, radius);
+		  }*/
+		Z3i::Point current= *it; //it->getPoint();
+		vcm_r = vcm.measure( chi, current );
+		LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
+
+		// Display normal
+		RealVector n = evec.column( 2 );
+		n*=size;
+		RealPoint p( current[ 0 ], current[ 1 ], current[2] );
+		RealVector n2 = evec.column( 1 );
+		n2*=size;
+
+		RealVector normal = evec.column(0).getNormalized();
+		Z3i::RealPoint otherNormal = correspondingTangentToPointInVol(current, tangents);//it->getTangent();
+		if (otherNormal == Z3i::RealPoint()) continue;
+		//if(sliceNumber > 2280 && sliceNumber < 2420 && sliceNumber % 10 ==0) {
+		if(sliceNumber % 5 ==0) {
+			viewer.setLineColor(Color::Blue);
+			viewer.setFillColor(Color::Blue);
+			viewer.setFillTransparency(150);
+			viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
+			i++;
 		}
-
-		trace.info() << sumDotProduct / sliceNumber << endl;
+		//}
+		sliceNumber++;
 	}
+
 	for (auto it = vPoints.begin(), ite = vPoints.end(); it != ite; ++it) {
 		if (volume(*it) >= thresholdMin)
 			viewer << CustomColors3D(Color(0,0,255,20), Color(0,0,255,20))<<*it;
 	}
 
-  
-	// viewer << Viewer3D<>::updateDisplay;
-	// application.exec();
+	viewer << CustomColors3D(Color(220,220,220,20), Color(220,220,220,20)) << setVolume;
+	viewer << Viewer3D<>::updateDisplay;
+	application.exec();
 	return 0;
-		
+
 
 }
 //                                                                          //

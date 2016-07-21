@@ -54,24 +54,24 @@ void create2DNaive() {
 	//create2DNaiveTangentsForVisu(dSet, board);
 
 	typedef vector<Z2i::Point>::iterator Iterator;
-	typedef typename IteratorCirculatorTraits<Iterator>::Value::Coordinate Coordinate; 
+	typedef typename IteratorCirculatorTraits<Iterator>::Value::Coordinate Coordinate;
 	typedef ArithmeticalDSSComputer<Iterator,Coordinate,8> RecognitionAlgorithm;
 	typedef SaturatedSegmentation<RecognitionAlgorithm> Segmentation;
-   
+
 	RecognitionAlgorithm algo;
 	Segmentation s(dSet.begin(),dSet.end(),algo);
-     
+
     typename Segmentation::SegmentComputerIterator i = s.begin();
 	typename Segmentation::SegmentComputerIterator end = s.end();
 	board << domain;
 	for (; i != end; ++i) {
-         
-		typename Segmentation::SegmentComputerIterator::SegmentComputer segment(*i); 
-		
+
+		typename Segmentation::SegmentComputerIterator::SegmentComputer segment(*i);
+
        board << SetMode(segment.primitive().className(), "Points") << segment.primitive() << SetMode(segment.primitive().className(), "BoundingBox" )
 			 << segment.primitive() ; // draw bounding box
-     
-     } 
+
+     }
 	board.saveEPS("fig2.eps");
 }
 
@@ -82,7 +82,7 @@ int main( int argc, char** argv )
 		trace.error() << "Please provide filename" << endl;
 		return EXIT_FAILURE;
 	}
-	const string examplesPath = "/home/florent/bin/DGtal/examples/samples/";
+	const string examplesPath;
 	string filename = argv[1];
 	float increment = atof(argv[2]);
 	float noise = 0.0;
@@ -90,14 +90,14 @@ int main( int argc, char** argv )
 		noise = atof(argv[3]);
 	typedef ImageContainerBySTLVector<Z3i::Domain, unsigned char> Image3D;
 	typedef ImageFromSet<Image3D> SetConverter;
-	typedef Pencil<Z3i::Point, MSTTangent<Z3i::Point>, PointVector<3, double> > Pencil; 
+	typedef Pencil<Z3i::Point, MSTTangent<Z3i::Point>, PointVector<3, double> > Pencil;
 	int range = 200;
 	int pitch =  20;
 	int radius = 10;
 
 	vector<PointVector<3, double>> curve;
 	set<PointVector<3,double>> vectorPoints;
-	
+
 //	createContinuousLogarithmicCurve(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
 //	createVolumeFromCurve(curve, vectorPoints, 7);
@@ -108,14 +108,14 @@ int main( int argc, char** argv )
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 //	thinVolume<Pencil>(curve, vectorPoints, 20.0);
 //	drawDeformedCylinder(vectorPoints, 50, 5, increment);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 4, M_PI/2);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 4, -2.8333*M_PI/6.6667// , -Eigen::Vector3d(0, sqrt(2)/2, sqrt(2)/2)
+	createRotatedVolumeFromCurve(curve, vectorPoints, 0, M_PI/2);
+	createRotatedVolumeFromCurve(curve, vectorPoints, 0, -0.61111*M_PI/2.2222// , -Eigen::Vector3d(0, sqrt(2)/2, sqrt(2)/2)
 		);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 4, -3.8333*M_PI/6.6667//, Eigen::Vector3d(sqrt(2)/2, sqrt(2)/2, 0)
+	createRotatedVolumeFromCurve(curve, vectorPoints, 0, -1.61111*M_PI/2.2222//, Eigen::Vector3d(sqrt(2)/2, sqrt(2)/2, 0)
 		);
 //	createRotatedVolumeFromCurve(curve, vectorPoints, 5, 2*M_PI/3);
-		
-	Ball<PointVector<3, double>> ball(Point(0,0,0), 10); 
+
+	Ball<PointVector<3, double>> ball(Point(0,0,0), 10);
 	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 300, 300));
 	//domain = Z3i::Domain(Z3i::Point(-20,-20,-20), Z3i::Point(20,20,60));
 //	createVolumeFromCurve(curve, vectorPoints, 10);
@@ -132,7 +132,7 @@ int main( int argc, char** argv )
 	}
 	DigitalSet set2 = addNoise(set, noise);
 //	imageFromRangeAndValue(vectorPoints.begin(), vectorPoints.end(), anImage3D, 150);
-	
+
 	Image3D anImage3D(domain);
 	for (auto it = domain.begin(), ite = domain.end();
 		 it != ite; ++it) {
@@ -140,7 +140,7 @@ int main( int argc, char** argv )
 			anImage3D.setValue(*it, 255);
 	}
 //	anImage3D = ImageFromSet<Image3D>::create(set, 1);
-    
+
     VolWriter<Image3D>::exportVol(examplesPath + filename, anImage3D);
 	const Color CURVE3D_COLOR( 100, 100, 140, 128 );
 

@@ -169,7 +169,10 @@ double deltaEdge(const DTL2& dt,
 			end = e;
 	}
 	double delta = 0;
-	if (b != Z3i::Point() && end != Z3i::Point())
+	if (dt.domain().isInside(b) &&
+		dt.domain().isInside(end) &&
+		b != Z3i::Point() &&
+		end != Z3i::Point())
 		delta = dt(b) - dt(end);
 	return delta;
 }
@@ -214,9 +217,12 @@ double amountInformationLostRatio(const DTL2& dt,
 	}
 	double length = lengthEdge(edge);
 	double delta = deltaEdge(dt, edge, branch, endPoints);
-	double Rh = dt(b);
-	double d = Z3i::l2Metric(b, end);
-	double qratio = length * (d - delta) / Rh;
+	double qratio = 0;
+	if (dt.domain().isInside(b)) {
+		double Rh = dt(b);
+		double d = Z3i::l2Metric(b, end);
+		qratio = length * (d - delta) / Rh;
+	}
 	return qratio;
 }
 
@@ -320,61 +326,21 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
 	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
-	vector<Point> existingSkeletonOrdered;
 		vector<Z3i::Point> endPointsV = CurveAnalyzer::findEndPoints(existingSkeleton);
 	Z3i::Point p = (*endPointsV.begin());
-	// We have to visit the direct neighbours in order to have a container with voxels
-	// ordered sequentially by their connexity
-	// Otherwise we have a point container with points which are not neighbours
-	// and this impairs maximal segment recognition
-	typedef Z3i::Object26_6 Graph;
-	typedef DepthFirstVisitor<Graph, set<Point> > Visitor;
-	typedef typename Visitor::Node MyNode;
-	typedef GraphVisitorRange<Visitor> VisitorRange;
-	Graph graph(Z3i::dt26_6, existingSkeleton);
-	Visitor visitor( graph, p );
-	MyNode node;
-
 	Z3i::DigitalSet branchingPoints(domainVolume);
-    pair<Z3i::Point, double> previous;
+	vector<Point> existingSkeletonOrdered = CurveAnalyzer::curveTraversalForGraphDecomposition(branchingPoints,
+																							   existingSkeleton,
+																							   p);
 
-	while ( !visitor.finished() )
-	{
-  		node = visitor.current();
-		if (node.second != 0 && ((int)node.second - previous.second) <= 0) {
-			vector<Z3i::Point> neighbors;
-			back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
-			MetricAdjacency::writeNeighbors(inserter, node.first);
-			double minDistance = std::numeric_limits<double>::max();
-			Z3i::Point cand;
-			for (const Z3i::Point& n : neighbors) {
-				if (find(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), n) != existingSkeletonOrdered.end()) {
-					double currentDistance = Z3i::l2Metric(n, node.first);
-					if (currentDistance < minDistance) {
-						minDistance = currentDistance;
-						cand = n;
-					}
-				}
-			}
-			branchingPoints.insert(cand);
-			existingSkeletonOrdered.push_back(cand);
 
-		}
-		previous = node;
-		existingSkeletonOrdered.push_back(node.first);
-		visitor.expand();
+    //branchingPoints = CurveAnalyzer::detectCriticalPoints(existingSkeleton);
+	vector<Z3i::Point> endPoints;
+	for (const Z3i::Point& p : endPointsV) {
+		if (branchingPoints.find(p) == branchingPoints.end())
+			endPoints.push_back(p);
 	}
-	SegmentComputer algo;
-	Segmentation s(existingSkeletonOrdered.begin(), existingSkeletonOrdered.end(), algo);
-	s.setMode("MostCentered++");
-	typename Segmentation::SegmentComputerIterator itseg = s.begin();
-	typename Segmentation::SegmentComputerIterator end = s.end();
-//	Z3i::DigitalSet branchingPoints = branchingPointDetection(s, existingSkeletonOrdered, domainVolume);
-	// Z3i::DigitalSet branchingPoints = detectCriticalPoints(existingSkeleton);
-	// branchingPoints = reduceClustersToCenters(branchingPoints);
-
 	vector<Z3i::DigitalSet> edgeGraph = CurveAnalyzer::constructGraph(existingSkeletonOrdered, branchingPoints);
-	vector<Z3i::Point> endPoints = CurveAnalyzer::findEndPoints(existingSkeleton);
 	Z3i::DigitalSet endPointSet(domainSkeleton);
 	endPointSet.insert(endPoints.begin(), endPoints.end());
 	vector<GraphEdge*> hierarchicalGraph = CurveAnalyzer::hierarchicalDecomposition(edgeGraph, endPoints, branchingPoints);
@@ -525,6 +491,27 @@ int main( int  argc, char**  argv )
 				toPrune.insert(aSet.begin(), aSet.end());
 			}
 		}
+	}
+	int i = 2;
+	for (const LevelConcatenation& levelConcat : groupConcatenations) {
+		if (i > maxLabel) break;
+		double laI =  levelConcat.computeAverageLevelFunction(lengthFunction);
+		double qratioaI = levelConcat.computeAverageLevelFunction(qRatioFunction);
+		for (const Concatenation& concat : levelConcat.myConcatenations) {
+			if (concat.myLevel == i) {
+				double nLocMaxH = concat.computeAverageFunction(numberLocMaxFunction);
+				double lengthH = concat.computeAverageFunction(lengthFunction);
+				double qratioH = concat.computeAverageFunction(qRatioFunction);
+				if (nLocMaxH <= 6 &&
+					qratioH <= 0.7 * qratioaI &&
+					lengthH <= 0.7 * laI) {
+					for (const Z3i::DigitalSet& aSet : concat.myEdges) {
+						toPrune.insert(aSet.begin(), aSet.end());
+					}
+				}
+			}
+		}
+		i++;
 	}
 
 	for (const Z3i::Point& p : existingSkeleton) {

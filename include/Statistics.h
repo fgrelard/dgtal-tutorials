@@ -64,7 +64,7 @@ double Statistics::mean(const std::vector<T>& aVector) {
 template <typename T>
 double Statistics::stddev(const std::vector<T>& aVector) {
 	std::vector<double> zero_mean( aVector );
-	transform( zero_mean.begin(), zero_mean.end(), zero_mean.begin(),bind2nd( std::minus<double>(), mean(aVector) ) );
+	transform( zero_mean.begin(), zero_mean.end(), zero_mean.begin(), bind2nd( std::minus<double>(), mean(aVector) ) );
 
 	double deviation = inner_product( zero_mean.begin(),zero_mean.end(), zero_mean.begin(), 0.0f );
 	deviation = sqrt( deviation / ( aVector.size() - 1 ) );
