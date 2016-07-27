@@ -401,7 +401,7 @@ bool VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container&
 	auto newPoint = setVolumeWeighted.begin();
 	if (pointInWeightedSet != setVolumeWeighted.end()) {
 		while ( current == centerOfMass &&
-			   //(newPoint != setVolumeWeighted.end()  && ((*newPoint)->myProcessed))
+			   (newPoint != setVolumeWeighted.end()  && ((*newPoint)->myProcessed)) &&
 			    connectedComponent3D.find(current) != connectedComponent3D.end()
 			) {
 			current = centerOfMass + normal * scalar;
@@ -418,7 +418,7 @@ bool VCMUtil::trackNextPoint(WeightedPointCount* &currentPoint, const Container&
 			current = centerOfMass;
 			if (pointInWeightedSet != setVolumeWeighted.end()) {
 				while ( current == centerOfMass &&
-					   //(newPoint != setVolumeWeighted.end()  && ((*newPoint)->myProcessed))
+						(newPoint != setVolumeWeighted.end()  && ((*newPoint)->myProcessed)) &&
 					    connectedComponent3D.find(current) != connectedComponent3D.end()
 					) {
 					current = centerOfMass - normal * scalar;
@@ -460,6 +460,7 @@ double VCMUtil::computeCurvatureJunction(const DGtal::Z3i::RealPoint& lambda) {
 	double lambda1 = (lambda[1] < 1) ? 1.0 : lambda[1];
 	double lambda2 = (lambda[2] < 1) ? 1.0 : lambda[2];
 	double ratio = (lambda0) / (lambda0 + lambda1 + lambda2);
+//    ratio = (sqrt(lambda1) * sqrt(lambda2)) / (sqrt(lambda0));
 	return ratio;
 }
 

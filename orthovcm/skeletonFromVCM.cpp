@@ -554,6 +554,82 @@ Z3i::DigitalSet jordanCurve(const VCM& vcm, const KernelFunction& chi,
 		return Z3i::DigitalSet(setTraversed.domain());
 }
 
+bool planesIntersect(const Z3i::DigitalSet& plane,
+					 const Z3i::DigitalSet& plane2) {
+	for (const Z3i::Point& p : plane) {
+		if (plane2.find(p) != plane2.end())
+			return true;
+	}
+	return false;
+}
+
+vector<pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> > > intersectingPlanes(const vector<Z3i::DigitalSet>& planes) {
+	vector<pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> > > inter;
+	for (int i = 0, end = planes.size(); i < end; i++) {
+		Z3i::DigitalSet current = planes[i];
+		vector<Z3i::DigitalSet> planesIntersecting;
+		for (int j = i+1; j < end; j++) {
+			Z3i::DigitalSet other = planes[j];
+			if (planesIntersect(current, other))
+				planesIntersecting.push_back(other);
+		}
+		pair<Z3i::DigitalSet, vector<Z3i::DigitalSet>> pair = make_pair(current, planesIntersecting);
+		inter.push_back(pair);
+	}
+	return inter;
+}
+
+double highestAreaVariation(const pair<Z3i::DigitalSet, vector<Z3i::DigitalSet>>& pairPlanes) {
+	double currentArea = pairPlanes.first.size();
+	double factorMax = 0.0;
+
+	for (const Z3i::DigitalSet& otherPlane : pairPlanes.second) {
+		double otherArea = otherPlane.size();
+		double factor = otherArea / currentArea;
+		if (factor > factorMax) {
+			factorMax = factor;
+		}
+	}
+	return factorMax;
+}
+
+template <typename VCM, typename KernelFunction, typename DTL2, typename Container, typename Domain>
+pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi,
+										   const Z3i::Point& p, const DTL2& dt,
+										   const Container& setVolume, const Domain& domain) {
+	map<Z3i::DigitalSet, double> eigenValues;
+	double radius = dt(p) + 1;
+	Z3i::RealPoint normal;
+	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
+																		 p, normal,
+																		 0, radius, radius*3, 26, true);
+	Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
+	//	eigenValues[p] = sqrt(eigenValue[2])  / (sqrt(eigenValue[0]) + sqrt(eigenValue[1])+ sqrt(eigenValue[2]));
+	double eigenVar = (sqrt(eigenValue[2])+sqrt(eigenValue[1])) / sqrt(eigenValue[0]);
+
+	return make_pair(connectedComponent3D, eigenVar);
+}
+
+vector<pair<Z3i::Point, double> > pointToMaxEigenValue(const Z3i::DigitalSet& setVolume,
+													   const vector<pair<Z3i::DigitalSet, double> >& pointToEigenValue) {
+	vector<pair<Z3i::Point, double> > pointToMax;
+	for (const Z3i::Point& p : setVolume) {
+		double maxValue = 0.0;
+		for (const pair<Z3i::DigitalSet, double>& pair : pointToEigenValue) {
+			Z3i::DigitalSet setCurrent = pair.first;
+			double value = pair.second;
+			if (setCurrent.find(p) != setCurrent.end()) {
+				if (value > maxValue) {
+					maxValue = value;
+				}
+			}
+		}
+		if (maxValue != 0.0)
+			pointToMax.push_back(make_pair(p, maxValue));
+	}
+	return pointToMax;
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
@@ -722,8 +798,10 @@ int main( int  argc, char**  argv )
 	Z3i::Point previousCenter, seedCenter;
 	Z3i::DigitalSet branches(setVolume.domain());
 	bool isNewSeed = true;
-
+	vector<Z3i::DigitalSet> planes;
+	vector<pair<Z3i::DigitalSet, double>> pointToEigenValue;
 	trace.beginBlock("Computing skeleton");
+
 	//Main loop to compute skeleton (stop when no vol points left to process)
 	while (numberLeft > 0)
 	{
@@ -744,12 +822,20 @@ int main( int  argc, char**  argv )
 			if (radius > 0) {
 				chi = KernelFunction( 1.0, radius);
 			}
-		}
+ 		}
+
 
 		// Compute discrete plane
 		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 															 currentPoint->myPoint, normal,
 															 0, radius, distanceMax, true);
+		DGtal::Z3i::DigitalSet discretePlane(domainVolume);
+		for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
+			if (DGtal::Z3i::l2Metric(*it, currentPoint->myPoint) <= radius)
+				discretePlane.insert(*it);
+		}
+	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, currentPoint->myPoint, dt, setVolumeWeighted, domainVolume);
+		pointToEigenValue.push_back(make_pair(discretePlane, value.second));
 
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 
@@ -758,9 +844,6 @@ int main( int  argc, char**  argv )
 		if (realCenter != Z3i::RealPoint()) {
 			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 			double radiusIntersection = computeRadiusFromIntersection(volume, centerOfMass, normal, distanceMax*2);
-
-			// Z3i::DigitalSet shell = computeShell(centerOfMass, setVolume, radiusIntersection*3, radiusIntersection*5);
-			// int degree = computeDegree(shell);
 
 			bool processed = false;
 			for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
@@ -776,36 +859,6 @@ int main( int  argc, char**  argv )
 				){
 				Z3i::Point b;
 				Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(b, branchingPoints, centerOfMass, radiusIntersection);
-				// if (branch.size() != 0) {
-				// 	b = extractNearestNeighborInSetFromPoint(setSurface, b);
-				// 	VCMUtil::markConnectedComponent3D(setVolumeWeighted, branch, 0);
-
-				// 	Z3i::DigitalSet setOfPoints(connectedComponent3D.domain());
-				// 	for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it!=ite; ++it) {
-				// 		if (dt(*it) <= 1)
-				// 			setOfPoints.insert(*it);
-				// 	}
-
-
-				// 	Z3i::DigitalSet ccCurve = setOfPoints;
-
-				// 	map<Z3i::Point, set<Z3i::Point>> paths = shortestPathsJunctions(setSurface, ccCurve, b);
-				// 	viewer << CustomColors3D(Color::Magenta, Color::Magenta) << ccCurve;
-				// 	viewer << CustomColors3D(Color::Green, Color::Green) << b;
-				// 	Z3i::DigitalSet jordan = jordanCurve(vcm, chi, paths, setSurface, ccCurve);
-				//      viewer << CustomColors3D(Color::Yellow, Color::Yellow) << jordan;
-				//      // for (auto it = paths.begin(), ite = paths.end(); it != ite; ++it)
-				// 	 //  	for (auto its = it->second.begin(), itse = it->second.end(); its != itse; ++its)
-				// 	 // 		viewer << CustomColors3D(Color::Yellow, Color::Yellow) << *its;
-				// }
-
-				// // Z3i::DigitalSet intersectionBV(branch.domain());
-				// // for (const Z3i::Point& b : branch) {
-				// // 	if (setVolume.find(b) != setVolume.end())
-				// // 		intersectionBV.insert(b);
-				// // }
-				// // Z3i::Point middle = Statistics::extractCenterOfMass3D(intersectionBV);
-				// // viewer << CustomColors3D(Color::Green, Color::Green) << middle;
 
 				branches.insert(branch.begin(), branch.end());
 				if (!isNewSeed && Z3i::l2Metric(previousCenter, centerOfMass) <= 2 * sqrt(3)) {
@@ -813,6 +866,7 @@ int main( int  argc, char**  argv )
 																					  previousNormal, previousCenter,
 																					  normal, centerOfMass,
 																					  domainVolume, radius);
+					planes.push_back(diffPlanes);
 					VCMUtil::markConnectedComponent3D(setVolumeWeighted, diffPlanes, 0);
 
 				}
@@ -823,12 +877,14 @@ int main( int  argc, char**  argv )
 				previousCenter = centerOfMass;
 
 
-				viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
-				viewer << Viewer3D<>::updateDisplay;
-				qApp->processEvents();
+				//viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
+				// viewer << Viewer3D<>::updateDisplay;
+				// qApp->processEvents();
 
 			}
 		}
+
+
 
 		//Go to next point according to normal OR to max value in DT
 		if (isNewSeed) {
@@ -836,7 +892,10 @@ int main( int  argc, char**  argv )
 			seedCenter = centerOfMass;
 			seedConnectedComponent3D = connectedComponent3D;
 		}
+		bool previousSeed = isNewSeed;
 		isNewSeed = VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
+		if (!isNewSeed && !previousSeed)
+			planes.push_back(connectedComponent3D);
 		if (isNewSeed) {
 			WeightedPointCount* otherPoint = new WeightedPointCount(*currentPoint);
 			isNewSeed = VCMUtil::trackNextPoint(otherPoint, setVolumeWeighted, seedConnectedComponent3D, seedCenter, seedNormal);
@@ -850,6 +909,33 @@ int main( int  argc, char**  argv )
 							  });
   		i++;
 	}
+
+
+
+	double minVal = min_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::DigitalSet, double>& one,
+																						const pair<Z3i::DigitalSet, double>& two) {
+									return (one.second < two.second);
+								})->second;
+	double maxVal = max_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::DigitalSet, double>& one,
+																						const pair<Z3i::DigitalSet, double>& two) {
+									return (one.second < two.second);
+								})->second;
+
+	vector<pair<Z3i::Point, double> > pointToMax = pointToMaxEigenValue(setVolume, pointToEigenValue);
+	GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
+	for (const pair<Z3i::Point, double>& pair : pointToMax) {
+		viewer << CustomColors3D(hueShade(pair.second), hueShade(pair.second)) << pair.first;
+	}
+
+	// vector<pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> > > interPlanes = intersectingPlanes(planes);
+
+	// for (const pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> >& pairPlanes : interPlanes) {
+	// 	double areaFactor = highestAreaVariation(pairPlanes);
+	// 	if (areaFactor > 1.2)
+	// 		viewer << CustomColors3D(Color::Red, Color::Red) << pairPlanes.first;
+	// 	viewer << pairPlanes.first;
+	// }
+
 	trace.endBlock();
 
 
@@ -862,9 +948,9 @@ int main( int  argc, char**  argv )
 
 //	fillHoles(skeletonPoints, viewer);
 
-	for (auto it=skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {
-		viewer << CustomColors3D(Color::Red, Color::Red) << *it;
-	}
+	// for (auto it=skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {
+	// 	viewer << CustomColors3D(Color::Red, Color::Red) << *it;
+	// }
 
 	// for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
 	//  	viewer << CustomColors3D(Color(0,50,0,50), Color(0,50,0,50)) <<*it;

@@ -13,7 +13,7 @@
 template <typename DTL2, typename BackgroundPredicate>
 class SaddleComputer {
 public:
-	typedef DGtal::ExactPredicateLpSeparableMetric<DGtal::Z3i::Space, 2> Metric;	
+	typedef DGtal::ExactPredicateLpSeparableMetric<DGtal::Z3i::Space, 2> Metric;
 	typedef DGtal::functors::BallConstantPointFunction<DGtal::Z3i::Point, double> KernelFunction;
 
 	typedef DGtal::Z3i::KSpace KSpace;
@@ -22,7 +22,7 @@ public:
 	typedef KSpace::Surfel Surfel;
 	typedef VoronoiCovarianceMeasureOnDigitalSurface< DigitalSurfaceContainer, Metric, KernelFunction, DTL2> VCMOnSurface;
 	typedef DGtal::Z3i::Domain Domain;
-	
+
 public:
 
 	SaddleComputer(const DGtal::Z3i::DigitalSet& setVolume,
@@ -36,24 +36,25 @@ public:
 		delete myVCMSurface;
 		delete mySurface;
 	}
-	
+
 	template <typename VCM>
 	DGtal::Z3i::DigitalSet computeBranchingPartsWithVCMFeature(const VCM& vcm, double threshold);
 
-	template <typename VCM>
-	std::vector<double> extractCurvatureOnPoints(const VCM& vcm);
+	std::vector<double> extractCurvatureOnPoints();
+
+	std::vector<std::pair<Z3i::Point, double> > mapPointToEigenvalue();
 
 	DGtal::Z3i::DigitalSet extractSaddlePoints(const DGtal::Z3i::DigitalSet& setVolume);
 
 	std::vector<DGtal::Z3i::Object26_6> saddleConnectedComponents(const DGtal::Z3i::DigitalSet& saddles);
-	
+
 	template <typename Matrix>
 	DGtal::Z3i::DigitalSet saddlePointsToOnePoint(const std::vector<DGtal::Z3i::Object26_6>& branchingPoints);
 
 	DGtal::Z3i::DigitalSet getSurface();
 
 
-	
+
 private:
 	VCMOnSurface* myVCMSurface;
 	DigitalSurface< DigitalSurfaceContainer >* mySurface;
@@ -67,8 +68,8 @@ SaddleComputer<DTL2, BackgroundPredicate>::SaddleComputer(const DGtal::Z3i::Digi
 									double R,
 									double r,
 									double delta) {
-	
-	
+
+
 	myDomain = setVolume.domain();
 	Metric l2;
 	KSpace ks;
@@ -84,7 +85,7 @@ SaddleComputer<DTL2, BackgroundPredicate>::SaddleComputer(const DGtal::Z3i::Digi
 	Surfel2PointEmbedding embType = Pointels; // Could be Pointels|InnerSpel|OuterSpel;
 	KernelFunction chiSurface( 1.0, r );             // hat function with support of radius r
 
-	
+
     myVCMSurface= new VCMOnSurface( *mySurface, embType, R, r,
 									chiSurface, dt, delta, l2, true);
 }
@@ -104,30 +105,45 @@ DGtal::Z3i::DigitalSet SaddleComputer<DTL2, BackgroundPredicate>::computeBranchi
 		if (ratio > threshold &&  sqrt(lambda[2]) < R*R)
 			aSet.insert(it->first);
 	}
-	return aSet; 
+	return aSet;
 }
 
 template <typename DTL2, typename BackgroundPredicate>
-template <typename VCM>
-std::vector<double> SaddleComputer<DTL2, BackgroundPredicate>::extractCurvatureOnPoints(const VCM& vcm) {
-	typedef typename VCM::Point2EigenStructure::const_iterator P2EConstIterator;
+std::vector<double> SaddleComputer<DTL2, BackgroundPredicate>::extractCurvatureOnPoints() {
+	typedef typename VCMOnSurface::Point2EigenStructure::const_iterator P2EConstIterator;
 
 	std::vector<double> curvatureValues;
-	for (P2EConstIterator  it = vcm.mapPoint2ChiVCM().begin(),
-			  itE = vcm.mapPoint2ChiVCM().end(); it != itE; ++it )
+	for (P2EConstIterator  it = myVCMSurface->mapPoint2ChiVCM().begin(),
+			  itE = myVCMSurface->mapPoint2ChiVCM().end(); it != itE; ++it )
     {
 		auto lambda = it->second.values;
 		double ratio = VCMUtil::computeCurvatureJunction(lambda);
 	    curvatureValues.push_back(ratio);
 	}
-	return curvatureValues; 
+	return curvatureValues;
+}
+
+
+template <typename DTL2, typename BackgroundPredicate>
+std::vector<std::pair<Z3i::Point, double> > SaddleComputer<DTL2, BackgroundPredicate>::mapPointToEigenvalue() {
+	typedef typename VCMOnSurface::Point2EigenStructure::const_iterator P2EConstIterator;
+
+	std::vector<std::pair<Z3i::Point, double> > curvatureValues;
+	for (P2EConstIterator  it = myVCMSurface->mapPoint2ChiVCM().begin(),
+			  itE = myVCMSurface->mapPoint2ChiVCM().end(); it != itE; ++it )
+    {
+		auto lambda = it->second.values;
+		double ratio = VCMUtil::computeCurvatureJunction(lambda);
+	    curvatureValues.push_back(std::make_pair(it->first, ratio));
+	}
+	return curvatureValues;
 }
 
 template <typename DTL2, typename BackgroundPredicate>
 DGtal::Z3i::DigitalSet SaddleComputer<DTL2, BackgroundPredicate>::extractSaddlePoints(const DGtal::Z3i::DigitalSet& setVolume){
 
 	auto myDomain = setVolume.domain();
-	std::vector<double> curvaturePoints = extractCurvatureOnPoints(*myVCMSurface);
+	std::vector<double> curvaturePoints = extractCurvatureOnPoints();
 	double threshold2 = Statistics::unimodalThresholding(curvaturePoints);
 
 //	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
@@ -152,7 +168,7 @@ std::vector<DGtal::Z3i::Object26_6> SaddleComputer<DTL2, BackgroundPredicate>::s
 	std::back_insert_iterator< std::vector<Z3i::Object26_6> > inserter( objects );
 	unsigned int nbConnectedComponents = obj.writeComponents(inserter);
 	return objects;
-   
+
 }
 
 /*
@@ -172,12 +188,12 @@ DGtal::Z3i::DigitalSet SaddleComputer<DTL2, BackgroundPredicate>::saddlePointsTo
 		Z3i::Point maximizingCurvaturePoint;
 		for (auto itPoint = it->pointSet().begin(), itPointE = it->pointSet().end(); itPoint != itPointE; ++itPoint) {
 			auto lambda = (myVCMSurface->mapPoint2ChiVCM()).at(*itPoint).values;
-			double ratio = VCMUtil::computeCurvatureJunction(lambda); 
+			double ratio = VCMUtil::computeCurvatureJunction(lambda);
 			if (ratio > ratioMax) {
 				ratioMax = ratio;
 				maximizingCurvaturePoint = *itPoint;
 			}
-		}		
+		}
 		maxCurvaturePoints.insert(maximizingCurvaturePoint);
 	}
 	return maxCurvaturePoints;
