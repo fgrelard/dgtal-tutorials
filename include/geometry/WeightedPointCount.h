@@ -7,6 +7,7 @@ template <typename Point>
 class WeightedPointCount : public WeightedPoint<Point> {
 	typedef WeightedPoint<Point> Base;
 public:
+	WeightedPointCount() {}
 	WeightedPointCount(const Point& aPoint, double aWeight, int aCount) : Base(aPoint, aWeight), myCount(aCount) {}
 	WeightedPointCount(const WeightedPointCount& other) : Base(other), myCount(other.myCount) {}
 	using Base::Base;

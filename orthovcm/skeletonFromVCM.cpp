@@ -78,6 +78,7 @@
 #include "shapes/Ball.h"
 ///////////////////////////////////////////////////////////////////////////////
 #include "ReverseHatPointFunction.h"
+#include "clustering/Watershed.h"
 
 using namespace std;
 using namespace DGtal;
@@ -605,30 +606,10 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi,
 																		 0, radius, radius*3, 26, true);
 	Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
 	//	eigenValues[p] = sqrt(eigenValue[2])  / (sqrt(eigenValue[0]) + sqrt(eigenValue[1])+ sqrt(eigenValue[2]));
-	double eigenVar = (sqrt(eigenValue[2])+sqrt(eigenValue[1])) / sqrt(eigenValue[0]);
-
+	double eigenVar = sqrt(eigenValue[0]) / (sqrt(eigenValue[2]));
 	return make_pair(connectedComponent3D, eigenVar);
 }
 
-vector<pair<Z3i::Point, double> > pointToMaxEigenValue(const Z3i::DigitalSet& setVolume,
-													   const vector<pair<Z3i::DigitalSet, double> >& pointToEigenValue) {
-	vector<pair<Z3i::Point, double> > pointToMax;
-	for (const Z3i::Point& p : setVolume) {
-		double maxValue = 0.0;
-		for (const pair<Z3i::DigitalSet, double>& pair : pointToEigenValue) {
-			Z3i::DigitalSet setCurrent = pair.first;
-			double value = pair.second;
-			if (setCurrent.find(p) != setCurrent.end()) {
-				if (value > maxValue) {
-					maxValue = value;
-				}
-			}
-		}
-		if (maxValue != 0.0)
-			pointToMax.push_back(make_pair(p, maxValue));
-	}
-	return pointToMax;
-}
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -799,7 +780,11 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet branches(setVolume.domain());
 	bool isNewSeed = true;
 	vector<Z3i::DigitalSet> planes;
-	vector<pair<Z3i::DigitalSet, double>> pointToEigenValue;
+    map<Z3i::Point, double> pointToEigenValue;
+
+	for (const Z3i::Point& p : setVolume) {
+		pointToEigenValue[p] = 0.0;
+	}
 	trace.beginBlock("Computing skeleton");
 
 	//Main loop to compute skeleton (stop when no vol points left to process)
@@ -835,7 +820,9 @@ int main( int  argc, char**  argv )
 				discretePlane.insert(*it);
 		}
 	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, currentPoint->myPoint, dt, setVolumeWeighted, domainVolume);
-		pointToEigenValue.push_back(make_pair(discretePlane, value.second));
+		for (const Z3i::Point& p : value.first) {
+			pointToEigenValue[p] = (pointToEigenValue[p] < value.second) ? value.second : pointToEigenValue[p];
+		}
 
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 
@@ -912,20 +899,35 @@ int main( int  argc, char**  argv )
 
 
 
-	double minVal = min_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::DigitalSet, double>& one,
-																						const pair<Z3i::DigitalSet, double>& two) {
+
+	double minVal = min_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::Point, double>& one,
+																						const pair<Z3i::Point, double>& two) {
 									return (one.second < two.second);
 								})->second;
-	double maxVal = max_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::DigitalSet, double>& one,
-																						const pair<Z3i::DigitalSet, double>& two) {
+	double maxVal = max_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::Point, double>& one,
+																						const pair<Z3i::Point, double>& two) {
 									return (one.second < two.second);
 								})->second;
 
-	vector<pair<Z3i::Point, double> > pointToMax = pointToMaxEigenValue(setVolume, pointToEigenValue);
-	GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
-	for (const pair<Z3i::Point, double>& pair : pointToMax) {
-		viewer << CustomColors3D(hueShade(pair.second), hueShade(pair.second)) << pair.first;
+	trace.info() << minVal << " " << maxVal << endl;
+
+	Watershed<Z3i::Point> watershed(pointToEigenValue, (maxVal-minVal)*0.1);
+	watershed.compute();
+	auto resultWatershed = watershed.getWatershed();
+    int bins = watershed.getBins();
+
+	GradientColorMap<int, CMAP_JET > hueShade(0, bins);
+	trace.info() << "Bins= " << bins << endl;
+	for (const auto& complexPoint : resultWatershed) {
+		if (complexPoint.second->getLabel() != -1 && complexPoint.second->getLabel() != -3)
+			trace.info() << complexPoint.second->getLabel() << endl;
+	 	viewer << CustomColors3D(hueShade(complexPoint.second->getLabel()), hueShade(complexPoint.second->getLabel())) << complexPoint.first;
 	}
+
+	// GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
+	// for (const auto& pToL : pointToEigenValue) {
+	//   	viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	// }
 
 	// vector<pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> > > interPlanes = intersectingPlanes(planes);
 
