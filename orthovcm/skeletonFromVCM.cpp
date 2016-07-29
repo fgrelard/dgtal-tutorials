@@ -606,7 +606,8 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi,
 																		 0, radius, radius*3, 26, true);
 	Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
 	//	eigenValues[p] = sqrt(eigenValue[2])  / (sqrt(eigenValue[0]) + sqrt(eigenValue[1])+ sqrt(eigenValue[2]));
-	double eigenVar = sqrt(eigenValue[0]) / (sqrt(eigenValue[2]));
+	double eigenVar = sqrt(eigenValue[1]) /sqrt(eigenValue[2]);
+//	trace.info() << eigenVar << " " << sqrt(eigenValue[0]) << " " << sqrt(eigenValue[1]) << " " << sqrt(eigenValue[2]) <<endl;
 	return make_pair(connectedComponent3D, eigenVar);
 }
 
@@ -815,13 +816,11 @@ int main( int  argc, char**  argv )
 															 currentPoint->myPoint, normal,
 															 0, radius, distanceMax, true);
 		DGtal::Z3i::DigitalSet discretePlane(domainVolume);
-		for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
-			if (DGtal::Z3i::l2Metric(*it, currentPoint->myPoint) <= radius)
-				discretePlane.insert(*it);
-		}
+
 	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, currentPoint->myPoint, dt, setVolumeWeighted, domainVolume);
 		for (const Z3i::Point& p : value.first) {
-			pointToEigenValue[p] = (pointToEigenValue[p] < value.second) ? value.second : pointToEigenValue[p];
+			if (DGtal::Z3i::l2Metric(p, currentPoint->myPoint) <= radius)
+				pointToEigenValue[p] = (pointToEigenValue[p] < value.second) ? value.second : pointToEigenValue[p];
 		}
 
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
@@ -854,6 +853,10 @@ int main( int  argc, char**  argv )
 																					  normal, centerOfMass,
 																					  domainVolume, radius);
 					planes.push_back(diffPlanes);
+					trace.info() << value.second << endl;
+					for (const Z3i::Point & p : diffPlanes) {
+						pointToEigenValue[p] = (pointToEigenValue[p] < value.second) ? value.second : pointToEigenValue[p];
+					}
 					VCMUtil::markConnectedComponent3D(setVolumeWeighted, diffPlanes, 0);
 
 				}
@@ -864,7 +867,7 @@ int main( int  argc, char**  argv )
 				previousCenter = centerOfMass;
 
 
-				//viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
+				// viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
 				// viewer << Viewer3D<>::updateDisplay;
 				// qApp->processEvents();
 
@@ -910,24 +913,21 @@ int main( int  argc, char**  argv )
 								})->second;
 
 	trace.info() << minVal << " " << maxVal << endl;
+	// Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
+	// watershed.compute();
+	// auto resultWatershed = watershed.getWatershed();
+    // int bins = watershed.getBins();
 
-	Watershed<Z3i::Point> watershed(pointToEigenValue, (maxVal-minVal)*0.1);
-	watershed.compute();
-	auto resultWatershed = watershed.getWatershed();
-    int bins = watershed.getBins();
-
-	GradientColorMap<int, CMAP_JET > hueShade(0, bins);
-	trace.info() << "Bins= " << bins << endl;
-	for (const auto& complexPoint : resultWatershed) {
-		if (complexPoint.second->getLabel() != -1 && complexPoint.second->getLabel() != -3)
-			trace.info() << complexPoint.second->getLabel() << endl;
-	 	viewer << CustomColors3D(hueShade(complexPoint.second->getLabel()), hueShade(complexPoint.second->getLabel())) << complexPoint.first;
-	}
-
-	// GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
-	// for (const auto& pToL : pointToEigenValue) {
-	//   	viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	// GradientColorMap<int, CMAP_JET > hueShade(0, bins);
+	// trace.info() << "Bins= " << bins << endl;
+	// for (const auto& complexPoint : resultWatershed) {
+	//  	viewer << CustomColors3D(hueShade(complexPoint->myCount), hueShade(complexPoint->myCount)) << complexPoint->myPoint;
 	// }
+
+	 GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
+	 for (const auto& pToL : pointToEigenValue) {
+	  	viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	 }
 
 	// vector<pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> > > interPlanes = intersectingPlanes(planes);
 

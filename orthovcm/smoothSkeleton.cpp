@@ -882,14 +882,17 @@ pair<Z3i::Point, Z3i::Point> twoClosestPoints(const Z3i::DigitalSet& one, const 
 	Z3i::Point p1, p2;
 	for (auto it = one.begin(), ite = one.end(); it != ite; ++it) {
 		DGtal::Z3i::Point oneP = *it;
-		DGtal::Z3i::Point closestPointInTheoretical =  *min_element(two.begin(), two.end(), [&](const DGtal::Z3i::Point& one, const DGtal::Z3i::Point& two) {
-				return DGtal::Z3i::l2Metric(one, oneP) < DGtal::Z3i::l2Metric(two, oneP);
+		auto iterator =  min_element(two.begin(), two.end(), [&](const DGtal::Z3i::Point& f, const DGtal::Z3i::Point& g) {
+				return DGtal::Z3i::l2Metric(f, oneP) < DGtal::Z3i::l2Metric(g, oneP);
 			});
-		double distance = DGtal::Z3i::l2Metric(closestPointInTheoretical, oneP);
-		if (distance < distanceMax) {
-			distanceMax = distance;
-			p1 = oneP;
-			p2 = closestPointInTheoretical;
+		if (iterator != two.end()) {
+			DGtal::Z3i::Point closestPointInTheoretical = *iterator;
+			double distance = DGtal::Z3i::l2Metric(closestPointInTheoretical, oneP);
+			if (distance < distanceMax) {
+				distanceMax = distance;
+				p1 = oneP;
+				p2 = closestPointInTheoretical;
+			}
 		}
 	}
 	return make_pair(p1, p2);
