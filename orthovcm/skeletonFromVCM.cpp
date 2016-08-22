@@ -603,12 +603,17 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi,
 	Z3i::RealPoint normal;
 	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
 																		 p, normal,
-																		 0, radius, radius*3, 26, true);
+																		 0, radius, radius*10, 26, true);
 	Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
 	//	eigenValues[p] = sqrt(eigenValue[2])  / (sqrt(eigenValue[0]) + sqrt(eigenValue[1])+ sqrt(eigenValue[2]));
-	double eigenVar = sqrt(eigenValue[1]) /sqrt(eigenValue[2]);
+	double eigenVar = sqrt(eigenValue[2]) /sqrt(eigenValue[1]);
 //	trace.info() << eigenVar << " " << sqrt(eigenValue[0]) << " " << sqrt(eigenValue[1]) << " " << sqrt(eigenValue[2]) <<endl;
-	return make_pair(connectedComponent3D, eigenVar);
+	Z3i::DigitalSet discretePlane(connectedComponent3D.domain());
+	for (const Z3i::Point& c : connectedComponent3D) {
+		if (Z3i::l2Metric(p, c) <= radius)
+			discretePlane.insert(c);
+	}
+	return make_pair(discretePlane, eigenVar);
 }
 
 
@@ -737,7 +742,7 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet branchingPoints = saddleComputer.extractSaddlePoints(setVolume);
 	vector<Z3i::Object26_6> objSaddle = saddleComputer.saddleConnectedComponents(branchingPoints);
  	Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(objSaddle);
-	Z3i::DigitalSet setSurface = saddleComputer.getSurface();
+	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin-1, thresholdMax);
 
 	//Z3i::DigitalSet saddleEroded = erodeSaddleAreas(branchingPoints,
 	//												setSurface, vPoints, dt);
@@ -806,22 +811,24 @@ int main( int  argc, char**  argv )
 				radius = dt(currentPoint->myPoint);
 			radius += delta;
 			if (radius > 0) {
-				chi = KernelFunction( 1.0, radius);
+				chi = KernelFunction(1.0, radius);
 			}
  		}
-
 
 		// Compute discrete plane
 		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 															 currentPoint->myPoint, normal,
-															 0, radius, distanceMax, true);
-		DGtal::Z3i::DigitalSet discretePlane(domainVolume);
+															 0, radius, distanceMax, 26, true);
+
 
 	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, currentPoint->myPoint, dt, setVolumeWeighted, domainVolume);
+		connectedComponent3D = value.first;
 		for (const Z3i::Point& p : value.first) {
-			if (DGtal::Z3i::l2Metric(p, currentPoint->myPoint) <= radius)
-				pointToEigenValue[p] = (pointToEigenValue[p] < value.second) ? value.second : pointToEigenValue[p];
+		    if (connectedComponent3D.find(p) != connectedComponent3D.end())
+				pointToEigenValue[p] = std::max(pointToEigenValue[p], value.second);
 		}
+
+
 
 	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 
@@ -847,15 +854,16 @@ int main( int  argc, char**  argv )
 				Z3i::DigitalSet branch = detectBranchingPointsInNeighborhood(b, branchingPoints, centerOfMass, radiusIntersection);
 
 				branches.insert(branch.begin(), branch.end());
-				if (!isNewSeed && Z3i::l2Metric(previousCenter, centerOfMass) <= 2 * sqrt(3)) {
+				if (!isNewSeed && Z3i::l2Metric(previousCenter, centerOfMass) <= 2 * sqrt(3)
+					) {
 					Z3i::DigitalSet diffPlanes = VCMUtil::markDifferenceBetweenPlanes(setVolumeWeighted,
 																					  previousNormal, previousCenter,
 																					  normal, centerOfMass,
 																					  domainVolume, radius);
 					planes.push_back(diffPlanes);
-					trace.info() << value.second << endl;
 					for (const Z3i::Point & p : diffPlanes) {
-						pointToEigenValue[p] = (pointToEigenValue[p] < value.second) ? value.second : pointToEigenValue[p];
+						if (DGtal::Z3i::l2Metric(p, currentPoint->myPoint) <= radius)
+							pointToEigenValue[p] = std::max(pointToEigenValue[p], value.second);
 					}
 					VCMUtil::markConnectedComponent3D(setVolumeWeighted, diffPlanes, 0);
 
@@ -874,35 +882,32 @@ int main( int  argc, char**  argv )
 			}
 		}
 
-
-
 		//Go to next point according to normal OR to max value in DT
-		if (isNewSeed) {
-			seedNormal = normal;
-			seedCenter = centerOfMass;
-			seedConnectedComponent3D = connectedComponent3D;
-		}
+		// if (isNewSeed) {
+		// 	seedNormal = normal;
+		// 	seedCenter = centerOfMass;
+		// 	seedConnectedComponent3D = connectedComponent3D;
+		// }
 		bool previousSeed = isNewSeed;
 		isNewSeed = VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
 		if (!isNewSeed && !previousSeed)
 			planes.push_back(connectedComponent3D);
-		if (isNewSeed) {
-			WeightedPointCount* otherPoint = new WeightedPointCount(*currentPoint);
-			isNewSeed = VCMUtil::trackNextPoint(otherPoint, setVolumeWeighted, seedConnectedComponent3D, seedCenter, seedNormal);
-			if (!isNewSeed) {
-				currentPoint = otherPoint;
-			}
-		}
+
+		// if (isNewSeed) {
+		// 	trace.info() << currentPoint->myPoint << endl;
+		// 	WeightedPointCount* otherPoint = new WeightedPointCount(*currentPoint);
+		// 	isNewSeed = VCMUtil::trackNextPoint(otherPoint, setVolumeWeighted, seedConnectedComponent3D, seedCenter, seedNormal);
+		// 	if (!isNewSeed) {
+		// 		currentPoint = otherPoint;
+		// 	}
+		// }
 		numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
 							  [&](WeightedPointCount* wpc) {
 								  return (!wpc->myProcessed);
 							  });
   		i++;
 	}
-
-
-
-
+	trace.endBlock();
 	double minVal = min_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::Point, double>& one,
 																						const pair<Z3i::Point, double>& two) {
 									return (one.second < two.second);
@@ -913,21 +918,21 @@ int main( int  argc, char**  argv )
 								})->second;
 
 	trace.info() << minVal << " " << maxVal << endl;
-	// Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
-	// watershed.compute();
-	// auto resultWatershed = watershed.getWatershed();
-    // int bins = watershed.getBins();
+	Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
+	watershed.compute();
+	auto resultWatershed = watershed.getWatershed();
+    int bins = watershed.getBins();
 
-	// GradientColorMap<int, CMAP_JET > hueShade(0, bins);
-	// trace.info() << "Bins= " << bins << endl;
-	// for (const auto& complexPoint : resultWatershed) {
-	//  	viewer << CustomColors3D(hueShade(complexPoint->myCount), hueShade(complexPoint->myCount)) << complexPoint->myPoint;
-	// }
+	GradientColorMap<int, CMAP_JET > hueShade(0, bins);
+	trace.info() << "Bins= " << bins << endl;
+	for (const auto& complexPoint : resultWatershed) {
+	 	viewer << CustomColors3D(hueShade(complexPoint->myCount), hueShade(complexPoint->myCount)) << complexPoint->myPoint;
+	}
 
-	 GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
-	 for (const auto& pToL : pointToEigenValue) {
-	  	viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
-	 }
+	 // GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
+	 // for (const auto& pToL : pointToEigenValue) {
+	 // 	 viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	 // }
 
 	// vector<pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> > > interPlanes = intersectingPlanes(planes);
 
@@ -937,8 +942,6 @@ int main( int  argc, char**  argv )
 	// 		viewer << CustomColors3D(Color::Red, Color::Red) << pairPlanes.first;
 	// 	viewer << pairPlanes.first;
 	// }
-
-	trace.endBlock();
 
 
 	//Discarding points being in branching parts

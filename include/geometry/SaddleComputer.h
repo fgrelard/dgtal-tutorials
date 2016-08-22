@@ -51,8 +51,6 @@ public:
 	template <typename Matrix>
 	DGtal::Z3i::DigitalSet saddlePointsToOnePoint(const std::vector<DGtal::Z3i::Object26_6>& branchingPoints);
 
-	DGtal::Z3i::DigitalSet getSurface();
-
 
 
 private:
@@ -147,7 +145,6 @@ DGtal::Z3i::DigitalSet SaddleComputer<DTL2, BackgroundPredicate>::extractSaddleP
 	double threshold2 = Statistics::unimodalThresholding(curvaturePoints);
 
 //	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
-	DGtal::Z3i::DigitalSet setSurface = getSurface();
 	Z3i::DigitalSet branchingPoints = computeBranchingPartsWithVCMFeature(*myVCMSurface, threshold2);
 	return branchingPoints;
 }
@@ -201,14 +198,4 @@ DGtal::Z3i::DigitalSet SaddleComputer<DTL2, BackgroundPredicate>::saddlePointsTo
 
 
 
-template <typename DTL2, typename BackgroundPredicate>
-DGtal::Z3i::DigitalSet SaddleComputer<DTL2, BackgroundPredicate>::getSurface() {
-	DGtal::Z3i::DigitalSet setSurface(myDomain);
-	std::set<DGtal::Z3i::Point> pointSet;
-	for ( auto it = (*mySurface).begin(), itE = (*mySurface).end(); it != itE; ++it )
-	    myVCMSurface->getPoints( std::inserter( pointSet, pointSet.begin() ), *it );
-	setSurface.insert(pointSet.begin(), pointSet.end());
-
-	return setSurface;
-}
 #endif

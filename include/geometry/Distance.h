@@ -12,7 +12,12 @@ namespace Distance {
 
 	template <typename Point>
 	inline double euclideanDistance(Point p, Point other) {
-		return sqrt(pow( (p[0] - other[0]), 2) + pow( (p[1] - other[1]), 2) + pow( (p[2] - other[2]), 2) );
+		int dim = Point::dimension;
+		double sum = 0;
+		for (int i = 0; i < dim; i++) {
+			sum += pow( (p[i] - other[i]), 2);
+		}
+		return sqrt(sum);
 	}
 
 	template <typename Container>
