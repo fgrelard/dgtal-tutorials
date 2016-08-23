@@ -20,12 +20,14 @@ template <typename Point>
 class Watershed {
 
 
+
+
         class WatershedPoint : public WeightedPointCount<Point> {
                 typedef WeightedPointCount<Point> Base;
         public:
                 using Base::Base;
         public:
-                WatershedPoint() : myDistance(-1) {}
+                WatershedPoint() {}
                 WatershedPoint(const Point& aPoint, double aWeight, int aCount, double aDistance) : Base(aPoint, aWeight, aCount), myDistance(aDistance) {}
                 WatershedPoint(const WatershedPoint& other) : Base(other), myDistance(other.myDistance) {}
 
@@ -40,30 +42,30 @@ class Watershed {
         class WatershedInformation {
         public:
                 WatershedInformation() : myLabel(UNLABELLED), myDistance(0.0), myValue(0.0) {}
-                WatershedInformation(double aValue) : myLabel(UNLABELLED), myDistance(0.0), myValue(aValue) {}
+                WatershedInformation(double aValue, int aIdentifier) : myLabel(UNLABELLED), myDistance(0.0), myValue(aValue), myIdentifier(aIdentifier) {}
 
                 void setLabel(int aLabel) { myLabel = aLabel; }
                 int getLabel() const { return myLabel; }
 
+                void setValue(double aValue) { myValue = aValue; }
                 double getValue() const { return myValue; }
 
                 void setDistance(double aDistance) { myDistance = aDistance; }
                 double getDistance() const { return myDistance; }
 
+                int getIdentifier() { return myIdentifier; }
+
                 friend bool operator<(WatershedInformation it, WatershedInformation other) {
-                        return (it.getValue() < other.getValue());
+                        return (it.getValue() < other.getValue() ||
+                                (it.getValue() == other.getValue() && it.getIdentifier() < other.getIdentifier()));
                 }
         private:
                 int myLabel;
                 double myDistance;
                 double myValue;
+                int myIdentifier;
         };
 
-        template<class T> struct ptr_less {
-                bool operator()(const T* lhs, const T* rhs) {
-                        return *lhs < *rhs;
-                }
-        };
 
 
 
@@ -72,18 +74,16 @@ public:
         Watershed(const Container& container, double aEpsilon);
 
         void compute();
-        void pixelsAtSameAltitude(std::queue<Point>& fifo, int& currentI, double currentAltitude);
+        void pixelsAtSameAltitude(std::queue<Point>& fifo, Point& current, int& currentI, double currentAltitude);
         void extendBasins(std::queue<Point>& fifo);
         void detectMinima(std::queue<Point>& fifo, int& label, double altitude);
 
-        WatershedPoint * at(const Point& p);
 
-        std::vector<WatershedPoint*> getWatershed();
+        std::map<Point, WatershedInformation> getWatershed();
         int getBins();
 private:
-        // std::map<Point, WatershedInformation*> myImageWatershed;
-        // std::map<WatershedInformation*, Point, ptr_less<WatershedInformation>> sortedMap;
-        std::vector<WatershedPoint*> myImageWatershed;
+        std::map<Point, WatershedInformation> myImageWatershed;
+        std::map<WatershedInformation, Point> sortedMap;
         double myEpsilon;
         Point myFictitious;
 };
@@ -93,42 +93,33 @@ template <typename Point>
 template <typename Container>
 Watershed<Point>::Watershed(const Container& container, double aEpsilon) {
         myEpsilon = aEpsilon;
+        double uniqueLabel = 0;
         for (const auto& p : container) {
-                WatershedPoint* wp = new WatershedPoint(p.first, p.second, UNLABELLED, 0.0);
-                myImageWatershed.push_back(wp);
-                // sortedMap[wi] = p.first;
-                // if (p.first < myFictitious)
-                //         myFictitious = 2*p.first;
+                WatershedInformation wi(p.second, uniqueLabel++);
+                myImageWatershed[p.first] = wi;
+                sortedMap[wi] = p.first;
+                if (p.first < myFictitious)
+                        myFictitious = 2*p.first;
         }
-        sort(myImageWatershed.begin(), myImageWatershed.end(), ptr_less<WatershedPoint>());
 }
 
 
-template <typename Point>
-typename Watershed<Point>::WatershedPoint* Watershed<Point>::at(const Point& p) {
-        auto iterator = find_if(myImageWatershed.begin(), myImageWatershed.end(), [&](WatershedPoint* one) {
-                        return one->myPoint == p;
-                });
-        if (iterator != myImageWatershed.end())
-                return *iterator;
-        else
-                return new WatershedPoint();
-}
+
 
 
 template <typename Point>
 void Watershed<Point>::compute() {
   int label = UNLABELLED;
   std::queue<Point> fifo;
-
+  Point current = myImageWatershed.begin()->first;
   int currentI = 0;
   DGtal::trace.beginBlock("Watershed");
   double altitude = 0, previousAltitude = -1;
   while ( currentI < myImageWatershed.size() ) {
           previousAltitude = altitude;
-          altitude = myImageWatershed[currentI]->myWeight;
-          trace.info() << altitude << endl;
-          pixelsAtSameAltitude(fifo, currentI, altitude);
+          altitude = myImageWatershed[current].getValue();
+          trace.info() << altitude << " " << currentI << " " << myImageWatershed.size() << endl;
+          pixelsAtSameAltitude(fifo, current, currentI, altitude);
           extendBasins(fifo);
           detectMinima(fifo, label, altitude);
   }
@@ -139,28 +130,42 @@ void Watershed<Point>::compute() {
 
 
 template <typename Point>
-void Watershed<Point>::pixelsAtSameAltitude(std::queue<Point>& fifo, int& currentI, double currentAltitude) {
+void Watershed<Point>::pixelsAtSameAltitude(std::queue<Point>& fifo, Point& current, int& currentI, double currentAltitude) {
         DGtal::MetricAdjacency<DGtal::Z3i::Space, 3> adj;
-        while (currentI < myImageWatershed.size() &&
-               myImageWatershed[currentI]->myWeight <= currentAltitude + myEpsilon) {
-                WatershedPoint* wi = myImageWatershed[currentI];
-                Point p = wi->myPoint;
-                wi->myCount =MASK;
+        int i = 0;
+        bool isPending = true;
+        for (const std::pair<WatershedInformation, Point>& pairWatershed : sortedMap) {
+                if (i <= currentI && isPending)  {
+                        i++;
+                        continue;
+                }
+                //Once we found the right position in vector, i is not incremented anymore
+                isPending = false;
+                Point p = pairWatershed.second;
+                WatershedInformation wi = pairWatershed.first;
+                currentI++;
+                current = p;
+                if (wi.getValue() > currentAltitude + myEpsilon) break;
+                wi.setLabel(MASK);
+                myImageWatershed[p] = wi;
                 std::vector<Point> neighbors;
                 std::back_insert_iterator<std::vector<Point> > inserter(neighbors);
                 adj.writeNeighbors(inserter, p);
                 for (const Point& n : neighbors) {
-                        WatershedPoint* wn = at(n);
-                        if (wn->myDistance != -1) {
-                                if (wn->myCount > 0 || wn->myCount == WATERSHED) {
-                                        wi->myDistance= 1;
+                        if (myImageWatershed.find(n) != myImageWatershed.end()) {
+                                WatershedInformation wn = myImageWatershed.at(n);
+                                if (wn.getLabel() > 0 || wn.getLabel() == WATERSHED) {
+                                        wi.setDistance(1);
+                                        myImageWatershed[p] = wi;
                                         fifo.push(p);
                                         break;
                                 }
                         }
                 }
-                currentI++;
         }
+        //To break from main loop: all the points have been processed
+        if (i == sortedMap.size())
+                currentI = i;
 }
 
 template <typename Point>
@@ -188,24 +193,30 @@ void Watershed<Point>::extendBasins(std::queue<Point>& fifo) {
                 std::back_insert_iterator<std::vector<Point> > inserter(neighbors);
                 adj.writeNeighbors(inserter, p);
 
-                WatershedPoint* wp = at(p);
+                WatershedInformation wp = myImageWatershed[p];
                 for (const Point& n : neighbors) {
-                        WatershedPoint* wn = at(n);
-                        if (wn->myDistance != -1) {
-                                if (wn->myDistance <= d_cur &&
-                                    (wn->myCount == WATERSHED || wn->myCount > 0)) {
-                                        if (wn->myCount > 0) {
-                                                if (wp->myCount == MASK)
-                                                        wp->myCount =wn->myCount;
-                                                else if (wp->myCount != wn->myCount)
-                                                        wp->myCount =WATERSHED;
+                        if (myImageWatershed.find(n) != myImageWatershed.end()) {
+                                WatershedInformation wn = myImageWatershed.at(n);
+                                if (wn.getDistance() <= d_cur &&
+                                    (wn.getLabel() == WATERSHED || wn.getLabel() > 0)) {
+                                        if (wn.getLabel() > 0) {
+                                                if (wp.getLabel() == MASK) {
+                                                        wp.setLabel(wn.getLabel());
+                                                        myImageWatershed[p] = wp;
+                                                }
+                                                else if (wp.getLabel() != wn.getLabel()) {
+                                                        wp.setLabel(WATERSHED);
+                                                        myImageWatershed[p] = wp;
+                                                }
                                         }
-                                        else if (wp->myCount == MASK) {
-                                                wp->myCount =WATERSHED;
+                                        else if (wp.getLabel() == MASK) {
+                                                wp.setLabel(WATERSHED);
+                                                myImageWatershed[p] = wp;
                                         }
                                 }
-                                else if (wn->myCount == MASK && wn->myDistance == 0) {
-                                        wn->myDistance = d_cur+1;
+                                else if (wn.getLabel() == MASK && wn.getDistance() == 0) {
+                                        wn.setDistance(d_cur+1);
+                                        myImageWatershed[n] = wn;
                                         fifo.push(n);
                                 }
                         }
@@ -218,14 +229,17 @@ void Watershed<Point>::extendBasins(std::queue<Point>& fifo) {
 template <typename Point>
 void Watershed<Point>::detectMinima(std::queue<Point>& fifo, int& label, double altitude) {
         DGtal::MetricAdjacency<DGtal::Z3i::Space, 3> adj;
-        for (WatershedPoint * wp : myImageWatershed) {
-                Point p = wp->myPoint;
-                if (wp->myWeight >= altitude && wp->myWeight <= altitude + myEpsilon) {
-                        wp->myDistance = 0;
-                        if (wp->myCount == MASK) {
+        for (std::pair<Point, WatershedInformation> pairWatershed : myImageWatershed) {
+                Point p = pairWatershed.first;
+                WatershedInformation wp = pairWatershed.second;
+                if (wp.getValue() >= altitude && wp.getValue() <= altitude + myEpsilon) {
+                        wp.setDistance(0);
+                        myImageWatershed[p] = wp;
+                        if (wp.getLabel() == MASK) {
                                 label++;
                                 fifo.push(p);
-                                wp->myCount =label;
+                                wp.setLabel(label);
+                                myImageWatershed[p] = wp;
                                 while (!fifo.empty()) {
                                         Point q = fifo.front();
                                         fifo.pop();
@@ -234,11 +248,12 @@ void Watershed<Point>::detectMinima(std::queue<Point>& fifo, int& label, double 
                                         std::back_insert_iterator<std::vector<Point> > inserter(neighbors);
                                         adj.writeNeighbors(inserter, q);
                                         for (const Point& n : neighbors) {
-                                                WatershedPoint * wn = at(n);
-                                                if (wn->myDistance != -1) {
-                                                        if (wn->myCount == MASK) {
+                                                if (myImageWatershed.find(n) != myImageWatershed.end()) {
+                                                        WatershedInformation wn = myImageWatershed.at(n);
+                                                        if (wn.getLabel() == MASK) {
                                                                 fifo.push(n);
-                                                                wn->myCount = label;
+                                                                wn.setLabel(label);
+                                                                myImageWatershed[n] = wn;
                                                         }
                                                 }
                                         }
@@ -250,16 +265,16 @@ void Watershed<Point>::detectMinima(std::queue<Point>& fifo, int& label, double 
 }
 
 template <typename Point>
-std::vector<typename Watershed<Point>::WatershedPoint*> Watershed<Point>::getWatershed() {
+std::map<Point, typename Watershed<Point>::WatershedInformation> Watershed<Point>::getWatershed() {
         return myImageWatershed;
 }
 
 template <typename Point>
 int Watershed<Point>::getBins() {
-        return (*max_element(myImageWatershed.begin(), myImageWatershed.end(), [](WatershedPoint* one,
-                                                                                  WatershedPoint* two) {
-                                     return one->myCount < two->myCount;
-                             }))->myCount;
+        return (*max_element(myImageWatershed.begin(), myImageWatershed.end(), [](const std::pair<Point, WatershedInformation>& one,
+                                                                                  const std::pair<Point, WatershedInformation>& two) {
+                                     return one.second.getLabel() < two.second.getLabel();
+                             })).second.getLabel();
 }
 
 
