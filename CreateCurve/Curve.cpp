@@ -75,6 +75,17 @@ void create2DNaive() {
 	board.saveEPS("fig2.eps");
 }
 
+template <typename Point>
+void createJunction(vector<Point>& v, set<Point>& s, float increment) {
+	createStraightLine(v, 35, increment);
+
+	createRotatedVolumeFromV(v, s, 0, M_PI/2);
+	createRotatedVolumeFromV(v, s, 0, -0.61111*M_PI/2.2222// , -Eigen::Vector3d(0, sqrt(2)/2, sqrt(2)/2)
+		);
+	createRotatedVolumeFromV(v, s, 0, -1.61111*M_PI/2.2222//, Eigen::Vector3d(sqrt(2)/2, sqrt(2)/2, 0)
+		);
+}
+
 int main( int argc, char** argv )
 {
 	srand(time(NULL));
@@ -98,21 +109,12 @@ int main( int argc, char** argv )
 	vector<PointVector<3, double>> curve;
 	set<PointVector<3,double>> vectorPoints;
 
+	drawCone(curve, 32, 15, increment);
+
 //	createContinuousLogarithmicCurve(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
 //	createVolumeFromCurve(curve, vectorPoints, 7);
-	createStraightLine(curve, 35, increment);
 
-
-//	createVolumeFromCurve(curve, vectorPoints, 10);
-//	createVolumeFromCurve(curve, vectorPoints, 10);
-//	thinVolume<Pencil>(curve, vectorPoints, 20.0);
-//	drawDeformedCylinder(vectorPoints, 50, 5, increment);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 0, M_PI/2);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 0, -0.61111*M_PI/2.2222// , -Eigen::Vector3d(0, sqrt(2)/2, sqrt(2)/2)
-		);
-	createRotatedVolumeFromCurve(curve, vectorPoints, 0, -1.61111*M_PI/2.2222//, Eigen::Vector3d(sqrt(2)/2, sqrt(2)/2, 0)
-		);
 //	createRotatedVolumeFromCurve(curve, vectorPoints, 5, 2*M_PI/3);
 
 	Ball<PointVector<3, double>> ball(Point(0,0,0), 10);
@@ -127,7 +129,7 @@ int main( int argc, char** argv )
 //	create2DNaive();
 //	vectorPoints = ball.pointsInBall();
 	DigitalSet set(domain);
-	for (auto it = vectorPoints.begin(), itE = vectorPoints.end(); it != itE; ++it) {
+	for (auto it = curve.begin(), itE = curve.end(); it != itE; ++it) {
 		set.insert(*it);
 	}
 	DigitalSet set2 = addNoise(set, noise);

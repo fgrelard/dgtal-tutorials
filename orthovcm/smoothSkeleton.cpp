@@ -1240,6 +1240,23 @@ vector<pair<Z3i::Point, Z3i::DigitalSet> > filterPlanesWithHalfSpaces(const vect
 	return (second.size() > first.size()) ? second : first;
 }
 
+vector<pair<Z3i::Point, Z3i::RealVector> > filterPlanesWithAngle(const vector<pair<Z3i::Point, Z3i::RealVector> >& initialPlanes,
+																 const pair<Z3i::Point, Z3i::RealPoint>& referencePlane) {
+	vector<pair<Z3i::Point, Z3i::RealVector> > first;
+	double refAngle = numeric_limits<double>::max();
+	pair<Z3i::Point, Z3i::RealVector> toDelete;
+    for (const pair<Z3i::Point, Z3i::RealVector>& initPlane : initialPlanes) {
+		double angle = initPlane.second.cosineSimilarity(referencePlane.second);
+		if (angle < refAngle)
+			toDelete = initPlane;
+	}
+	for (const pair<Z3i::Point, Z3i::RealVector>& initPlane : initialPlanes) {
+		if (initPlane == toDelete)
+			first.push_back(initPlane);
+	}
+	return first;
+}
+
 template <typename VCM, typename KernelFunction, typename DTL2, typename Container, typename Domain>
 map<Z3i::Point, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi,
 											 const Z3i::DigitalSet& setSkeleton, const DTL2& dt,
@@ -1469,6 +1486,7 @@ int main( int  argc, char**  argv )
 				vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(restrictEdge, b);
 				vector<pair<Z3i::Point, Z3i::DigitalSet> > planes = computePlanes(vcmSurface, chiSurface, orientedEdge,
 																				  dt, setVolume, setVolumeWeighted, domainVolume);
+
 				vector< pair< Z3i::Point, double > > pointToAreas = computeArea(planes);
 				if (pointToAreas.size() == 0) continue;
 
@@ -1498,7 +1516,10 @@ int main( int  argc, char**  argv )
 				 																				 const pair<Z3i::Point, double>& two) {
 													 return one.second < two.second;
 			    								 })->second;
+
 				pointToPlanes.push_back(make_pair(cuttingPoint.first, cuttingPoint.second));
+//				viewer << CustomColors3D(Color::Yellow, Color::Yellow) << cuttingPoint.second;
+				viewer << CustomColors3D(Color::Yellow, Color::Yellow) << cuttingPoint.first;
 
 				Z3i::Point referencePoint = planes[0].first;
 				double radius = dt(referencePoint) + 1;
@@ -1508,7 +1529,6 @@ int main( int  argc, char**  argv )
 																					 0, radius, radius*3, 6, true);
 				referenceNormal = make_pair(referencePoint, normal);
 				referencePlane = planes[0].second;
-			    viewer << CustomColors3D(Color::Yellow, Color::Yellow) << cuttingPoint.first;
 				double areaB = pointToAreas[0].second;
 				if (areaB < referenceArea) {
 					referenceArea = areaB;
@@ -1516,7 +1536,6 @@ int main( int  argc, char**  argv )
 				}
 			}
 			vector<pair<Z3i::Point, Z3i::DigitalSet>> filteredPlanes = filterPlanesWithHalfSpaces(pointToPlanes, referenceNormal);
-
 
 			if (filteredPlanes.size() < 2) continue;
 			//Find two max :  two planes

@@ -144,11 +144,21 @@ void drawDisk(vector<Point>& v, float radius, float cx, float cy, float cz, floa
 }
 
 template <typename Point>
+void drawCone(vector<Point>& v, int length, float radius, float increment) {
+	for (int i = 0; i < length; i++) {
+		drawDisk(v, radius, 0, 0, i, increment);
+		radius -= increment;
+	}
+}
+
+template <typename Point>
 void drawCylinder(vector<Point>& v, int length, float radius, float increment) {
 	for (int i = 0; i < length; i++) {
 		drawDisk(v, radius, 0, 0, i, increment);
 	}
 }
+
+
 
 
 void drawCylinder(Eigen::Matrix<double, Eigen::Dynamic, 4> & m, int length, int radius, float rotationAngle, float increment) {

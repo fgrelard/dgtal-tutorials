@@ -34,6 +34,8 @@ void drawDisk(Eigen::Matrix<double, Eigen::Dynamic, 4> & m, double radius, doubl
 template <typename Point>
 void drawDisk(std::vector<Point>& v, float radius, float cx, float cy, float cz, float increment);
 
+template <typename Point>
+void drawCone(std::vector<Point>& v, int length, float radius, float increment);
 
 template <typename Point>
 void drawCylinder(std::vector<Point>& v, int length, float radius, float increment);
@@ -79,7 +81,6 @@ void create2DCurve(DigitalSet & digitalSet);
 template <typename DigitalSet, typename Board>
 void create2DNaiveTangentsForVisu(const DigitalSet & points, Board& board);
 
-								  
 #include "ModelisationUtils.ih"
 
 #endif

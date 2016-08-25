@@ -34,7 +34,7 @@ namespace TangentUtils {
 template <typename Pencil, typename Iterator>
 std::vector<Pencil> TangentUtils::orthogonalPlanesWithTangents(Iterator itb, Iterator ite)
 {
-	typedef StandardDSS6Computer<Iterator,int,8> SegmentComputer;  
+	typedef StandardDSS6Computer<Iterator,int,8> SegmentComputer;
 	typedef SaturatedSegmentation<SegmentComputer> Segmentation;
     SegmentComputer algo;
     Segmentation s(itb, ite, algo);
