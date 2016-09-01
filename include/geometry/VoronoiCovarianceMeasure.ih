@@ -313,8 +313,8 @@ measure( const std::vector<Point>& neighbors, Point2ScalarFunction chi_r, Point 
           it_neighbors_end = neighbors.end(); it_neighbors != it_neighbors_end; ++it_neighbors )
     {
       Point q = *it_neighbors;
-	  // Scalar coef = chi_r( q - p );
-	  Scalar coef = 1.0;
+	   Scalar coef = chi_r( q - p );
+      // Scalar coef = 1.0;
       if ( coef > 0.0 ) 
         {
           typename std::map<Point,MatrixNN>::const_iterator it = myVCM.find( q );

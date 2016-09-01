@@ -29,7 +29,8 @@ namespace VCMUtil {
 											   const std::vector<DGtal::Z3i::Point>& v = std::vector<DGtal::Z3i::Point>());
 
 	template <typename VCM, typename KernelFunction>
-	DGtal::Z3i::RealPoint computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi);
+	DGtal::Z3i::RealPoint computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi,
+													const std::vector<DGtal::Z3i::Point>& v = std::vector<DGtal::Z3i::Point>());
 
 
 	bool planeContains(const DGtal::Z3i::Point& point, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& current);
@@ -107,12 +108,16 @@ DGtal::Z3i::RealPoint VCMUtil::computeNormalFromVCM(const DGtal::Z3i::Point& cur
 }
 
 template <typename VCM, typename KernelFunction>
-DGtal::Z3i::RealPoint VCMUtil::computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi) {
+DGtal::Z3i::RealPoint VCMUtil::computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi,
+														 const std::vector<DGtal::Z3i::Point>& v) {
 	typedef DGtal::EigenDecomposition<3,double> LinearAlgebraTool;
 	LinearAlgebraTool::Matrix vcm_r, evec;
 	DGtal::Z3i::RealVector eval;
 // Compute VCM and diagonalize it.
-	vcm_r = vcm.measure( chi, currentPoint );
+	if (v != std::vector<DGtal::Z3i::Point>())
+		vcm_r = vcm.measure(v, chi, currentPoint);
+	else
+		vcm_r = vcm.measure( chi, currentPoint );
 	LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
 
 	return eval;

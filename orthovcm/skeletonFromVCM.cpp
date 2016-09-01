@@ -604,23 +604,15 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, 
 	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
 																		 p, normal,
 																		 0, radius, radius*10, 26, true);
-	Z3i::RealPoint realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-    Z3i::Point	centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
-	double radiusIntersection = radius * 2;
-	connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
-																		 p, normal,
-																		 0, radiusIntersection, radius*10, 26, false);
-	// if (radiusIntersection == 0) {
-	// 	radiusIntersection = radius;
-	// }
 
-    // connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
-	// 													 p, normal,
-	// 													 0, radiusIntersection, radius*10, 26, false);
-
+	// Z3i::RealPoint realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
+    // Z3i::Point	centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
+	// double radiusIntersection = radius;
+	// connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
+	// 																	 centerOfMass, normal,
+	// 																	 0, radiusIntersection, radius*10, 26, false);
 
 	Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
-	//	eigenValues[p] = sqrt(eigenValue[2])  / (sqrt(eigenValue[0]) + sqrt(eigenValue[1])+ sqrt(eigenValue[2]));
 	double eigenVar = sqrt(eigenValue[2]) / sqrt(eigenValue[1]);
 	Z3i::DigitalSet discretePlane(connectedComponent3D.domain());
 	for (const Z3i::Point& c : connectedComponent3D) {
@@ -636,8 +628,6 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, 
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
 {
-
-
 	typedef Z3i::Space Space;
 	typedef Z3i::Point Point;
 	typedef Z3i::RealPoint RealPoint;
@@ -822,6 +812,7 @@ int main( int  argc, char**  argv )
 
 
 	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, volume, currentPoint->myPoint, dt, setVolumeWeighted, domainVolume);
+
 		connectedComponent3D = value.first;
 		for (const Z3i::Point& p : value.first) {
 		    if (connectedComponent3D.find(p) != connectedComponent3D.end())
@@ -836,6 +827,7 @@ int main( int  argc, char**  argv )
 		//Center of mass computation
 		if (realCenter != Z3i::RealPoint()) {
 			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
+//			pointToEigenValue[centerOfMass] =  std::min(pointToEigenValue[centerOfMass], value.second);
 			double radiusIntersection = computeRadiusFromIntersection(volume, centerOfMass, normal, distanceMax*2);
 
 			bool processed = false;
@@ -907,12 +899,13 @@ int main( int  argc, char**  argv )
 																						const pair<Z3i::Point, double>& two) {
 									return (one.second < two.second);
 								})->second;
-	double maxVal = max_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::Point, double>& one,
-																						const pair<Z3i::Point, double>& two) {
-									return (one.second < two.second &&
-											one.second != numeric_limits<double>::max() &&
-											two.second != numeric_limits<double>::max());
-								})->second;
+	double maxVal = 0;
+	for (const auto & pair : pointToEigenValue) {
+		if (pair.second == numeric_limits<double>::max()) continue;
+		if (maxVal < pair.second)
+			maxVal = pair.second;
+	}
+	trace.info() << minVal << " " << maxVal << endl;
 	vector<map<Z3i::Point, double>::iterator> itToRemove;
 	for (auto it = pointToEigenValue.begin(), ite = pointToEigenValue.end(); it != ite; ++it) {
 		if (it->second == numeric_limits<double>::max())
@@ -921,23 +914,23 @@ int main( int  argc, char**  argv )
 	for (const auto& iterator : itToRemove) {
 	    pointToEigenValue.erase(iterator);
 	}
-	trace.info() << minVal << " " << maxVal << endl;
-	Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
-	watershed.compute();
-	auto resultWatershed = watershed.getWatershed();
-    int bins = watershed.getBins();
+	// trace.info() << minVal << " " << maxVal << endl;
+	// Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
+	// watershed.compute();
+	// auto resultWatershed = watershed.getWatershed();
+    // int bins = watershed.getBins();
 
-	GradientColorMap<int, CMAP_JET > hueShade(0, bins);
-	trace.info() << "Bins= " << bins << endl;
-	for (const auto& complexPoint : resultWatershed) {
-	 	viewer << CustomColors3D(hueShade(complexPoint.second.getLabel()), hueShade(complexPoint.second.getLabel())) << complexPoint.first;
-	}
-
-	// GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
-	// for (const auto& pToL : pointToEigenValue) {
-	// 	if (pToL.second >= maxVal) continue;
-	// 	viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	// GradientColorMap<int, CMAP_JET > hueShade(0, bins);
+	// trace.info() << "Bins= " << bins << endl;
+	// for (const auto& complexPoint : resultWatershed) {
+	//  	viewer << CustomColors3D(hueShade(complexPoint.second.getLabel()), hueShade(complexPoint.second.getLabel())) << complexPoint.first;
 	// }
+
+	GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
+	for (const auto& pToL : pointToEigenValue) {
+		if (pToL.second >= maxVal) continue;
+		viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	}
 
 	// vector<pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> > > interPlanes = intersectingPlanes(planes);
 
