@@ -124,6 +124,7 @@ namespace DGtal
 		typedef typename MatrixNN::RowVector VectorN;             ///< the type for N-vector of real numbers
 		typedef std::vector<Point> PointContainer;                ///< the list of points
 		typedef std::map<Point,MatrixNN> Point2MatrixNN;          ///< Associates a matrix to points.
+		typedef std::map<Point, Vector> Point2Vector;
 
 		// ----------------------- Standard services ------------------------------
 	public:
@@ -179,8 +180,8 @@ namespace DGtal
 		   @pre \a itb != \a ite.
 		   @pre [itb,ite) is a valid range (\a ite can be reached from \a itb).
 		*/
-			template <typename PointInputIterator>
-			void init( PointInputIterator itb, PointInputIterator ite );
+		template <typename PointInputIterator>
+		void init( PointInputIterator itb, PointInputIterator ite );
 
 		/// @return the domain of computation
 		const Domain& domain() const;
@@ -216,7 +217,8 @@ namespace DGtal
 		template <typename Point2ScalarFunction>
 		MatrixNN measureJunction( const Vector& dirVector, Point2ScalarFunction chi_r, Point p ) const;
 
-
+		template <typename Point2ScalarFunction>
+		double vectorVariability(const std::vector<Z3i::Point>& v, const Vector& normal, const Point2ScalarFunction& chi_r, Point p) const;
 		// ----------------------- Interface --------------------------------------
 	public:
 
@@ -256,6 +258,8 @@ namespace DGtal
 		Voronoi* myVoronoi;
 		/// The map point -> VCM
 		Point2MatrixNN myVCM;
+		/// The map point -> vectors
+		Point2Vector myPoint2Vector;
 		/// The structure used for proximity queries.
 		ProximityStructure* myProximityStructure;
 

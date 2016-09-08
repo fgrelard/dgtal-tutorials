@@ -78,7 +78,6 @@ public:
         void extendBasins(std::queue<Point>& fifo);
         void detectMinima(std::queue<Point>& fifo, int& label, double altitude);
 
-
         std::map<Point, WatershedInformation> getWatershed();
         int getBins();
 private:
@@ -99,8 +98,9 @@ Watershed<Point>::Watershed(const Container& container, double aEpsilon) {
                 myImageWatershed[p.first] = wi;
                 sortedMap[wi] = p.first;
                 if (p.first < myFictitious)
-                        myFictitious = 2*p.first;
+                        myFictitious = p.first-Point::diagonal(100);
         }
+        trace.info() << myFictitious << std::endl;
 }
 
 
@@ -111,12 +111,11 @@ template <typename Point>
 void Watershed<Point>::compute() {
   int label = UNLABELLED;
   std::queue<Point> fifo;
-  Point current = myImageWatershed.begin()->first;
+  Point current = sortedMap.begin()->second;
   int currentI = 0;
   DGtal::trace.beginBlock("Watershed");
-  double altitude = 0, previousAltitude = -1;
+  double altitude = 0;
   while ( currentI < myImageWatershed.size() ) {
-          previousAltitude = altitude;
           altitude = myImageWatershed[current].getValue();
           trace.info() << altitude << " " << currentI << " " << myImageWatershed.size() << endl;
           pixelsAtSameAltitude(fifo, current, currentI, altitude);
@@ -132,20 +131,14 @@ void Watershed<Point>::compute() {
 template <typename Point>
 void Watershed<Point>::pixelsAtSameAltitude(std::queue<Point>& fifo, Point& current, int& currentI, double currentAltitude) {
         DGtal::MetricAdjacency<DGtal::Z3i::Space, 3> adj;
-        int i = 0;
-        bool isPending = true;
-        for (const std::pair<WatershedInformation, Point>& pairWatershed : sortedMap) {
-                if (i <= currentI && isPending)  {
-                        i++;
-                        continue;
-                }
+        for (auto it = std::next(sortedMap.begin(), currentI), ite = sortedMap.end(); it != ite; ++it) {
                 //Once we found the right position in vector, i is not incremented anymore
-                isPending = false;
+                std::pair<WatershedInformation, Point> pairWatershed = *it;
                 Point p = pairWatershed.second;
                 WatershedInformation wi = pairWatershed.first;
-                currentI++;
                 current = p;
                 if (wi.getValue() > currentAltitude + myEpsilon) break;
+
                 wi.setLabel(MASK);
                 myImageWatershed[p] = wi;
                 std::vector<Point> neighbors;
@@ -162,10 +155,13 @@ void Watershed<Point>::pixelsAtSameAltitude(std::queue<Point>& fifo, Point& curr
                                 }
                         }
                 }
+                currentI++;
+
         }
+
         //To break from main loop: all the points have been processed
-        if (i == sortedMap.size())
-                currentI = i;
+        // if (i == sortedMap.size())
+        //         currentI = sortedMap.size();
 }
 
 template <typename Point>
@@ -175,7 +171,7 @@ void Watershed<Point>::extendBasins(std::queue<Point>& fifo) {
         fifo.push(myFictitious);
         DGtal::MetricAdjacency<DGtal::Z3i::Space, 3> adj;
 
-        while ( !fifo.empty() ) {
+        while ( true ) {
                 Point p = fifo.front();
                 fifo.pop();
                 if (p == myFictitious)  {
@@ -193,7 +189,7 @@ void Watershed<Point>::extendBasins(std::queue<Point>& fifo) {
                 std::back_insert_iterator<std::vector<Point> > inserter(neighbors);
                 adj.writeNeighbors(inserter, p);
 
-                WatershedInformation wp = myImageWatershed[p];
+                WatershedInformation wp = myImageWatershed.at(p);
                 for (const Point& n : neighbors) {
                         if (myImageWatershed.find(n) != myImageWatershed.end()) {
                                 WatershedInformation wn = myImageWatershed.at(n);
@@ -229,9 +225,9 @@ void Watershed<Point>::extendBasins(std::queue<Point>& fifo) {
 template <typename Point>
 void Watershed<Point>::detectMinima(std::queue<Point>& fifo, int& label, double altitude) {
         DGtal::MetricAdjacency<DGtal::Z3i::Space, 3> adj;
-        for (std::pair<Point, WatershedInformation> pairWatershed : myImageWatershed) {
-                Point p = pairWatershed.first;
-                WatershedInformation wp = pairWatershed.second;
+        for (const std::pair<WatershedInformation, Point>& pairWatershed : sortedMap) {
+                Point p = pairWatershed.second;
+                WatershedInformation wp = myImageWatershed.at(p);
                 if (wp.getValue() >= altitude && wp.getValue() <= altitude + myEpsilon) {
                         wp.setDistance(0);
                         myImageWatershed[p] = wp;

@@ -97,13 +97,12 @@ Z3i::DigitalSet computeShell(const Z3i::Point& center, const Z3i::DigitalSet& se
 	Ball<Z3i::Point> ballInnerBall(center, radiusInnerBall);
 	Ball<Z3i::Point> ballOuterBall(center, radiusOuterBall);
 
-	Z3i::DigitalSet pointsInOuterBall = ballOuterBall.pointsInBallSet();
-
-	Z3i::DigitalSet shell(pointsInOuterBall.domain());
-	for (auto it = pointsInOuterBall.begin(), ite = pointsInOuterBall.end();
+	Z3i::DigitalSet shell(setVolume.domain());
+	for (auto it = setVolume.begin(), ite = setVolume.end();
 		 it != ite; ++it) {
-		if (!(ballInnerBall.contains(*it)) && setVolume.find(*it) != setVolume.end()) {
-			shell.insert(*it);
+		Z3i::Point current = *it;
+		if (!(ballInnerBall.contains(current)) && ballOuterBall.contains(current)) {
+			shell.insert(current);
 		}
 	}
 
@@ -594,33 +593,40 @@ double highestAreaVariation(const pair<Z3i::DigitalSet, vector<Z3i::DigitalSet>>
 	return factorMax;
 }
 
-template <typename VCM, typename KernelFunction, typename Image, typename DTL2, typename Container, typename Domain>
+template <typename VCM, typename KernelFunction, typename Image, typename DTL2, typename Container>
 pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, const Image& volume,
 												 const Z3i::Point& p, const DTL2& dt,
-												 const Container& setVolume, const Domain& domain) {
+												 const Container& setVolumeWeighted, const Z3i::DigitalSet& setVolume,
+												 Viewer3D<>& viewer) {
 	map<Z3i::DigitalSet, double> eigenValues;
 	double radius = dt(p) + 2;
 	Z3i::RealPoint normal;
-	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
+	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, setVolume.domain(), setVolumeWeighted,
 																		 p, normal,
 																		 0, radius, radius*10, 26, true);
 
-	// Z3i::RealPoint realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-    // Z3i::Point	centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
-	// double radiusIntersection = radius;
-	// connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
-	// 																	 centerOfMass, normal,
-	// 																	 0, radiusIntersection, radius*10, 26, false);
+	//  Z3i::RealPoint realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
+    //  Z3i::Point	centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
+	//  double radiusIntersection = radius*2;
+	// connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, setVolume.domain(), setVolumeWeighted,
+	// 													 centerOfMass, normal,
+	// 													 0, radiusIntersection, radius*10, 26, false);
 
 	Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
-	double eigenVar = sqrt(eigenValue[2]) / sqrt(eigenValue[1]);
+	vector<Z3i::Point> v(connectedComponent3D.begin(), connectedComponent3D.end());
+	double eigenVar = sqrt(eigenValue[0]);
+	double angle = M_PI/2 - vcm.vectorVariability(v, normal, chi, p);
+	// Z3i::DigitalSet shell = computeShell (p, setVolume, radius*2, radius*4);
+	// int degree = computeDegree(shell);
+	// if (degree == 1)
+	// 	angle = 0;
 	Z3i::DigitalSet discretePlane(connectedComponent3D.domain());
 	for (const Z3i::Point& c : connectedComponent3D) {
 		if (Z3i::l2Metric(p, c) <= radius)
 			discretePlane.insert(c);
 	}
 
-	return make_pair(discretePlane, eigenVar);
+	return make_pair(discretePlane, angle);
 }
 
 
@@ -755,6 +761,7 @@ int main( int  argc, char**  argv )
 	double distanceMax = currentPoint->myWeight+delta;
 
 	VCM vcm( R, ceil( r ), l2, true );
+	viewer << CustomColors3D(Color::Green, Color::Green);
 	vcm.init( setVolume.begin(), setVolume.end() );
 	Domain domain = vcm.domain();
 	KernelFunction chi( 1.0, r );
@@ -811,7 +818,7 @@ int main( int  argc, char**  argv )
 															 0, radius, distanceMax, 26, true);
 
 
-	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, volume, currentPoint->myPoint, dt, setVolumeWeighted, domainVolume);
+	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, volume, currentPoint->myPoint, dt, setVolumeWeighted, setVolume, viewer);
 
 		connectedComponent3D = value.first;
 		for (const Z3i::Point& p : value.first) {
@@ -914,32 +921,25 @@ int main( int  argc, char**  argv )
 	for (const auto& iterator : itToRemove) {
 	    pointToEigenValue.erase(iterator);
 	}
-	// trace.info() << minVal << " " << maxVal << endl;
-	// Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
-	// watershed.compute();
-	// auto resultWatershed = watershed.getWatershed();
-    // int bins = watershed.getBins();
+	trace.info() << pointToEigenValue.size() << " " << setVolume.size() << endl;
+	trace.info() << minVal << " " << maxVal << endl;
+	Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
+	watershed.compute();
+	auto resultWatershed = watershed.getWatershed();
+    int bins = watershed.getBins();
 
-	// GradientColorMap<int, CMAP_JET > hueShade(0, bins);
-	// trace.info() << "Bins= " << bins << endl;
-	// for (const auto& complexPoint : resultWatershed) {
-	//  	viewer << CustomColors3D(hueShade(complexPoint.second.getLabel()), hueShade(complexPoint.second.getLabel())) << complexPoint.first;
-	// }
-
-	GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
-	for (const auto& pToL : pointToEigenValue) {
-		if (pToL.second >= maxVal) continue;
-		viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	GradientColorMap<int, CMAP_JET > hueShade(0, bins);
+	trace.info() << "Bins= " << bins << endl;
+	for (const auto& complexPoint : resultWatershed) {
+		viewer << CustomColors3D(hueShade(complexPoint.second.getLabel()), hueShade(complexPoint.second.getLabel())) << complexPoint.first;
 	}
 
-	// vector<pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> > > interPlanes = intersectingPlanes(planes);
-
-	// for (const pair<Z3i::DigitalSet, vector<Z3i::DigitalSet> >& pairPlanes : interPlanes) {
-	// 	double areaFactor = highestAreaVariation(pairPlanes);
-	// 	if (areaFactor > 1.2)
-	// 		viewer << CustomColors3D(Color::Red, Color::Red) << pairPlanes.first;
-	// 	viewer << pairPlanes.first;
+	// GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
+	// for (const auto& pToL : pointToEigenValue) {
+	// 	if (pToL.second > maxVal) continue;
+	// 	viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
 	// }
+
 
 
 	//Discarding points being in branching parts

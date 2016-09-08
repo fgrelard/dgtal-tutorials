@@ -1047,6 +1047,8 @@ Z3i::DigitalSet smoothedSkeletonPoints(const Z3i::DigitalSet& subVolume,
 	for (const Z3i::Point& subPoint : subVolume) {
 		subVolumeWeighted.insert(new WeightedPointCount(subPoint, 1));
 	}
+	int i = 0;
+	bool add= false;
 	for (const Z3i::Point& cp : existingSkeleton) {
 	    Z3i::DigitalSet connectedComponent3D = associatedPlane<VCM, KernelFunction>(cp, existingSkeleton, subVolume.domain(), subVolumeWeighted);
 		Z3i::RealPoint realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
@@ -1055,10 +1057,11 @@ Z3i::DigitalSet smoothedSkeletonPoints(const Z3i::DigitalSet& subVolume,
 		for (const Z3i::Point& p : computedSkeleton)
 			if (Z3i::l2Metric(centerOfMass, p) <= sqrt(3))
 				stop = true;
-		if (stop) break;
-		if (realCenter != Z3i::RealPoint()) {
+		if (stop && add) break;
+		if (realCenter != Z3i::RealPoint() && !stop) {
 			smoothSkeleton.insert(centerOfMass);
 		}
+		i++;
 	}
 	return smoothSkeleton;
 }
@@ -1507,11 +1510,12 @@ int main( int  argc, char**  argv )
 			//Find two max :  two planes
 			pair<Z3i::Point, Z3i::DigitalSet> maxiVarying = filteredPlanes[0];
 			pair<Z3i::Point, Z3i::DigitalSet> maxiVarying2 = filteredPlanes[1];
+			pair<Z3i::Point, Z3i::DigitalSet> maxiVarying3 = filteredPlanes[2];
 
 			Z3i::Point firstPoint = maxiVarying.first, secondPoint = maxiVarying2.first;
 			Z3i::DigitalSet firstPlane = maxiVarying.second, secondPlane = maxiVarying2.second;
 
-			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << firstPoint << secondPoint << firstPlane << secondPlane;
+			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << firstPoint << secondPoint;
 			if (maxiVarying.first == Z3i::Point() || maxiVarying2.first == Z3i::Point()) continue;
 
 
@@ -1637,13 +1641,14 @@ int main( int  argc, char**  argv )
 				edgesVolume2.insert(edgesVolume2.end(), restrictEdgeOriented.begin(), restrictEdgeOriented.end());
 				edgesVolume2.insert(edgesVolume2.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
 
-				Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume, edgesVolume, Z3i::DigitalSet(setVolume.domain()));
-				Z3i::DigitalSet smoothedSkeleton2 = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume2, edgesVolume2, smoothedSkeleton);
+				Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume, edgesVolume, skeletonPoints);
+				skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
+				Z3i::DigitalSet smoothedSkeleton2 = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume2, edgesVolume2, skeletonPoints);
+				skeletonPoints.insert(smoothedSkeleton2.begin(), smoothedSkeleton2.end());
 
 				viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton;
 				viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton2;
-				skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
-				skeletonPoints.insert(smoothedSkeleton2.begin(), smoothedSkeleton2.end());
+
 				viewer << CustomColors3D(Color::Red, Color::Red) << delineatedNewPlane << delineatedNewPlane2;
 
 				processedEdges.insert(restrictEdge.begin(), restrictEdge.end());

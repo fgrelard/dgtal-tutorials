@@ -30,6 +30,7 @@
 //////////////////////////////////////////////////////////////////////////////
 #include <cstdlib>
 #include "shapes/Ball.h"
+#include "Statistics.h"
 //////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -203,6 +204,7 @@ init( PointInputIterator itb, PointInputIterator ite )
       lower = lower.inf( p );
       upper = upper.sup( p );
       myVCM[ p ] = matrixZero;
+      myPoint2Vector[ p ] = Vector::zero;
     }
   Integer intR = (Integer) ceil( myBigR );
   lower -= Point::diagonal( intR );
@@ -246,9 +248,10 @@ init( PointInputIterator itb, PointInputIterator ite )
           double d = myMetric( q, p );
           if ( d <= myBigR ) // We restrict computation to the R offset of K.
 		  {
-			  VectorN v( p[ 0 ] - q[ 0 ], p[ 1 ] - q[ 1 ], p[ 2 ] - q[ 2 ] );
+            VectorN v = Vector( p[ 0 ] - q[ 0 ], p[ 1 ] - q[ 1 ], p[ 2 ] - q[ 2 ] );
+            myPoint2Vector[ q ] += v;
               // Computes tensor product V^t x V
-              for ( Dimension i = 0; i < 3; ++i ) 
+              for ( Dimension  i = 0; i < 3; ++i )
                 for ( Dimension j = 0; j < 3; ++j )
                   m.setComponent( i, j, v[ i ] * v[ j ] ); 
               myVCM[ q ] += m; 
@@ -256,6 +259,8 @@ init( PointInputIterator itb, PointInputIterator ite )
 		  }
 	  }
   }
+
+
   if ( myVerbose ) trace.endBlock();
  
   if ( myVerbose ) trace.endBlock();
@@ -279,7 +284,8 @@ measure( Point2ScalarFunction chi_r, Point p ) const
   // std::cout << *it << " has " << neighbors.size() << " neighbors." << std::endl;
   for ( typename std::vector<Point>::const_iterator it_neighbors = neighbors.begin(),
           it_neighbors_end = neighbors.end(); it_neighbors != it_neighbors_end; ++it_neighbors )
-    {
+
+  {
       Point q = *it_neighbors;
       Scalar coef = chi_r( q - p );
       if ( coef > 0.0 ) 
@@ -364,6 +370,47 @@ measureJunction( const Vector& dirVector, Point2ScalarFunction chi_r, Point p ) 
         }
     }
   return vcm;
+}
+
+
+template <typename TSpace, typename TSeparableMetric>
+template <typename Point2ScalarFunction>
+inline
+double
+DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
+vectorVariability(const std::vector<Z3i::Point>& points, const Vector& normal, const Point2ScalarFunction& chi_r, Point p) const
+{
+  double angle = 0;
+  std::vector<Vector> vectors;
+  Ball<Point> ball(p,mySmallR);
+  std::vector<Point> neighbors = ball.pointsInBall();
+  for ( typename std::vector<Point>::const_iterator it_neighbors = neighbors.begin(),
+          it_neighbors_end = neighbors.end(); it_neighbors != it_neighbors_end; ++it_neighbors )
+    {
+      Point q = *it_neighbors;
+       Scalar coef = chi_r( q - p );
+      // Scalar coef = 1.0;
+      if ( coef > 0.0 )
+        {
+          typename std::map<Point,Vector>::const_iterator it = myPoint2Vector.find( q );
+          if ( it != myPoint2Vector.end() ) {
+            Vector vector = it->second;
+            vectors.push_back(vector);
+          }
+        }
+    }
+  int number = 0;
+
+  for (const Vector& v1 : vectors) {
+    if (v1 == Vector::zero) continue;
+    Vector currentV = v1.getNormalized();
+    currentV = (currentV.dot(normal) < 0) ? -v1 : v1;
+    double currentAngle = currentV.cosineSimilarity(normal);
+    angle  += currentAngle * currentV.norm();
+    number += currentV.norm();
+  }
+  angle /= number;
+  return angle;
 }
 
 //-----------------------------------------------------------------------------
