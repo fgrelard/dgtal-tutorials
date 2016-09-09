@@ -100,7 +100,6 @@ Watershed<Point>::Watershed(const Container& container, double aEpsilon) {
                 if (p.first < myFictitious)
                         myFictitious = p.first-Point::diagonal(100);
         }
-        trace.info() << myFictitious << std::endl;
 }
 
 
@@ -117,7 +116,7 @@ void Watershed<Point>::compute() {
   double altitude = 0;
   while ( currentI < myImageWatershed.size() ) {
           altitude = myImageWatershed[current].getValue();
-          trace.info() << altitude << " " << currentI << " " << myImageWatershed.size() << endl;
+          DGtal::trace.info() << altitude << " " << currentI << " " << myImageWatershed.size() << endl;
           pixelsAtSameAltitude(fifo, current, currentI, altitude);
           extendBasins(fifo);
           detectMinima(fifo, label, altitude);

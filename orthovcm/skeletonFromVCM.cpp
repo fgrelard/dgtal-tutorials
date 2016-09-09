@@ -47,6 +47,7 @@
 #include "DGtal/io/viewers/Viewer3D.h"
 #include "DGtal/io/readers/VolReader.h"
 #include "DGtal/images/ImageHelper.h"
+#include "DGtal/io/writers/ITKWriter.h"
 #include "DGtal/io/writers/GenericWriter.h"
 #include "DGtal/graph/DepthFirstVisitor.h"
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
@@ -593,13 +594,12 @@ double highestAreaVariation(const pair<Z3i::DigitalSet, vector<Z3i::DigitalSet>>
 	return factorMax;
 }
 
-template <typename VCM, typename KernelFunction, typename Image, typename DTL2, typename Container>
+template <typename VCM, typename KernelFunction, typename Image, typename Container>
 pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, const Image& volume,
-												 const Z3i::Point& p, const DTL2& dt,
+												 const Z3i::Point& p, double radius,
 												 const Container& setVolumeWeighted, const Z3i::DigitalSet& setVolume,
 												 Viewer3D<>& viewer) {
 	map<Z3i::DigitalSet, double> eigenValues;
-	double radius = dt(p) + 2;
 	Z3i::RealPoint normal;
 	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, setVolume.domain(), setVolumeWeighted,
 																		 p, normal,
@@ -643,6 +643,7 @@ int main( int  argc, char**  argv )
 	typedef EigenDecomposition<3,double> LinearAlgebraTool;
 	typedef LinearAlgebraTool::Matrix Matrix;
 	typedef ImageSelector<Domain, unsigned char>::Type Image;
+	typedef ImageContainerBySTLVector<Domain, double> ImageDouble;
 	typedef VoronoiCovarianceMeasure<Space,Metric> VCM;
 
 
@@ -673,7 +674,7 @@ int main( int  argc, char**  argv )
 		("input,i", po::value<std::string>(), "vol file (corresponding volume)")
 		("output,o", po::value<std::string>(), "output skeleton filename")
 		("skeleton,s", po::bool_switch()->default_value(false), "vol file (medial axis)")
-		("delta,d", po::value<double>()->default_value(1), "delta for ball radius")
+		("delta,d", po::value<double>()->default_value(2), "delta for ball radius")
 		("thresholdMin,m", po::value<int>()->default_value(0), "minimum threshold for binarization")
 		("thresholdMax,M", po::value<int>()->default_value(255), "maximum threshold for binarization")
 		("radiusInside,R", po::value<double>()->default_value(10), "radius of the ball inside voronoi cell")
@@ -791,9 +792,13 @@ int main( int  argc, char**  argv )
 	trace.beginBlock("Computing skeleton");
 
 	//Main loop to compute skeleton (stop when no vol points left to process)
-	while (numberLeft > 0)
+	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it)
+	//while (numberLeft > 0)
 	{
-		trace.progressBar((setVolumeWeighted.size() - numberLeft), setVolumeWeighted.size());
+		i++;
+		trace.progressBar(i, setVolumeWeighted.size());
+		//trace.progressBar((setVolumeWeighted.size() - numberLeft), setVolumeWeighted.size());
+		currentPoint = *it;
 		currentPoint->myProcessed = true;
 		double radius = r;
 
@@ -813,93 +818,90 @@ int main( int  argc, char**  argv )
  		}
 
 		// Compute discrete plane
-		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
-															 currentPoint->myPoint, normal,
-															 0, radius, distanceMax, 26, true);
+		// connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+		// 													 currentPoint->myPoint, normal,
+		// 													 0, radius, distanceMax, 26, true);
 
-
-	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, volume, currentPoint->myPoint, dt, setVolumeWeighted, setVolume, viewer);
-
+	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, volume, currentPoint->myPoint, radius, setVolumeWeighted, setVolume, viewer);
+		pointToEigenValue[currentPoint->myPoint] =  std::min(pointToEigenValue[currentPoint->myPoint], value.second);
 		connectedComponent3D = value.first;
-		for (const Z3i::Point& p : value.first) {
-		    if (connectedComponent3D.find(p) != connectedComponent3D.end())
-				pointToEigenValue[p] = std::min(pointToEigenValue[p], value.second);
-		}
-
-
-
-	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-
-
-		//Center of mass computation
-		if (realCenter != Z3i::RealPoint()) {
-			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
-//			pointToEigenValue[centerOfMass] =  std::min(pointToEigenValue[centerOfMass], value.second);
-			double radiusIntersection = computeRadiusFromIntersection(volume, centerOfMass, normal, distanceMax*2);
-
-			bool processed = false;
-			for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
-				for (auto itS = skeletonPoints.begin(), itSe = skeletonPoints.end(); itS != itSe; ++itS)  {
-					if (*itS == *it)
-						processed = true;
-				}
-			}
-
-			VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
-
-			if (!processed && Z3i::l2Metric(currentPoint->myPoint, centerOfMass) <= sqrt(3)
-				){
-				if (!isNewSeed && Z3i::l2Metric(previousCenter, centerOfMass) <= 2 * sqrt(3)
-					) {
-					Z3i::DigitalSet diffPlanes = VCMUtil::markDifferenceBetweenPlanes(setVolumeWeighted,
-																					  previousNormal, previousCenter,
-																					  normal, centerOfMass,
-																					  domainVolume, radius);
-					planes.push_back(diffPlanes);
-					for (const Z3i::Point & p : diffPlanes) {
-						if (DGtal::Z3i::l2Metric(p, currentPoint->myPoint) <= radius)
-							pointToEigenValue[p] = std::min(pointToEigenValue[p], value.second);
-					}
-					VCMUtil::markConnectedComponent3D(setVolumeWeighted, diffPlanes, 0);
-
-				}
-
-				// Branching detection
-				skeletonPoints.insert(centerOfMass);
-				previousNormal = normal;
-				previousCenter = centerOfMass;
-
-				viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
-				viewer << Viewer3D<>::updateDisplay;
-				qApp->processEvents();
-
-			}
-		}
-
-		//Go to next point according to normal OR to max value in DT
-		// if (isNewSeed) {
-		// 	seedNormal = normal;
-		// 	seedCenter = centerOfMass;
-		// 	seedConnectedComponent3D = connectedComponent3D;
+		// for (const Z3i::Point& p : value.first) {
+		//     if (connectedComponent3D.find(p) != connectedComponent3D.end())
+		// 		pointToEigenValue[p] = std::min(pointToEigenValue[p], value.second);
 		// }
-		bool previousSeed = isNewSeed;
-		isNewSeed = VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
-		if (!isNewSeed && !previousSeed)
-			planes.push_back(connectedComponent3D);
 
-		// if (isNewSeed) {
-		// 	trace.info() << currentPoint->myPoint << endl;
-		// 	WeightedPointCount* otherPoint = new WeightedPointCount(*currentPoint);
-		// 	isNewSeed = VCMUtil::trackNextPoint(otherPoint, setVolumeWeighted, seedConnectedComponent3D, seedCenter, seedNormal);
-		// 	if (!isNewSeed) {
-		// 		currentPoint = otherPoint;
+	    // realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
+
+
+		// //Center of mass computation
+		// if (realCenter != Z3i::RealPoint()) {
+		// 	centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
+
+		// 	double radiusIntersection = computeRadiusFromIntersection(volume, centerOfMass, normal, distanceMax*2);
+
+		// 	bool processed = false;
+		// 	for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
+		// 		for (auto itS = skeletonPoints.begin(), itSe = skeletonPoints.end(); itS != itSe; ++itS)  {
+		// 			if (*itS == *it)
+		// 				processed = true;
+		// 		}
+		// 	}
+
+		// 	//VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
+
+		// 	if (!processed && Z3i::l2Metric(currentPoint->myPoint, centerOfMass) <= sqrt(3)
+		// 		){
+		// 		if (!isNewSeed && Z3i::l2Metric(previousCenter, centerOfMass) <= 2 * sqrt(3)
+		// 			) {
+		// 			// Z3i::DigitalSet diffPlanes = VCMUtil::markDifferenceBetweenPlanes(setVolumeWeighted,
+		// 			// 																  previousNormal, previousCenter,
+		// 			// 																   normal, centerOfMass,
+		// 			// 																   domainVolume, radius);
+		// 			// planes.push_back(diffPlanes);
+		// 			// for (const Z3i::Point & p : diffPlanes) {
+		// 			// 	if (DGtal::Z3i::l2Metric(p, currentPoint->myPoint) <= radius)
+		// 			// 		pointToEigenValue[p] = std::min(pointToEigenValue[p], value.second);
+		// 			// }
+		// 			//	VCMUtil::markConnectedComponent3D(setVolumeWeighted, diffPlanes, 0);
+
+		// 		}
+
+		// 		// Branching detection
+		// 		skeletonPoints.insert(centerOfMass);
+		// 		previousNormal = normal;
+		// 		previousCenter = centerOfMass;
+
+		// 		viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
+		// 		viewer << Viewer3D<>::updateDisplay;
+		// 		qApp->processEvents();
+
 		// 	}
 		// }
-		numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
-							  [&](WeightedPointCount* wpc) {
-								  return (!wpc->myProcessed);
-							  });
-  		i++;
+
+		// //Go to next point according to normal OR to max value in DT
+		// // if (isNewSeed) {
+		// // 	seedNormal = normal;
+		// // 	seedCenter = centerOfMass;
+		// // 	seedConnectedComponent3D = connectedComponent3D;
+		// // }
+		// bool previousSeed = isNewSeed;
+		// isNewSeed = VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
+		// if (!isNewSeed && !previousSeed)
+		// 	planes.push_back(connectedComponent3D);
+
+		// // if (isNewSeed) {
+		// // 	trace.info() << currentPoint->myPoint << endl;
+		// // 	WeightedPointCount* otherPoint = new WeightedPointCount(*currentPoint);
+		// // 	isNewSeed = VCMUtil::trackNextPoint(otherPoint, setVolumeWeighted, seedConnectedComponent3D, seedCenter, seedNormal);
+		// // 	if (!isNewSeed) {
+		// // 		currentPoint = otherPoint;
+		// // 	}
+		// // }
+		// numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
+		// 					  [&](WeightedPointCount* wpc) {
+		// 						  return (!wpc->myProcessed);
+		// 					  });
+  		// i++;
 	}
 	trace.endBlock();
 	double minVal = min_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::Point, double>& one,
@@ -921,24 +923,24 @@ int main( int  argc, char**  argv )
 	for (const auto& iterator : itToRemove) {
 	    pointToEigenValue.erase(iterator);
 	}
-	trace.info() << pointToEigenValue.size() << " " << setVolume.size() << endl;
-	trace.info() << minVal << " " << maxVal << endl;
-	Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
-	watershed.compute();
-	auto resultWatershed = watershed.getWatershed();
-    int bins = watershed.getBins();
+	// trace.info() << pointToEigenValue.size() << " " << setVolume.size() << endl;
+	// trace.info() << minVal << " " << maxVal << endl;
+	// Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
+	// watershed.compute();
+	// auto resultWatershed = watershed.getWatershed();
+    // int bins = watershed.getBins();
 
-	GradientColorMap<int, CMAP_JET > hueShade(0, bins);
-	trace.info() << "Bins= " << bins << endl;
-	for (const auto& complexPoint : resultWatershed) {
-		viewer << CustomColors3D(hueShade(complexPoint.second.getLabel()), hueShade(complexPoint.second.getLabel())) << complexPoint.first;
-	}
-
-	// GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
-	// for (const auto& pToL : pointToEigenValue) {
-	// 	if (pToL.second > maxVal) continue;
-	// 	viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	// GradientColorMap<int, CMAP_JET > hueShade(0, bins);
+	// trace.info() << "Bins= " << bins << endl;
+	// for (const auto& complexPoint : resultWatershed) {
+	// 	viewer << CustomColors3D(hueShade(complexPoint.second.getLabel()), hueShade(complexPoint.second.getLabel())) << complexPoint.first;
 	// }
+
+	GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
+	for (const auto& pToL : pointToEigenValue) {
+		if (pToL.second > maxVal) continue;
+		viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	}
 
 
 
@@ -976,8 +978,19 @@ int main( int  argc, char**  argv )
 	}
 
 	Image outImage(volume.domain());
+	ImageDouble outDoubleImage(volume.domain());
+	for (const Z3i::Point& p : domainVolume) {
+		if (setVolume.find(p) == setVolume.end())
+			outDoubleImage.setValue(p, minVal-1);
+	}
+	for (const auto& pToL : pointToEigenValue) {
+	    if (pToL.second > maxVal) continue;
+		outDoubleImage.setValue(pToL.first, pToL.second);
+	}
 	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
 	VolWriter<Image>::exportVol(outFilename, outImage);
+	typedef ITKWriter<ImageDouble> Writer;
+	Writer::exportITK(outFilename + ".mhd", outDoubleImage);
 	viewer << Viewer3D<>::updateDisplay;
 	application.exec();
 	return 0;

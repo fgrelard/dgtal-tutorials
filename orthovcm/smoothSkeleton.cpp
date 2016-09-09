@@ -1510,7 +1510,6 @@ int main( int  argc, char**  argv )
 			//Find two max :  two planes
 			pair<Z3i::Point, Z3i::DigitalSet> maxiVarying = filteredPlanes[0];
 			pair<Z3i::Point, Z3i::DigitalSet> maxiVarying2 = filteredPlanes[1];
-			pair<Z3i::Point, Z3i::DigitalSet> maxiVarying3 = filteredPlanes[2];
 
 			Z3i::Point firstPoint = maxiVarying.first, secondPoint = maxiVarying2.first;
 			Z3i::DigitalSet firstPlane = maxiVarying.second, secondPlane = maxiVarying2.second;
