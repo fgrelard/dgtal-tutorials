@@ -108,38 +108,6 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 	return toReturn;
 }
 
-Z3i::DigitalSet reduceClustersToCenters(const Z3i::DigitalSet& clusters, const Z3i::DigitalSet& skeleton) {
-	Z3i::DigitalSet newClusters(clusters.domain());
-
-	Z3i::Object26_6 obj(Z3i::dt26_6, clusters);
-	vector<Z3i::Object26_6> objects;
-	back_insert_iterator<vector<Z3i::Object26_6>> inserter(objects);
-    obj.writeComponents(inserter);
-	for (const Z3i::Object26_6& o : objects) {
-		Z3i::DigitalSet currentPointSet = o.pointSet();
-		if (currentPointSet.size() > 1) {
-			Z3i::Point candidate;
-			int previous=0;
-			for (const Z3i::Point& b : currentPointSet) {
-				Z3i::DigitalSet difference = skeleton;
-				difference.erase(b);
-				Z3i::Object26_6 differenceObj(Z3i::dt26_6, difference);
-				vector<Z3i::Object26_6> objectsDifference;
-				back_insert_iterator<vector<Z3i::Object26_6>> inserterDiff(objectsDifference);
-				unsigned int nbCC = differenceObj.writeComponents(inserterDiff);
-				if (nbCC > previous) {
-					previous = nbCC;
-					candidate = b;
-				}
-			}
-			newClusters.insert(candidate);
-		}
-		else {
-			newClusters.insert(currentPointSet.begin(), currentPointSet.end());
-		}
-	}
-	return newClusters;
-}
 
 template <typename DTL2>
 Z3i::Point findMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const Z3i::Point& junctionPoint) {
@@ -187,53 +155,6 @@ double computeRadiusFromIntersection(const Image& volume, const Z3i::Point& poin
 
 
 template <typename DTL2>
-Z3i::DigitalSet extractSurfacePoints(const Z3i::DigitalSet& intersection,
-									 const DTL2& dt) {
-	Z3i::DigitalSet surfacePoints(intersection.domain());
-	for (const Z3i::Point& p : intersection) {
-		if (dt(p) <= 1)
-			surfacePoints.insert(p);
-
-	}
-	return surfacePoints;
-}
-
-Z3i::DigitalSet extractSetFromRadiusAndCenter(const Z3i::DigitalSet& intersection,
-											  const Z3i::Point& center,
-											  double radius) {
-	Ball<Z3i::Point> ball(center, radius);
-	vector<Z3i::Point> restrictedIntersection = ball.intersection(intersection);
-	Z3i::DigitalSet restrictedSet(intersection.domain());
-	restrictedSet.insert(restrictedIntersection.begin(), restrictedIntersection.end());
-	return restrictedSet;
-}
-
-template <typename DTL2>
-Z3i::DigitalSet extractRelevantSurfacePointsForVolVCM(const Z3i::DigitalSet& intersection,
-									 const DTL2& dt,
-									 const Z3i::Point& center) {
-	typedef Z3i::Object26_6 ObjectType;
-
-	double maxSize = intersection.size();
-	double currentSize = 0;
-	unsigned int nbConnectedComponents = 0;
-	double radius = 1.;
-	Z3i::DigitalSet surfels(intersection.domain());
-
-	while (currentSize < maxSize && nbConnectedComponents != 1) {
-		Z3i::DigitalSet plane = extractSetFromRadiusAndCenter(intersection, center, radius);
-	    surfels = extractSurfacePoints(intersection, dt);
-		ObjectType objectImage(Z3i::dt26_6, surfels);
-		vector<ObjectType> objects;
-		back_insert_iterator< std::vector<ObjectType> > inserter( objects );
-	    nbConnectedComponents = objectImage.writeComponents(inserter);
-		currentSize = plane.size();
-		radius++;
-	}
-	return surfels;
-}
-
-template <typename DTL2>
 Z3i::Point projectionPoint(const DTL2& dt,
 						   const Z3i::Point& center,
 						   const Z3i::RealVector& direction) {
@@ -246,77 +167,6 @@ Z3i::Point projectionPoint(const DTL2& dt,
 	return proj;
 }
 
-template <typename DTL2>
-Z3i::RealVector signVector(const DTL2& dt,
-						   const Z3i::Point& center,
-						   const Z3i::RealVector& direction) {
-	Z3i::Point projCenter = projectionPoint(dt, center, direction);
-	Z3i::Point otherProjCenter = projectionPoint(dt,center, -direction);
-
-	if (Z3i::l2Metric(projCenter, center) > Z3i::l2Metric(otherProjCenter, center))
-		return -direction;
-	return direction;
-}
-
-template <typename DTL2>
-Z3i::DigitalSet extractSurfacePointsWithEigenVectors(const Z3i::DigitalSet& intersection, const DTL2& dt,
-													 const Z3i::Point& center, double radius) {
-	typedef Eigen::MatrixXd MatrixXd;
-
-	Z3i::DigitalSet surfelSet(intersection.domain());
-	MatrixXd covmat = Statistics::computeCovarianceMatrix<MatrixXd>(intersection);
-	if (covmat.size() == 0) return surfelSet;
-	Z3i::RealVector v2 = Statistics::extractEigenVector<Z3i::RealVector>(covmat, 2);
-	v2 = signVector(dt, center, v2);
-	v2 = -v2;
-	Z3i::Point projectionCenter = center;
-	int scalar=1;
-	while (dt.domain().isInside(projectionCenter) && dt(projectionCenter) >= 1) {
-		projectionCenter = center - v2*scalar;
-		scalar++;
-	}
-	Ball<Z3i::Point> ball(projectionCenter, radius);
-	vector<Z3i::Point> surfels = ball.intersection(intersection);
-	surfelSet.insert(surfels.begin(), surfels.end());
-	return surfelSet;
-}
-
-
-
-template <typename VCM, typename KernelFunction, typename Container>
-double distanceToDelineateSubVolume(const Z3i::Point& current,
-									const Z3i::Point& b,
-									const vector<GraphEdge*> neighborEdge,
-									const Container& setVolume,
-									const Z3i::DigitalSet& saddlePoints) {
-
-	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
-	Metric l2;
-	double distance = 0;
-	for (GraphEdge* edge : neighborEdge) {
-		Z3i::DigitalSet setEdge = edge->pointSet();
-		if (setEdge.find(current) != setEdge.end()) continue;
-		for (const Z3i::Point& e : setEdge) {
-			double radius = setEdge.size() * 0.4;
-			VCM vcm(20, ceil(radius), l2, false);
-			vcm.init(setEdge.begin(), setEdge.end());
-			KernelFunction chi(1.0, radius);
-			Z3i::RealPoint normal;
-			Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, saddlePoints, setVolume,
-																				 e, normal,
-																				 0, radius, radius*2, 26, false);
-			for (const Z3i::Point& s : saddlePoints) {
-				if (connectedComponent3D.find(s) != connectedComponent3D.end()) {
-					double currentDistance = Z3i::l2Metric(e, b);
-					if (currentDistance > distance) {
-						distance = currentDistance;
-					}
-				}
-			}
-		}
-	}
-	return distance;
-}
 
 template <typename VCM, typename KernelFunction>
 map<Z3i::Point, Z3i::RealPoint> computePlanesForSubVolume(const Z3i::Point& b,
@@ -350,111 +200,7 @@ map<Z3i::Point, Z3i::RealPoint> computePlanesForSubVolume(const Z3i::Point& b,
 	return normals;
 }
 
-template <typename VCM, typename KernelFunction, typename Container>
-Container constructSubVolume(const Z3i::Point& current,
-							 const vector<GraphEdge*>& graph,
-							 const Z3i::DigitalSet& currentEdge,
-							 const Container& setVolume,
-							 const Z3i::DigitalSet& branchingPoints,
-							 const Z3i::DigitalSet& saddlePoints) {
-	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
 
-	vector<Z3i::Point> neighbors;
-	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
-	MAdj::writeNeighbors(inserter, current);
-
-	Z3i::Point b;
-	for (const Z3i::Point& n : neighbors) {
-		if (branchingPoints.find(n) != branchingPoints.end())
-			b = n;
-	}
-	if (b == Z3i::Point())
-		return setVolume;
-
-	vector<GraphEdge*> neighborEdge = CurveAnalyzer::neighboringEdges(graph,
-													   currentEdge,
-													   branchingPoints);
-
-	double distance = distanceToDelineateSubVolume<VCM, KernelFunction>(current, b, neighborEdge, setVolume, saddlePoints);
-	map<Z3i::Point, Z3i::RealPoint> normals = computePlanesForSubVolume<VCM, KernelFunction>(b, neighborEdge, distance);
-
-	Container subVolume;
-	for (auto it = setVolume.begin(), ite = setVolume.end();
-		 it != ite; ++it) {
-		Z3i::Point pointVolume = (*it)->myPoint;
-		int cpt = 0;
-		for (const auto& pair : normals) {
-			if (pair.first == current)
-				continue;
-			if (VCMUtil::abovePlane(pointVolume, pair.second, pair.first)) {
-				cpt++;
-			}
-		}
-		bool toAdd = (cpt >= normals.size()-1);
-		if (toAdd)
-			subVolume.insert(*it);
-	}
-	return subVolume;
-}
-
-
-
-template <typename VCM, typename KernelFunction, typename Container>
-Z3i::DigitalSet constructSubVolumeWithTangent(const Z3i::Point& current,
-										const vector<GraphEdge*>& graph,
-										const Z3i::DigitalSet& currentEdge,
-										const Container& setVolume,
-										const Z3i::DigitalSet& branchingPoints,
-										const Z3i::DigitalSet& saddlePoints,
-										const Z3i::DigitalSet& setSurface) {
-	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
-	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
-	Metric l2;
-
-	Z3i::DigitalSet digitalSetVolume(saddlePoints.domain());
-	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
-		digitalSetVolume.insert((*it)->myPoint);
-	}
-
-	vector<Z3i::Point> neighbors;
-	back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
-	MAdj::writeNeighbors(inserter, current);
-
-	Z3i::Point b;
-	for (const Z3i::Point& n : neighbors) {
-		if (branchingPoints.find(n) != branchingPoints.end())
-			b = n;
-	}
-	if (b == Z3i::Point())
-		return digitalSetVolume;
-
-
-	vector<GraphEdge*> neighborEdge = CurveAnalyzer::neighboringEdges(graph,
-													   currentEdge,
-													   branchingPoints);
-	double radius = currentEdge.size() * 0.4;
-	VCM vcm(20, ceil(radius), l2, false);
-	vcm.init(currentEdge.begin(), currentEdge.end());
-	KernelFunction chi(1.0, radius);
-	Z3i::RealPoint normal = VCMUtil::computeNormalFromVCM(current, vcm, chi, 0);
-
-	Z3i::DigitalSet subVolume(digitalSetVolume.domain());
-	Z3i::Object26_6 obj(Z3i::dt26_6, setSurface);
-	for (GraphEdge* edge : neighborEdge) {
-		Z3i::DigitalSet setEdge = edge->pointSet();
-		for (const Z3i::Point& e : setEdge) {
-			Z3i::Point trackedPoint = PointUtil::trackPoint(e, digitalSetVolume, normal);
-			Z3i::Point trackedPointMinus = PointUtil::trackPoint(e, digitalSetVolume, -normal);
-			if (saddlePoints.find(trackedPoint) != saddlePoints.end() ||
-				saddlePoints.find(trackedPointMinus) != saddlePoints.end()) {
-				vector<Z3i::Point> path = SurfaceTraversal::AStarAlgorithm(obj, trackedPoint, trackedPointMinus);
-				subVolume.insert(path.begin(), path.end());
-				break;
-			}
-		}
-	}
-	return subVolume;
-}
 
 
 std::set<Z3i::Point> vectorsToCompare(const std::vector<Z3i::Point>& directionVectors) {
@@ -495,123 +241,7 @@ vector<GraphEdge*> edgesAssociatedWithPoints(const std::set<Z3i::Point>& point,
 	return edges;
 }
 
-vector<pair<Z3i::Point, Z3i::RealPoint>> rotatedVectors(const pair<Z3i::Point, Z3i::RealPoint>& one,
-												const pair<Z3i::Point, Z3i::RealPoint>& two) {
-	vector<pair<Z3i::Point, Z3i::RealPoint>> rotated;
-	Z3i::Point p1 = one.first;
-	Z3i::RealPoint p2 =  two.first;
-	Z3i::RealPoint n1 = one.second;
-	Z3i::RealPoint n2 =  two.second;
-	Z3i::RealPoint nrot = n1.crossProduct(n2);
-	pair<Z3i::Point, Z3i::RealPoint> pair1 = make_pair(p1, n2.crossProduct(nrot));
-	pair<Z3i::Point, Z3i::RealPoint> pair2 = make_pair(p2, n1.crossProduct(nrot));
-	rotated.push_back(pair1);
-	rotated.push_back(pair2);
-	return rotated;
-}
 
-template <typename VCM, typename KernelFunction, typename Container, typename Domain>
-map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint> > > constructSubVolumeWithPlanes(const vector<GraphEdge*>& graph,
-															 const Container& setVolume,
-															 const Domain& domain,
-															 const vector<Z3i::Object26_6>& saddlePoints) {
-	typedef MetricAdjacency<Z3i::Space, 3> MAdj;
-	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
-
-	map<Z3i::Point, vector<pair<Z3i::Point, Z3i::RealPoint>>> saddlesToPlanes;
-	for (const Z3i::Object26_6& o : saddlePoints) {
-		Z3i::Point saddleCC = *(o.pointSet().begin());
-		saddlesToPlanes[saddleCC] = vector<pair<Z3i::Point, Z3i::RealPoint>>();
-	}
-
-	Metric l2;
-	int cpt = 0;
-
-	for (GraphEdge* edge : graph) {
-		Z3i::DigitalSet setEdge = edge->pointSet();
-		if (setEdge.size() <= 2) continue;
-		bool found = false;
-		for (const Z3i::Point& p : setEdge) {
-			if (found) break;
-			double radius = setEdge.size() * 0.4;
-			VCM vcm(20, ceil(radius), l2, false);
-			vcm.init(setEdge.begin(), setEdge.end());
-			KernelFunction chi(1.0, radius);
-			Z3i::RealPoint normal;
-			Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
-																				 p, normal,
-																				 0, radius, radius*2, false);
-			for (const Z3i::Object26_6& o : saddlePoints) {
-				Z3i::DigitalSet saddleCC = o.pointSet();
-				if (found) break;
-				for (const Z3i::Point& sp : saddleCC) {
-					if (connectedComponent3D.find(sp) != connectedComponent3D.end()) {
-
-						saddlesToPlanes[*saddleCC.begin()].push_back(make_pair(p, normal));
-						found  = true;
-						break;
-					}
-				}
-			}
-		}
-	}
-
-	for (auto it = saddlesToPlanes.begin(), ite = saddlesToPlanes.end(); it != ite; ++it) {
-		vector<pair<Z3i::Point, Z3i::RealPoint>> pointToVectors = it->second;
-		trace.info() << pointToVectors.size() << endl;
-		if (pointToVectors.size() == 2) {
-			Z3i::Point p1 = (*(pointToVectors.begin())).first;
-			Z3i::RealPoint p2 =  (*(++pointToVectors.begin())).first;
-			Z3i::RealPoint n1 = (*(pointToVectors.begin())).second;
-			Z3i::RealPoint n2 =  (*(++pointToVectors.begin())).second;
-			Z3i::RealPoint nrot = n1.crossProduct(n2);
-			// Z3i::RealPoint nrot2 = n2.crossProduct(n1);
-			// double alpha = acos(n1.dot(n2));
-			// float angleRotation = std::abs(M_PI/2 - alpha);
-			// Eigen::Affine3f t(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot[0], nrot[1], nrot[2])));
-			// Eigen::Affine3f t2(Eigen::AngleAxisf(angleRotation, Eigen::Vector3f(nrot2[0], nrot2[1], nrot2[2])));
-			// Eigen::Vector3f n1e(n1[0], n1[1], n1[2]);
-			// Eigen::Vector3f n2e(n2[0], n2[1], n2[2]);
-			// Eigen::Vector3f rotn1e = t.linear() * n1e;
-			// Eigen::Vector3f rotn2e = t2.linear() * n2e;
-			// Eigen::Vector3f otherRotn1e = t2.linear() * n1e;
-			// Eigen::Vector3f otherRotn2e = t.linear() * n2e;
-			// Z3i::RealPoint rotn1(rotn1e[0], rotn1e[1], rotn1e[2]);
-			// Z3i::RealPoint rotn2(rotn2e[0], rotn2e[1], rotn2e[2]);
-			// Z3i::RealPoint otherRotn1(otherRotn1e[0], otherRotn1e[1], otherRotn1e[2]);
-			// Z3i::RealPoint otherRotn2(otherRotn2e[0], otherRotn2e[1], otherRotn2e[2]);
-			// if (std::abs(otherRotn1.dot(otherRotn2)) < std::abs(rotn1.dot(rotn2))) {
-			// 	rotn1 = otherRotn1;
-			// 	rotn2 = otherRotn2;
-			// }
-
-			pointToVectors.clear();
-			pointToVectors.push_back(make_pair(p1, n2.crossProduct(nrot)));
-			pointToVectors.push_back(make_pair(p2, n1.crossProduct(nrot)));
-			saddlesToPlanes[it->first] = pointToVectors;
-		}
-		else {
-			saddlesToPlanes[it->first].clear();
-		}
-	}
-
-
-	return saddlesToPlanes;
-}
-
-template <typename DTL2>
-Z3i::DigitalSet extractSurfacePointsWithDT( const Z3i::DigitalSet& setSurface,
-											const DTL2& dt,
-											const Z3i::Point& center, double radius) {
-	Z3i::DigitalSet surfelSet(setSurface.domain());
-	Z3i::Point closestPoint = *min_element(setSurface.begin(), setSurface.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
-			return (Z3i::l2Metric(one, center) < Z3i::l2Metric(two, center));
-		});
-	Ball<Z3i::Point> ball(closestPoint, radius);
-	vector<Z3i::Point> surfels = ball.intersection(setSurface);
-	surfelSet.insert(surfels.begin(), surfels.end());
-	return surfelSet;
-}
 
 
 vector<pair<Z3i::Point, double> > computeArea(const vector<pair<Z3i::Point, Z3i::DigitalSet> >& pointsToPlanes) {
@@ -683,7 +313,7 @@ pair<Z3i::Point, Z3i::RealPoint> pointToNormal(const Z3i::Point&  point, const Z
 	Z3i::RealPoint normal;
 	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
 																		 point, normal,
-																		 0, radius, radius*10, false);
+																		 0, radius, radius*10, 6, false);
 	return make_pair(point, normal);
 
 }
@@ -703,7 +333,7 @@ Z3i::DigitalSet associatedPlane(const Z3i::Point& point, const Container& setVCM
 	Z3i::RealPoint normal;
 	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
 																		 point, normal,
-																		 0, radius, radius*10, false);
+																		 0, radius, radius*10, 6, false);
 	return connectedComponent3D;
 }
 
@@ -735,7 +365,6 @@ pair<Z3i::Point, Z3i::DigitalSet> pointsVaryingNeighborhood(const vector<pair<Z3
 		Z3i::Point p = pair.first;
 		Z3i::DigitalSet current = pair.second;
 		double currentValue = pair.second.size();
-		double radius = sqrt(currentValue / M_PI);
 		vector<Z3i::Point> neighbors;
 		back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
 	    MAdj::writeNeighbors(inserter, p);
@@ -766,7 +395,6 @@ vector<pair<Z3i::Point, double> > areaVariationMeasure(const vector<pair<Z3i::Po
 		double previousFactor = 0;
 		Z3i::Point p = pair.first;
 		double currentValue = pair.second;
-		double radius = sqrt(currentValue / M_PI);
 		vector<Z3i::Point> neighbors;
 		back_insert_iterator<vector<Z3i::Point>> inserter(neighbors);
 	    MAdj::writeNeighbors(inserter, p);
@@ -857,27 +485,6 @@ vector<Z3i::DigitalSet> delineatingPlanes(const Z3i::DigitalSet& subVolume, cons
 }
 
 
-
-vector<Z3i::DigitalSet> twoClosestPlanes(const vector<Z3i::DigitalSet>& delineatingPlanes) {
-	double distanceMin = numeric_limits<double>::max();
-	vector<Z3i::DigitalSet> pairPlanes;
-	trace.info() << delineatingPlanes.size() << endl;
-	for (size_t i = 0; i < delineatingPlanes.size(); i++) {
-		for (size_t j = i+1; j < delineatingPlanes.size(); j++) {
-			Z3i::DigitalSet first = delineatingPlanes[i];
-			Z3i::DigitalSet second = delineatingPlanes[j];
-			double dh = Distance::distanceSet(first, second);
-			if (dh < distanceMin) {
-				distanceMin = dh;
-				vector<Z3i::DigitalSet> currentPair;
-				currentPair.push_back(first);
-				currentPair.push_back(second);
-				pairPlanes = currentPair;
-			}
-		}
-	}
-	return pairPlanes;
-}
 
 pair<Z3i::Point, Z3i::Point> twoClosestPoints(const Z3i::DigitalSet& one, const Z3i::DigitalSet& two) {
 	double distanceMax = std::numeric_limits<double>::max();
@@ -978,26 +585,6 @@ Z3i::DigitalSet restrictByDistanceToPoint(const Z3i::DigitalSet& original,
 	return restricted;
 }
 
-pair<Z3i::Point, Z3i::RealPoint> intersectionBetweenPlanes(const pair<Z3i::Point, Z3i::RealPoint>& plane1,
-														   const pair<Z3i::Point, Z3i::RealPoint>& plane2) {
-	Z3i::RealPoint n1 = plane1.second;
-	Z3i::RealPoint n2 = plane2.second;
-	Z3i::Point p1 = plane1.first;
-	Z3i::Point p2 = plane2.second;
-	double d1 = n1[0] * p1[0] + n1[1] * p1[1] + n1[2] * p1[2];
-	double d2 =	n2[0] * p2[0] + n2[1] * p2[1] + n2[2] * p2[2];
-	Z3i::RealPoint direction = n1.crossProduct(n2);
-
-	Eigen::Matrix2f A;
-	Eigen::Vector2f b;
-
-	A << n1[1], n1[2], n2[1], n2[2];
-	b << d1, d2;
-
-	Eigen::Vector2f x = A.colPivHouseholderQr().solve(b);
-	Z3i::RealPoint solution(0, x[0], x[1]);
-	return make_pair(solution, direction);
-}
 
 Z3i::DigitalSet createVolumeAroundPoint(const Z3i::DigitalSet& setVolume,
 										const Z3i::Point& point, double radius) {
@@ -1132,80 +719,6 @@ std::vector<Z3i::DigitalSet> planesAlongEdge(const vector<Z3i::Point>& orientedE
 
 
 
-void twoClosestPlanesNonIntersecting(Z3i::DigitalSet& plane,
-									 Z3i::DigitalSet& plane2,
-									 int& index,
-									 int& index2,
-									 const vector<Z3i::DigitalSet>& planesEdge,
-									 const vector<Z3i::DigitalSet>& planesEdge2)
-{
-	for (int i = 0; i < planesEdge.size(); i ++) {
-		Z3i::DigitalSet firstPlane = planesEdge[i];
-		for (int j = 0; j < planesEdge2.size(); j++) {
-			Z3i::DigitalSet secondPlane = planesEdge2[j];
-			bool intersecting = planesIntersect(firstPlane, secondPlane);
-			if (!intersecting ) {
-				bool underIntersecting = false;
-
-				for (int firstI = i; firstI < planesEdge.size(); firstI++) {
-					Z3i::DigitalSet planeFirstUnder = planesEdge[firstI];
-					for (int secondJ = j; secondJ < planesEdge2.size(); secondJ++) {
-						Z3i::DigitalSet planeSecondUnder = planesEdge2[secondJ];
-						underIntersecting |= planesIntersect(planeFirstUnder, planeSecondUnder);
-					}
-				}
-				if (!underIntersecting) {
-					index = i;
-					index2 = j;
-					plane = firstPlane;
-					plane2 = secondPlane;
-					return;
-				}
-			}
-		}
-	}
-}
-
-void twoClosestPlanesNonIntersecting(Z3i::DigitalSet& plane,
-									 int& index,
-									 const vector<Z3i::DigitalSet>& planesEdge,
-									 const std::initializer_list<vector<Z3i::DigitalSet>>& otherPlanes)
-{
-	vector<size_t> doneIndexes;
-	for (int i = 0; i < planesEdge.size(); i ++) {
-		Z3i::DigitalSet firstPlane = planesEdge[i];
-		for (int otherIndex = 0; otherIndex < otherPlanes.size(); otherIndex++) {
-		    vector<Z3i::DigitalSet> otherPlanesEdge = otherPlanes.begin()[otherIndex];
-			for (int j = 0; j < otherPlanesEdge.size(); j++) {
-				Z3i::DigitalSet otherPlane = otherPlanesEdge[j];
-				bool intersecting = planesIntersect(firstPlane, otherPlane);
-				if (!intersecting) {
-					bool underIntersecting = false;
-
-					for (int firstI = i; firstI < planesEdge.size(); firstI++) {
-						Z3i::DigitalSet planeFirstUnder = planesEdge[firstI];
-						for (const vector<Z3i::DigitalSet>& restrictedPlanesEdge : otherPlanes) {
-							for (int secondJ = j; secondJ < restrictedPlanesEdge.size(); secondJ++) {
-								Z3i::DigitalSet planeSecondUnder = restrictedPlanesEdge[secondJ];
-								underIntersecting |= planesIntersect(planeFirstUnder, planeSecondUnder);
-							}
-						}
-					}
-					if ((find(doneIndexes.begin(), doneIndexes.end(), otherIndex) == doneIndexes.end()) &&
-						!underIntersecting) {
-						doneIndexes.push_back(otherIndex);
-						index = i;
-						plane = firstPlane;
-						if (doneIndexes.size() == otherPlanes.size()) return;
-						break;
-					}
-				}
-			}
-		}
-
-	}
-}
-
 vector<pair<Z3i::Point, Z3i::DigitalSet> > filterPlanes(const vector<pair<Z3i::Point, Z3i::DigitalSet> >& initialPlanes,
 									 const Z3i::DigitalSet& referencePlane) {
 	double maxRatio = numeric_limits<double>::max();
@@ -1267,6 +780,40 @@ vector<pair<Z3i::Point, Z3i::RealVector> > filterPlanesWithAngle(const vector<pa
 }
 
 
+
+pair<Z3i::Point, Z3i::DigitalSet> detectBranchingPoint(const vector<pair<Z3i::Point, Z3i::DigitalSet> >& parentEdge,
+														 const vector<Z3i::DigitalSet>& cuttingPlanes) {
+	for (const auto& pair : parentEdge) {
+		Z3i::Point current = pair.first;
+		Z3i::DigitalSet currentPlane = pair.second;
+		bool areIntersecting = false;
+		for (const Z3i::DigitalSet& cuttingPlane : cuttingPlanes) {
+			if (areIntersecting) break;
+			if (planesIntersect(cuttingPlane, currentPlane)) {
+				areIntersecting = true;
+
+			}
+		}
+		if (!areIntersecting) {
+			return pair;
+		}
+	}
+	return *(--parentEdge.end());
+}
+
+Z3i::DigitalSet isolateJunctionAreas(const vector<pair<Z3i::Point, Z3i::RealPoint> >& pToNormals,
+									 const Z3i::DigitalSet& setVolume) {
+	Z3i::DigitalSet setJunction(setVolume.domain());
+	for (const Z3i::Point& p : setVolume) {
+		bool addToJunction = true;
+		for (const pair<Z3i::Point, Z3i::RealPoint>& pToN : pToNormals) {
+			addToJunction &= VCMUtil::abovePlane(p, pToN.second, pToN.first);
+		}
+		if (addToJunction)
+			setJunction.insert(p);
+	}
+	return setJunction;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
@@ -1349,8 +896,6 @@ int main( int  argc, char**  argv )
 	double R = vm["radiusInside"].as<double>();
 	double r = vm["radiusNeighbour"].as<double>();
 	double delta = vm["delta"].as<double>();
-//	bool isDT = vm["skeleton"].as<bool>();
-	bool isDT = true;
 
 	QApplication application(argc,argv);
 	Viewer3D<> viewer;
@@ -1368,7 +913,6 @@ int main( int  argc, char**  argv )
 	Image skeleton = VolReader<Image>::importVol(skeletonFilename);
 	Z3i::Domain domainSkeleton = skeleton.domain();
 	Z3i::DigitalSet setSkeleton(domainSkeleton);
-//	Z3i::DigitalSet branchingPoints(domainSkeleton);
 	SetFromImage<Z3i::DigitalSet>::append<Image>(setSkeleton, skeleton, thresholdMin-1, thresholdMax);
 
 	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
@@ -1392,12 +936,6 @@ int main( int  argc, char**  argv )
 		}
 	}
 
-	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
-	typedef GreedySegmentation<SegmentComputer> Segmentation;
-
-	//Z3i::DigitalSet branchingPoints = CurveAnalyzer::detectCriticalPoints(existingSkeleton);
-
-
 	vector<Z3i::Point> endPointsV = CurveAnalyzer::findEndPoints(existingSkeleton);
 	Z3i::Point p = (*endPointsV.begin());
 
@@ -1406,8 +944,6 @@ int main( int  argc, char**  argv )
 																							   existingSkeleton,
 																							   p);
 
-
-    //branchingPoints = CurveAnalyzer::detectCriticalPoints(existingSkeleton);
 	vector<Z3i::Point> endPoints;
 	for (const Z3i::Point& p : endPointsV) {
 		if (branchingPoints.find(p) == branchingPoints.end())
@@ -1447,12 +983,20 @@ int main( int  argc, char**  argv )
 		 																			const Z3i::DigitalSet& e2) {
 										return e1.size() < e2.size();
 									})->size()*0.5;
+
 		for (const Z3i::DigitalSet& adjacentE : adjacentEdges) {
-			double radius = adjacentE.size();
+			Z3i::Point farthestPoint = *max_element(adjacentE.begin(), adjacentE.end(), [&](const Z3i::Point& one,
+																							const Z3i::Point& two) {
+												 return Z3i::l2Metric(one, b) < Z3i::l2Metric(two, b);
+											 });
+
+			double maxDistance = Z3i::l2Metric(b, farthestPoint);
+			double radius = maxDistance// adjacentE.size()*0.9
+				;
 			DGtal::Z3i::DigitalSet restrictedAdj = restrictByDistanceToPoint(adjacentE, b, radius);
-			restrictedAdjacentEdges.push_back(restrictedAdj);
+			restrictedAdjacentEdges.push_back(adjacentE);
 		}
-		if (adjacentEdges.size() > 3 //  || dt(b) <= sqrt(3)
+		if (adjacentEdges.size() > 3  //|| dt(b) > 3 || dt(b) <= 2 || lowestSize > 5
 			) {
 			for (const Z3i::DigitalSet& restrictedAdj : restrictedAdjacentEdges) {
 				processedEdges.insert(restrictedAdj.begin(), restrictedAdj.end());
@@ -1462,6 +1006,7 @@ int main( int  argc, char**  argv )
 
 			continue;
 		}
+
 		if (adjacentEdges.size() == 3) {
 			vector<pair<Z3i::Point, double>> pointsVarying;
 			vector<pair<Z3i::Point, Z3i::RealPoint>> pointsToNormals;
@@ -1473,7 +1018,6 @@ int main( int  argc, char**  argv )
 				vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(restrictEdge, b);
 				vector<pair<Z3i::Point, Z3i::DigitalSet> > planes = computePlanes(vcmSurface, chiSurface, orientedEdge,
 																				  dt, setVolume, setVolumeWeighted, domainVolume);
-
 				vector< pair< Z3i::Point, double > > pointToAreas = computeArea(planes);
 				if (pointToAreas.size() == 0) continue;
 
@@ -1489,15 +1033,14 @@ int main( int  argc, char**  argv )
 
 			}
 
-			double radiusReference = dt(b) + 1;
+			double radiusReference = dt(b) + 2;
 			Z3i::RealPoint normal;
 			Z3i::DigitalSet referencePlane = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume, setVolumeWeighted,
 																		   b, normal,
 																		   0, radiusReference, radiusReference*10, 26, true);
+//			viewer << CustomColors3D(Color::Blue, Color::Blue) << referencePlane;
 			referenceNormal = make_pair(b, normal);
-
-
-			vector<pair<Z3i::Point, Z3i::DigitalSet>> filteredPlanes = filterPlanesWithHalfSpaces(endPointToPlanes, pointToPlanes, referenceNormal);
+			vector<pair<Z3i::Point, Z3i::DigitalSet> > filteredPlanes = filterPlanesWithHalfSpaces(endPointToPlanes, pointToPlanes, referenceNormal);
 
 			if (filteredPlanes.size() < 2) {
 			    for (const Z3i::DigitalSet& restrictedAdj : restrictedAdjacentEdges) {
@@ -1507,160 +1050,223 @@ int main( int  argc, char**  argv )
 				}
 				continue;
 			}
-			//Find two max :  two planes
-			pair<Z3i::Point, Z3i::DigitalSet> maxiVarying = filteredPlanes[0];
-			pair<Z3i::Point, Z3i::DigitalSet> maxiVarying2 = filteredPlanes[1];
-
-			Z3i::Point firstPoint = maxiVarying.first, secondPoint = maxiVarying2.first;
-			Z3i::DigitalSet firstPlane = maxiVarying.second, secondPlane = maxiVarying2.second;
-
-			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << firstPoint << secondPoint;
-			if (maxiVarying.first == Z3i::Point() || maxiVarying2.first == Z3i::Point()) continue;
-
-
-			Z3i::DigitalSet restrictEdge = *find_if(restrictedAdjacentEdges.begin(),
-													restrictedAdjacentEdges.end(),
-													[&](const Z3i::DigitalSet& one) {
-													   return one.find(firstPoint) != one.end();
-												   });
-			Z3i::DigitalSet restrictEdge2 = *find_if(restrictedAdjacentEdges.begin(),
-													restrictedAdjacentEdges.end(),
-													[&](const Z3i::DigitalSet& one) {
-													   return one.find(secondPoint) != one.end();
-												   });
-
+			vector<Z3i::DigitalSet> edgesRecentering;
+			for (const pair<Z3i::Point, Z3i::DigitalSet>& otherPToP : filteredPlanes) {
+				auto it = find_if(restrictedAdjacentEdges.begin(),
+							 restrictedAdjacentEdges.end(),
+							 [&](const Z3i::DigitalSet& one) {
+								 return one.find(otherPToP.first) != one.end();
+								   });
+				if (it != restrictedAdjacentEdges.end())
+					edgesRecentering.push_back(*it);
+			}
 			Z3i::DigitalSet restrictEdgeB(domainVolume);
 			for (const Z3i::DigitalSet& edge : restrictedAdjacentEdges) {
-				if (!(CurveAnalyzer::sameSet(edge, restrictEdge) ||
-					  CurveAnalyzer::sameSet(edge, restrictEdge2))) {
+				unsigned int cpt = 0;
+				for (const Z3i::DigitalSet& edgeRecentering : edgesRecentering) {
+					if (!(CurveAnalyzer::sameSet(edge, edgeRecentering))) {
+						cpt++;
+					}
+				}
+				if (cpt == edgesRecentering.size())
 					restrictEdgeB = edge;
+			}
+			std::vector<Z3i::Point> restrictEdgeBOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeB, b);
+
+			vector<pair<Z3i::Point, Z3i::DigitalSet> > planesB = computePlanes(vcmSurface, chiSurface, restrictEdgeBOriented,
+																			  dt, setVolume, setVolumeWeighted, domainVolume);
+			vector<Z3i::DigitalSet> cuttingPlanes;
+			//Find two max :  two planes
+			for (int i = 0, end = filteredPlanes.size(); i < end; ++i) {
+				pair<Z3i::Point, Z3i::DigitalSet> pointToPlane = filteredPlanes[i];
+				Z3i::Point currentPoint = pointToPlane.first;
+				Z3i::DigitalSet currentPlane = pointToPlane.second;
+				Z3i::DigitalSet currentEdge = *find_if(restrictedAdjacentEdges.begin(),
+													restrictedAdjacentEdges.end(),
+													[&](const Z3i::DigitalSet& one) {
+													   return one.find(currentPoint) != one.end();
+												   });
+				currentEdge = restrictByDistanceToPoint(currentEdge, b, radius);
+
+				vector<Z3i::DigitalSet> otherEdges;
+				vector<pair<Z3i::Point, Z3i::DigitalSet> > otherCuttingPlanes;
+
+				for (int j = 0, jend = edgesRecentering.size(); j < jend; j++) {
+					if (i != j) {
+						Z3i::DigitalSet otherRestrictedEdge = restrictByDistanceToPoint(edgesRecentering[j], b, radius);
+						pair<Z3i::Point, Z3i::DigitalSet> otherPToPlane = filteredPlanes[j];
+						Z3i::Point otherPoint = otherPToPlane.first;
+						if (otherPoint == Z3i::Point() || currentPoint == Z3i::Point()) continue;
+						Z3i::DigitalSet otherPlane = otherPToPlane.second;
+
+						pair<Z3i::Point, Z3i::Point> closestPointsInter = twoClosestPoints(currentPlane, otherPlane);
+						Z3i::Point current = closestPointsInter.first;
+						Z3i::Point current2 = closestPointsInter.second;
+
+
+						pair<Z3i::Point, Z3i::RealPoint> ptoNPlane = pointToNormal<VCM, KernelFunction>(currentPoint, currentEdge, domainVolume, setVolumeWeighted);
+						pair<Z3i::Point, Z3i::RealPoint>  ptoNPlane2 = pointToNormal<VCM, KernelFunction>(otherPoint, otherRestrictedEdge, domainVolume, setVolumeWeighted);
+
+						Z3i::RealPoint normalRot = ptoNPlane.second.crossProduct(ptoNPlane2.second);
+						Z3i::RealPoint normalPlane = normalRot.crossProduct(ptoNPlane2.second);
+						Z3i::RealPoint normalPlane2 = normalRot.crossProduct(ptoNPlane.second);
+
+						Z3i::DigitalSet newPlane(domainVolume), newPlane2(domainVolume);
+						double d = normalPlane[0] * current[0] + normalPlane[1] * current[1] + normalPlane[2] * current[2];
+						double omega = std::max(std::abs(normalPlane[0]), std::max(std::abs(normalPlane[1]), std::abs(normalPlane[2])));
+						VCMUtil::extractConnectedComponent3D(newPlane, domainVolume, setVolumeWeighted, normalPlane, current, d, omega);
+						d = normalPlane2[0] * current2[0] + normalPlane2[1] * current2[1] + normalPlane2[2] * current2[2];
+						omega = std::max(std::abs(normalPlane2[0]), std::max(std::abs(normalPlane2[1]), std::abs(normalPlane2[2])));
+						VCMUtil::extractConnectedComponent3D(newPlane2, domainVolume, setVolumeWeighted, normalPlane2, current2, d, omega);
+
+						Z3i::RealVector delineatePlane = (b - current).getNormalized();
+						Z3i::RealVector delineatePlane2 = (b -current2).getNormalized();
+						normalPlane = (delineatePlane.dot(normalPlane) < 0) ? -normalPlane : normalPlane;
+						normalPlane2 = (delineatePlane2.dot(normalPlane2) < 0) ? -normalPlane2 : normalPlane2;
+
+						Z3i::DigitalSet delineatedNewPlane2(newPlane2.domain());
+						for (const Z3i::Point& p : newPlane2) {
+							if (VCMUtil::abovePlane(p, normalPlane, current2))
+								delineatedNewPlane2.insert(p);
+						}
+						viewer << CustomColors3D(Color::Red, Color::Red) << delineatedNewPlane2;
+						cuttingPlanes.push_back(delineatedNewPlane2);
+
+						//Recentering
+						{
+							// Z3i::DigitalSet restrictedVolumePlane = createVolumeAroundPoint(setVolume, b, radius*1.5);
+							// Z3i::DigitalSet subVolume =  createSubVolume (restrictedVolumePlane, normalPlane, current);
+							// Z3i::DigitalSet subVolumeUnder = createSubVolume (restrictedVolumePlane, -normalPlane2, current);
+							// subVolume.insert(subVolumeUnder.begin(), subVolumeUnder.end());
+
+							// std::vector<Z3i::Point> eEdge = CurveAnalyzer::findEndPoints(currentEdge);
+							// Z3i::Point candEdge = b;
+							// for (const Z3i::Point& p : eEdge) {
+							// 	if (p != b)
+							// 		candEdge = p;
+							// }
+
+
+							// Z3i::DigitalSet restrictEdgeInVol(domainVolume),restrictEdgeBInVol(domainVolume);
+							// for (const Z3i::Point& pResVol : restrictedVolumePlane) {
+							// 	if (currentEdge.find(pResVol) != currentEdge.end())
+							// 		restrictEdgeInVol.insert(pResVol);
+							// 	if (restrictEdgeB.find(pResVol) != restrictEdgeB.end())
+							// 		restrictEdgeBInVol.insert(pResVol);
+							// }
+
+							// std::vector<Z3i::Point> restrictEdgeOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeInVol, candEdge);
+							// std::vector<Z3i::Point> restrictEdgeBOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeBInVol, b);
+
+
+
+							// std::vector<Z3i::Point> edgesVolume;
+							// edgesVolume.insert(edgesVolume.end(), restrictEdgeOriented.begin(), restrictEdgeOriented.end());
+							// edgesVolume.insert(edgesVolume.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
+
+							// Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume, edgesVolume, skeletonPoints);
+							// skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
+							// viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton;
+
+							// processedEdges.insert(restrictEdge.begin(), restrictEdge.end());
+							// processedEdges.insert(restrictEdgeB.begin(), restrictEdgeB.end());
+						}
+					}
 				}
 			}
-
-
-		    restrictEdge = restrictByDistanceToPoint(restrictEdge, b, radius);
-			restrictEdge2 = restrictByDistanceToPoint(restrictEdge2, b, radius);
-			restrictEdgeB = restrictByDistanceToPoint(restrictEdgeB, b, radius);
-
-			pair<Z3i::Point, Z3i::Point> closestPointsInter = twoClosestPoints(firstPlane, secondPlane);
-
-			Z3i::Point current = closestPointsInter.first;
-			Z3i::Point current2 = closestPointsInter.second;
-
-
-			pair<Z3i::Point, Z3i::RealPoint> ptoNPlane = pointToNormal<VCM, KernelFunction>(firstPoint, restrictEdge, domainVolume, setVolumeWeighted);
-			pair<Z3i::Point, Z3i::RealPoint>  ptoNPlane2 = pointToNormal<VCM, KernelFunction>(secondPoint, restrictEdge2, domainVolume, setVolumeWeighted);
-			if (firstPlane.size()  == 0 || secondPlane.size() == 0)
-				trace.info() << ptoNPlane.second << " " << ptoNPlane2.second << endl;
-			Z3i::RealPoint normalRot = ptoNPlane.second.crossProduct(ptoNPlane2.second);
-			Z3i::RealPoint normalPlane = normalRot.crossProduct(ptoNPlane2.second);
-			Z3i::RealPoint normalPlane2 = normalRot.crossProduct(ptoNPlane.second);
-
-			Z3i::DigitalSet newPlane(domainVolume), newPlane2(domainVolume);
-			double d = normalPlane[0] * current[0] + normalPlane[1] * current[1] + normalPlane[2] * current[2];
-			double omega = std::max(std::abs(normalPlane[0]), std::max(std::abs(normalPlane[1]), std::abs(normalPlane[2])));
-			VCMUtil::extractConnectedComponent3D(newPlane, domainVolume, setVolumeWeighted, normalPlane, current, d, omega);
-
-			d = normalPlane2[0] * current2[0] + normalPlane2[1] * current2[1] + normalPlane2[2] * current2[2];
-			omega = std::max(std::abs(normalPlane2[0]), std::max(std::abs(normalPlane2[1]), std::abs(normalPlane2[2])));
-			VCMUtil::extractConnectedComponent3D(newPlane2, domainVolume, setVolumeWeighted, normalPlane2, current2, d, omega);
-
-
-			Z3i::RealVector delineatePlane = (b - current).getNormalized();
-			Z3i::RealVector delineatePlane2 = (b -current2).getNormalized();
-			normalPlane = (delineatePlane.dot(normalPlane) < 0) ? -normalPlane : normalPlane;
-			normalPlane2 = (delineatePlane2.dot(normalPlane2) < 0) ? -normalPlane2 : normalPlane2;
-
-			Z3i::DigitalSet delineatedNewPlane(newPlane.domain());
-			for (const Z3i::Point& p : newPlane) {
-				if (VCMUtil::abovePlane(p, normalPlane2, current))
-					delineatedNewPlane.insert(p);
+			pair<Z3i::Point, Z3i::DigitalSet> pairBranching = detectBranchingPoint(planesB, cuttingPlanes);
+			Z3i::Point newB = pairBranching.first;
+			Z3i::RealVector dirVector = (b - newB).getNormalized();
+			vector<pair<Z3i::Point, Z3i::RealPoint> > pToNormals;
+			pair<Z3i::Point, Z3i::RealPoint> ptoNPlaneB = pointToNormal<VCM, KernelFunction>(pairBranching.first, restrictEdgeB, domainVolume, setVolumeWeighted);
+			Z3i::RealVector normalNewB = ptoNPlaneB.second;
+			if (dirVector.dot(normalNewB) < 0)
+				normalNewB = -normalNewB;
+			pToNormals.push_back(make_pair(newB, normalNewB));
+			for (int i = 0; i < filteredPlanes.size(); i++) {
+				pair<Z3i::Point, Z3i::DigitalSet> pairPointToPlane = filteredPlanes[i];
+				Z3i::Point currentPoint = pairPointToPlane.first;
+				Z3i::RealVector dirVector = (b - currentPoint).getNormalized();
+				Z3i::DigitalSet correspondingEdge = edgesRecentering[i];
+				pair<Z3i::Point, Z3i::RealPoint> ptoNPlane = pointToNormal<VCM, KernelFunction>(currentPoint, correspondingEdge, domainVolume, setVolumeWeighted);
+				Z3i::RealVector normal = ptoNPlane.second;
+				if (dirVector.dot(normal) < 0)
+					normal = -normal;
+				pToNormals.push_back(make_pair(currentPoint, normal));
 			}
 
-
-			Z3i::DigitalSet delineatedNewPlane2(newPlane2.domain());
-			for (const Z3i::Point& p : newPlane2) {
-				if (VCMUtil::abovePlane(p, normalPlane, current2))
-					delineatedNewPlane2.insert(p);
-			}
-
-			viewer << CustomColors3D(Color::Red, Color::Red) << delineatedNewPlane;
-			planes.push_back(newPlane);
-
-
-			viewer << CustomColors3D(Color::Red, Color::Red) << delineatedNewPlane2;
-			planes.push_back(newPlane2);
-
+			Z3i::DigitalSet junctionToDelete = isolateJunctionAreas(pToNormals, setVolume);
+			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << junctionToDelete;
 
 			//Recentering
 			{
-				Z3i::DigitalSet restrictedVolumePlane = createVolumeAroundPoint(setVolume, b, radius*1.5);
-				Z3i::DigitalSet subVolume =  createSubVolume (restrictedVolumePlane, normalPlane, current);
-				Z3i::DigitalSet subVolume2 = createSubVolume (restrictedVolumePlane, normalPlane2, current);
-				Z3i::DigitalSet subVolumeUnder = createSubVolume (restrictedVolumePlane, -normalPlane2, current);
-				Z3i::DigitalSet subVolumeUnder2 = createSubVolume (restrictedVolumePlane, -normalPlane, current);
-				subVolume.insert(subVolumeUnder.begin(), subVolumeUnder.end());
-				subVolume2.insert(subVolumeUnder2.begin(), subVolumeUnder2.end());
+				// Z3i::DigitalSet restrictedVolumePlane = createVolumeAroundPoint(setVolume, b, radius*1.5);
+				// Z3i::DigitalSet subVolume =  createSubVolume (restrictedVolumePlane, normalPlane, current);
+				// Z3i::DigitalSet subVolume2 = createSubVolume (restrictedVolumePlane, normalPlane2, current);
+				// Z3i::DigitalSet subVolumeUnder = createSubVolume (restrictedVolumePlane, -normalPlane2, current);
+				// Z3i::DigitalSet subVolumeUnder2 = createSubVolume (restrictedVolumePlane, -normalPlane, current);
+				// subVolume.insert(subVolumeUnder.begin(), subVolumeUnder.end());
+				// subVolume2.insert(subVolumeUnder2.begin(), subVolumeUnder2.end());
 
-				std::vector<Z3i::Point> eEdge = CurveAnalyzer::findEndPoints(restrictEdge);
-				std::vector<Z3i::Point> eEdge2 = CurveAnalyzer::findEndPoints(restrictEdge2);
+				// std::vector<Z3i::Point> eEdge = CurveAnalyzer::findEndPoints(restrictEdge);
+				// std::vector<Z3i::Point> eEdge2 = CurveAnalyzer::findEndPoints(restrictEdge2);
 
-				Z3i::Point candEdge = b;
-				for (const Z3i::Point& p : eEdge) {
-					if (p != b)
-						candEdge = p;
-				}
+				// Z3i::Point candEdge = b;
+				// for (const Z3i::Point& p : eEdge) {
+				// 	if (p != b)
+				// 		candEdge = p;
+				// }
 
 
-				Z3i::Point candEdge2 = b;
-				for (const Z3i::Point& p : eEdge2) {
-					if (p != b)
-						candEdge2 = p;
-				}
+				// Z3i::Point candEdge2 = b;
+				// for (const Z3i::Point& p : eEdge2) {
+				// 	if (p != b)
+				// 		candEdge2 = p;
+				// }
 
-				Z3i::DigitalSet restrictEdgeInVol(domainVolume), restrictEdge2InVol(domainVolume), restrictEdgeBInVol(domainVolume);
-				for (const Z3i::Point& pResVol : restrictedVolumePlane) {
-					if (restrictEdge.find(pResVol) != restrictEdge.end())
-						restrictEdgeInVol.insert(pResVol);
-					if (restrictEdge2.find(pResVol) != restrictEdge2.end())
-						restrictEdge2InVol.insert(pResVol);
-					if (restrictEdgeB.find(pResVol) != restrictEdgeB.end())
-						restrictEdgeBInVol.insert(pResVol);
-				}
+				// Z3i::DigitalSet restrictEdgeInVol(domainVolume), restrictEdge2InVol(domainVolume), restrictEdgeBInVol(domainVolume);
+				// for (const Z3i::Point& pResVol : restrictedVolumePlane) {
+				// 	if (restrictEdge.find(pResVol) != restrictEdge.end())
+				// 		restrictEdgeInVol.insert(pResVol);
+				// 	if (restrictEdge2.find(pResVol) != restrictEdge2.end())
+				// 		restrictEdge2InVol.insert(pResVol);
+				// 	if (restrictEdgeB.find(pResVol) != restrictEdgeB.end())
+				// 		restrictEdgeBInVol.insert(pResVol);
+				// }
 
-				std::vector<Z3i::Point> restrictEdgeOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeInVol, candEdge);
-				std::vector<Z3i::Point> restrictEdge2Oriented = CurveAnalyzer::convertToOrientedEdge(restrictEdge2InVol, candEdge2);
-				std::vector<Z3i::Point> restrictEdgeBOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeBInVol, b);
+				// std::vector<Z3i::Point> restrictEdgeOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeInVol, candEdge);
+				// std::vector<Z3i::Point> restrictEdge2Oriented = CurveAnalyzer::convertToOrientedEdge(restrictEdge2InVol, candEdge2);
+				// std::vector<Z3i::Point> restrictEdgeBOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeBInVol, b);
 
-				std::vector<Z3i::Point> edgesVolume;
-				edgesVolume.insert(edgesVolume.end(), restrictEdge2Oriented.begin(), restrictEdge2Oriented.end());
-				edgesVolume.insert(edgesVolume.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
+				// std::vector<Z3i::Point> edgesVolume;
+				// edgesVolume.insert(edgesVolume.end(), restrictEdge2Oriented.begin(), restrictEdge2Oriented.end());
+				// edgesVolume.insert(edgesVolume.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
 
-				std::vector<Z3i::Point> edgesVolume2;
-				edgesVolume2.insert(edgesVolume2.end(), restrictEdgeOriented.begin(), restrictEdgeOriented.end());
-				edgesVolume2.insert(edgesVolume2.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
+				// std::vector<Z3i::Point> edgesVolume2;
+				// edgesVolume2.insert(edgesVolume2.end(), restrictEdgeOriented.begin(), restrictEdgeOriented.end());
+				// edgesVolume2.insert(edgesVolume2.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
 
-				Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume, edgesVolume, skeletonPoints);
-				skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
-				Z3i::DigitalSet smoothedSkeleton2 = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume2, edgesVolume2, skeletonPoints);
-				skeletonPoints.insert(smoothedSkeleton2.begin(), smoothedSkeleton2.end());
+				// Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume, edgesVolume, skeletonPoints);
+				// skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
+				// Z3i::DigitalSet smoothedSkeleton2 = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume2, edgesVolume2, skeletonPoints);
+				// skeletonPoints.insert(smoothedSkeleton2.begin(), smoothedSkeleton2.end());
 
-				viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton;
-				viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton2;
+				// viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton;
+				// viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton2;
 
-				viewer << CustomColors3D(Color::Red, Color::Red) << delineatedNewPlane << delineatedNewPlane2;
+				// viewer << CustomColors3D(Color::Red, Color::Red) << delineatedNewPlane << delineatedNewPlane2;
 
-				processedEdges.insert(restrictEdge.begin(), restrictEdge.end());
-				processedEdges.insert(restrictEdge2.begin(), restrictEdge2.end());
-				processedEdges.insert(restrictEdgeB.begin(), restrictEdgeB.end());
+				// processedEdges.insert(restrictEdge.begin(), restrictEdge.end());
+				// processedEdges.insert(restrictEdge2.begin(), restrictEdge2.end());
+				// processedEdges.insert(restrictEdgeB.begin(), restrictEdgeB.end());
 			}
 		}
 	}
-	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-	// viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
-	// viewer << Viewer3D<>::updateDisplay;
-	// application.exec();
-	// return 0;
+	//viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
+	viewer << Viewer3D<>::updateDisplay;
+	application.exec();
+	return 0;
 	{
 	// vector<Z3i::DigitalSet> parts = computeSubVolumes(setVolume, planes);
 	// for (const Z3i::DigitalSet& part : parts) {
@@ -1669,22 +1275,22 @@ int main( int  argc, char**  argv )
 	// }
 	}
 	{
-		Z3i::DigitalSet notProcessed(existingSkeleton.domain());
-		for (const Z3i::Point& s : existingSkeleton) {
-			if (processedEdges.find(s) == processedEdges.end())
-				notProcessed.insert(s);
-		}
+		// Z3i::DigitalSet notProcessed(existingSkeleton.domain());
+		// for (const Z3i::Point& s : existingSkeleton) {
+		// 	if (processedEdges.find(s) == processedEdges.end())
+		// 		notProcessed.insert(s);
+		// }
 
-		Z3i::Object26_6 objNotProcessed(Z3i::dt26_6, notProcessed);
-		vector<Z3i::Object26_6> objects;
-		back_insert_iterator<vector<Z3i::Object26_6> > inserter(objects);
-		objNotProcessed.writeComponents(inserter);
-		for (const Z3i::Object26_6& o : objects) {
-			Z3i::DigitalSet currentSet = o.pointSet();
-			Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction>(setVolume, currentSet, Z3i::DigitalSet(setVolume.domain()));
-			viewer << CustomColors3D(Color::Red, Color::Red) << smoothedSkeleton;
-			skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
-		}
+		// Z3i::Object26_6 objNotProcessed(Z3i::dt26_6, notProcessed);
+		// vector<Z3i::Object26_6> objects;
+		// back_insert_iterator<vector<Z3i::Object26_6> > inserter(objects);
+		// objNotProcessed.writeComponents(inserter);
+		// for (const Z3i::Object26_6& o : objects) {
+		// 	Z3i::DigitalSet currentSet = o.pointSet();
+		// 	Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction>(setVolume, currentSet, Z3i::DigitalSet(setVolume.domain()));
+		// 	viewer << CustomColors3D(Color::Red, Color::Red) << smoothedSkeleton;
+		// 	skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
+		// }
 	}
 	Image outImage(volume.domain());
 	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);
