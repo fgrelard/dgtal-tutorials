@@ -14,8 +14,10 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/include/cairo/cairo.h
  /usr/include/qt4/Qt3Support/q3cstring.h
  /usr/include/qt4/Qt3Support/q3valuelist.h
+ /usr/include/qt4/QtCore/QDir
  /usr/include/qt4/QtCore/QPoint
  /usr/include/qt4/QtCore/QPointF
+ /usr/include/qt4/QtCore/QTextStream
  /usr/include/qt4/QtCore/qalgorithms.h
  /usr/include/qt4/QtCore/qatomic.h
  /usr/include/qt4/QtCore/qatomic_aarch64.h
@@ -54,9 +56,11 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/include/qt4/QtCore/qcoreapplication.h
  /usr/include/qt4/QtCore/qcoreevent.h
  /usr/include/qt4/QtCore/qdatastream.h
+ /usr/include/qt4/QtCore/qdir.h
  /usr/include/qt4/QtCore/qeventloop.h
  /usr/include/qt4/QtCore/qfeatures.h
  /usr/include/qt4/QtCore/qfile.h
+ /usr/include/qt4/QtCore/qfileinfo.h
  /usr/include/qt4/QtCore/qglobal.h
  /usr/include/qt4/QtCore/qhash.h
  /usr/include/qt4/QtCore/qiodevice.h
@@ -64,6 +68,7 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/include/qt4/QtCore/qline.h
  /usr/include/qt4/QtCore/qlinkedlist.h
  /usr/include/qt4/QtCore/qlist.h
+ /usr/include/qt4/QtCore/qlocale.h
  /usr/include/qt4/QtCore/qmap.h
  /usr/include/qt4/QtCore/qmargins.h
  /usr/include/qt4/QtCore/qmetatype.h
@@ -87,28 +92,38 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/include/qt4/QtCore/qstringlist.h
  /usr/include/qt4/QtCore/qstringmatcher.h
  /usr/include/qt4/QtCore/qt_windows.h
+ /usr/include/qt4/QtCore/qtextcodec.h
+ /usr/include/qt4/QtCore/qtextstream.h
  /usr/include/qt4/QtCore/qvariant.h
  /usr/include/qt4/QtCore/qvector.h
  /usr/include/qt4/QtGui/QApplication
  /usr/include/qt4/QtGui/QColor
  /usr/include/qt4/QtGui/QKeyEvent
+ /usr/include/qt4/QtGui/QMessageBox
  /usr/include/qt4/QtGui/QPlatformWindow
  /usr/include/qt4/QtGui/QPlatformWindowFormat
+ /usr/include/qt4/QtGui/QTextEdit
+ /usr/include/qt4/QtGui/qabstractscrollarea.h
  /usr/include/qt4/QtGui/qapplication.h
  /usr/include/qt4/QtGui/qbrush.h
  /usr/include/qt4/QtGui/qcolor.h
  /usr/include/qt4/QtGui/qcursor.h
  /usr/include/qt4/QtGui/qdesktopwidget.h
+ /usr/include/qt4/QtGui/qdialog.h
  /usr/include/qt4/QtGui/qdrag.h
  /usr/include/qt4/QtGui/qdrawutil.h
  /usr/include/qt4/QtGui/qevent.h
  /usr/include/qt4/QtGui/qfont.h
+ /usr/include/qt4/QtGui/qfontdatabase.h
  /usr/include/qt4/QtGui/qfontinfo.h
  /usr/include/qt4/QtGui/qfontmetrics.h
+ /usr/include/qt4/QtGui/qframe.h
+ /usr/include/qt4/QtGui/qglyphrun.h
  /usr/include/qt4/QtGui/qimage.h
  /usr/include/qt4/QtGui/qkeysequence.h
  /usr/include/qt4/QtGui/qmacdefines_mac.h
  /usr/include/qt4/QtGui/qmatrix.h
+ /usr/include/qt4/QtGui/qmessagebox.h
  /usr/include/qt4/QtGui/qmime.h
  /usr/include/qt4/QtGui/qpaintdevice.h
  /usr/include/qt4/QtGui/qpaintengine.h
@@ -120,9 +135,16 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/include/qt4/QtGui/qplatformwindow_qpa.h
  /usr/include/qt4/QtGui/qplatformwindowformat_qpa.h
  /usr/include/qt4/QtGui/qpolygon.h
+ /usr/include/qt4/QtGui/qrawfont.h
  /usr/include/qt4/QtGui/qregion.h
  /usr/include/qt4/QtGui/qrgb.h
  /usr/include/qt4/QtGui/qsizepolicy.h
+ /usr/include/qt4/QtGui/qtextcursor.h
+ /usr/include/qt4/QtGui/qtextdocument.h
+ /usr/include/qt4/QtGui/qtextedit.h
+ /usr/include/qt4/QtGui/qtextformat.h
+ /usr/include/qt4/QtGui/qtextlayout.h
+ /usr/include/qt4/QtGui/qtextobject.h
  /usr/include/qt4/QtGui/qtextoption.h
  /usr/include/qt4/QtGui/qtransform.h
  /usr/include/qt4/QtGui/qtransportauth_qws.h
@@ -424,6 +446,7 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/local/include/DGtal/shapes/Mesh.ih
  /usr/local/include/DGtal/topology/CAdjacency.h
  /usr/local/include/DGtal/topology/CCellularGridSpaceND.h
+ /usr/local/include/DGtal/topology/CPreCellularGridSpaceND.h
  /usr/local/include/DGtal/topology/CanonicCellEmbedder.h
  /usr/local/include/DGtal/topology/CanonicCellEmbedder.ih
  /usr/local/include/DGtal/topology/CanonicSCellEmbedder.h
@@ -433,43 +456,22 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/local/include/DGtal/topology/DigitalTopologyTraits.h
  /usr/local/include/DGtal/topology/DomainAdjacency.h
  /usr/local/include/DGtal/topology/DomainAdjacency.ih
+ /usr/local/include/DGtal/topology/KhalimskyPreSpaceND.h
+ /usr/local/include/DGtal/topology/KhalimskyPreSpaceND.ih
  /usr/local/include/DGtal/topology/KhalimskySpaceND.h
  /usr/local/include/DGtal/topology/KhalimskySpaceND.ih
  /usr/local/include/DGtal/topology/MetricAdjacency.h
  /usr/local/include/DGtal/topology/MetricAdjacency.ih
+ /usr/local/include/DGtal/topology/NeighborhoodConfigurations.h
+ /usr/local/include/DGtal/topology/NeighborhoodConfigurations.ih
  /usr/local/include/DGtal/topology/Object.h
  /usr/local/include/DGtal/topology/Object.ih
  /usr/local/include/DGtal/topology/SCellsFunctors.h
  /usr/local/include/DGtal/topology/Topology.h
+ /usr/local/include/DGtal/topology/helpers/NeighborhoodConfigurationsHelper.h
  /usr/local/include/ITK-4.10/ITKCommonExport.h
  /usr/local/include/ITK-4.10/ITKIOGDCMExport.h
  /usr/local/include/ITK-4.10/ITKIOImageBaseExport.h
- /usr/local/include/ITK-4.10/borland55/vcl_cmath.h
- /usr/local/include/ITK-4.10/borland55/vcl_complex.h
- /usr/local/include/ITK-4.10/borland56/vcl_complex.h
- /usr/local/include/ITK-4.10/egcs/vcl_complex.txx
- /usr/local/include/ITK-4.10/emulation/egcs-stlconf.h
- /usr/local/include/ITK-4.10/emulation/gcc-272-stlconf.h
- /usr/local/include/ITK-4.10/emulation/gcc-281-stlconf.h
- /usr/local/include/ITK-4.10/emulation/gcc-295-stlconf.h
- /usr/local/include/ITK-4.10/emulation/sgi-CC-stlconf.h
- /usr/local/include/ITK-4.10/emulation/sun-CC4.1-stlconf.h
- /usr/local/include/ITK-4.10/emulation/sun-CC5.0-stlconf.h
- /usr/local/include/ITK-4.10/emulation/vcl_algobase.h
- /usr/local/include/ITK-4.10/emulation/vcl_bool.h
- /usr/local/include/ITK-4.10/emulation/vcl_complex.h
- /usr/local/include/ITK-4.10/emulation/vcl_complex.txx
- /usr/local/include/ITK-4.10/emulation/vcl_functional.h
- /usr/local/include/ITK-4.10/emulation/vcl_iterator.h
- /usr/local/include/ITK-4.10/emulation/vcl_limits.h
- /usr/local/include/ITK-4.10/emulation/vcl_new.h
- /usr/local/include/ITK-4.10/emulation/vcl_pair.h
- /usr/local/include/ITK-4.10/emulation/vcl_stlconf.h
- /usr/local/include/ITK-4.10/emulation/win32-vc50-stlconf.h
- /usr/local/include/ITK-4.10/gcc-295/vcl_complex.h
- /usr/local/include/ITK-4.10/gcc-295/vcl_complex.txx
- /usr/local/include/ITK-4.10/gcc/vcl_cmath.h
- /usr/local/include/ITK-4.10/gcc/vcl_cstdlib.h
  /usr/local/include/ITK-4.10/gdcmBasicOffsetTable.h
  /usr/local/include/ITK-4.10/gdcmByteSwapFilter.h
  /usr/local/include/ITK-4.10/gdcmByteValue.h
@@ -518,29 +520,6 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/local/include/ITK-4.10/gdcmValueIO.h
  /usr/local/include/ITK-4.10/gdcmValueIO.txx
  /usr/local/include/ITK-4.10/gdcmWin32.h
- /usr/local/include/ITK-4.10/generic/vcl_cassert.h
- /usr/local/include/ITK-4.10/generic/vcl_cmath.h
- /usr/local/include/ITK-4.10/generic/vcl_complex.h
- /usr/local/include/ITK-4.10/generic/vcl_cstddef.h
- /usr/local/include/ITK-4.10/generic/vcl_cstdio.h
- /usr/local/include/ITK-4.10/generic/vcl_cstdlib.h
- /usr/local/include/ITK-4.10/generic/vcl_cstring.h
- /usr/local/include/ITK-4.10/generic/vcl_fstream.h
- /usr/local/include/ITK-4.10/generic/vcl_iosfwd.h
- /usr/local/include/ITK-4.10/generic/vcl_iostream.h
- /usr/local/include/ITK-4.10/generic/vcl_limits.h
- /usr/local/include/ITK-4.10/iso/vcl_cassert.h
- /usr/local/include/ITK-4.10/iso/vcl_cmath.h
- /usr/local/include/ITK-4.10/iso/vcl_complex.h
- /usr/local/include/ITK-4.10/iso/vcl_complex.txx
- /usr/local/include/ITK-4.10/iso/vcl_cstddef.h
- /usr/local/include/ITK-4.10/iso/vcl_cstdio.h
- /usr/local/include/ITK-4.10/iso/vcl_cstdlib.h
- /usr/local/include/ITK-4.10/iso/vcl_cstring.h
- /usr/local/include/ITK-4.10/iso/vcl_fstream.h
- /usr/local/include/ITK-4.10/iso/vcl_iosfwd.h
- /usr/local/include/ITK-4.10/iso/vcl_iostream.h
- /usr/local/include/ITK-4.10/iso/vcl_limits.h
  /usr/local/include/ITK-4.10/itkArray.h
  /usr/local/include/ITK-4.10/itkArray.hxx
  /usr/local/include/ITK-4.10/itkAtomicInt.h
@@ -703,39 +682,16 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/local/include/ITK-4.10/itksys/Configure.hxx
  /usr/local/include/ITK-4.10/itksys/String.hxx
  /usr/local/include/ITK-4.10/itksys/SystemTools.hxx
- /usr/local/include/ITK-4.10/mwerks/vcl_cmath.h
- /usr/local/include/ITK-4.10/mwerks/vcl_complex.h
- /usr/local/include/ITK-4.10/mwerks/vcl_cstdlib.h
- /usr/local/include/ITK-4.10/sgi/vcl_cmath.h
- /usr/local/include/ITK-4.10/sgi/vcl_complex.h
- /usr/local/include/ITK-4.10/sgi/vcl_complex.txx
- /usr/local/include/ITK-4.10/sgi/vcl_cstdlib.h
- /usr/local/include/ITK-4.10/sgi/vcl_iostream.h
- /usr/local/include/ITK-4.10/stlport/vcl_cmath.h
- /usr/local/include/ITK-4.10/stlport/vcl_complex.h
- /usr/local/include/ITK-4.10/stlport/vcl_cstdlib.h
- /usr/local/include/ITK-4.10/sunpro/vcl_cmath.h
- /usr/local/include/ITK-4.10/sunpro/vcl_complex.h
- /usr/local/include/ITK-4.10/sunpro/vcl_complex.txx
- /usr/local/include/ITK-4.10/sunpro/vcl_cstdlib.h
  /usr/local/include/ITK-4.10/vcl_cassert.h
  /usr/local/include/ITK-4.10/vcl_cmath.h
  /usr/local/include/ITK-4.10/vcl_compiler.h
- /usr/local/include/ITK-4.10/vcl_complex.h
- /usr/local/include/ITK-4.10/vcl_complex.txx
  /usr/local/include/ITK-4.10/vcl_config_compiler.h
  /usr/local/include/ITK-4.10/vcl_config_headers.h
  /usr/local/include/ITK-4.10/vcl_config_manual.h
- /usr/local/include/ITK-4.10/vcl_cstddef.h
- /usr/local/include/ITK-4.10/vcl_cstdio.h
  /usr/local/include/ITK-4.10/vcl_cstdlib.h
- /usr/local/include/ITK-4.10/vcl_cstring.h
  /usr/local/include/ITK-4.10/vcl_deprecated.h
- /usr/local/include/ITK-4.10/vcl_fstream.h
- /usr/local/include/ITK-4.10/vcl_iosfwd.h
  /usr/local/include/ITK-4.10/vcl_iostream.h
  /usr/local/include/ITK-4.10/vcl_limits.h
- /usr/local/include/ITK-4.10/vcl_new.h
  /usr/local/include/ITK-4.10/vnl/algo/vnl_determinant.h
  /usr/local/include/ITK-4.10/vnl/algo/vnl_matrix_inverse.h
  /usr/local/include/ITK-4.10/vnl/algo/vnl_svd.h
@@ -749,6 +705,7 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/local/include/ITK-4.10/vnl/vnl_math.h
  /usr/local/include/ITK-4.10/vnl/vnl_matrix.h
  /usr/local/include/ITK-4.10/vnl/vnl_matrix_fixed.h
+ /usr/local/include/ITK-4.10/vnl/vnl_matrix_fixed.hxx
  /usr/local/include/ITK-4.10/vnl/vnl_matrix_fixed.txx
  /usr/local/include/ITK-4.10/vnl/vnl_matrix_ref.h
  /usr/local/include/ITK-4.10/vnl/vnl_numeric_traits.h
@@ -759,13 +716,4 @@ CMakeFiles/TestGeodesicMetric.dir/testGeodesicMetric.cpp.o
  /usr/local/include/ITK-4.10/vnl/vnl_vector_ref.h
  /usr/local/include/ITK-4.10/vxl_config.h
  /usr/local/include/ITK-4.10/vxl_version.h
- /usr/local/include/ITK-4.10/win32-vc60/vcl_cmath.h
- /usr/local/include/ITK-4.10/win32-vc60/vcl_complex.h
- /usr/local/include/ITK-4.10/win32-vc60/vcl_cstdlib.h
- /usr/local/include/ITK-4.10/win32-vc70/vcl_cmath.h
- /usr/local/include/ITK-4.10/win32-vc70/vcl_complex.h
- /usr/local/include/ITK-4.10/win32-vc70/vcl_cstdlib.h
- /usr/local/include/ITK-4.10/win32-vc8/vcl_cmath.h
- /usr/local/include/ITK-4.10/win32-vc8/vcl_complex.h
- /usr/local/include/ITK-4.10/win32-vc8/vcl_cstdlib.h
  ITKIOFactoryRegistration/itkImageIOFactoryRegisterManager.h

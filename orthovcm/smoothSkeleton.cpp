@@ -78,6 +78,7 @@
 #include "geometry/VCMUtil.h"
 #include "geometry/WeightedPointCount.h"
 #include "geometry/SaddleComputer.h"
+#include "geometry/DigitalPlane.h"
 #include "surface/SurfaceTraversal.h"
 #include "Statistics.h"
 #include "shapes/Ball.h"
@@ -109,23 +110,6 @@ Z3i::Point extractNearestNeighborInSetFromPoint(const Z3i::DigitalSet& aSet, con
 }
 
 
-template <typename DTL2>
-Z3i::Point findMaxDTInSet(const Z3i::DigitalSet& set, const DTL2 dt, const Z3i::Point& junctionPoint) {
-	double maxDT = 0.0;
-	Z3i::Point maxDTPoint;
-	for (auto it = set.begin(), ite = set.end(); it != ite; ++it) {
-		Z3i::Point point = *it;
-		if (dt(point) > maxDT) {
-			maxDT = dt(point);
-			maxDTPoint = point;
-		}
-		else if (dt(point) == maxDT) {
-			if (Z3i::l2Metric(junctionPoint, point) < Z3i::l2Metric(junctionPoint, maxDTPoint))
-				maxDTPoint = point;
-		}
-	}
-	return maxDTPoint;
-}
 
 template <typename Image>
 double computeRadiusFromIntersection(const Image& volume, const Z3i::Point& point, const Z3i::RealPoint& normal,
@@ -151,97 +135,6 @@ double computeRadiusFromIntersection(const Image& volume, const Z3i::Point& poin
 	double distance = Z2i::l2Metric(center, trackedPoint);
 	return distance;
 }
-
-
-
-template <typename DTL2>
-Z3i::Point projectionPoint(const DTL2& dt,
-						   const Z3i::Point& center,
-						   const Z3i::RealVector& direction) {
-	Z3i::Point proj = center;
-	int scalar = 1;
-	while (dt.domain().isInside(proj) && dt(proj) > 1) {
-		scalar++;
-		proj = center + direction*scalar;
-	}
-	return proj;
-}
-
-
-template <typename VCM, typename KernelFunction>
-map<Z3i::Point, Z3i::RealPoint> computePlanesForSubVolume(const Z3i::Point& b,
-														  const vector<GraphEdge*> neighborEdge,
-														  double distance) {
-	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
-	Metric l2;
-
-	map<Z3i::Point, Z3i::RealPoint> normals;
-	for (GraphEdge* edge: neighborEdge) {
-		Z3i::DigitalSet setEdge = edge->pointSet();
-		double maxDifference = std::numeric_limits<double>::max();
-		Z3i::Point candidate;
-		for (const Z3i::Point& e : setEdge) {
-			double difference = std::abs(Z3i::l2Metric(e, b) - distance);
-			if (difference < maxDifference) {
-				candidate  = e;
-				maxDifference = difference;
-			}
-		}
-
-		double radius = setEdge.size() * 0.4;
-		VCM vcm(20, ceil(radius), l2, false);
-		vcm.init(setEdge.begin(), setEdge.end());
-		KernelFunction chi(1.0, radius);
-		Z3i::RealPoint normal = VCMUtil::computeNormalFromVCM(candidate, vcm, chi, 0);
-		Z3i::RealPoint directionVector = (candidate - b).getNormalized();
-		normal = (normal.dot(directionVector) < 0) ? normal : -normal;
-		normals[candidate] = normal;
-	}
-	return normals;
-}
-
-
-
-
-std::set<Z3i::Point> vectorsToCompare(const std::vector<Z3i::Point>& directionVectors) {
-
-	set<Z3i::Point> vectorsToCompare;
-	for (const Z3i::Point& directionVector: directionVectors) {
-		for (const Z3i::Point& otherDirectionVector : directionVectors) {
-			if (directionVector == otherDirectionVector) continue;
-			if (directionVector.dot(otherDirectionVector) > 0) {
-				vectorsToCompare.insert(directionVector);
-				vectorsToCompare.insert(otherDirectionVector);
-			}
-		}
-	}
-	return vectorsToCompare;
-}
-
-std::set<Z3i::Point> vectorsToPoint(const std::set<Z3i::Point>& vectorsToCompare,
-									const Z3i::Point& branchingPoint) {
-	set<Z3i::Point> vectorsToPoint;
-	for (const Z3i::Point& p : vectorsToCompare) {
-		vectorsToPoint.insert(branchingPoint + p);
-	}
-	return vectorsToPoint;
-}
-
-
-vector<GraphEdge*> edgesAssociatedWithPoints(const std::set<Z3i::Point>& point,
-											 const vector<GraphEdge*>& graph) {
-	vector<GraphEdge*> edges;
-	for (GraphEdge* edge : graph) {
-		Z3i::DigitalSet setEdge = edge->pointSet();
-		for (const Z3i::Point& p : point) {
-			if (setEdge.find(p) != setEdge.end())
-				edges.push_back(edge);
-		}
-	}
-	return edges;
-}
-
-
 
 
 vector<pair<Z3i::Point, double> > computeArea(const vector<pair<Z3i::Point, Z3i::DigitalSet> >& pointsToPlanes) {
@@ -852,6 +745,7 @@ int main( int  argc, char**  argv )
 	typedef KSpace::Surfel Surfel;
 	typedef VoronoiMap<Space, NotPointPredicate, Metric> VoronoiMap;
 	typedef Eigen::MatrixXd MatrixXd;
+	typedef DigitalPlane<Z3i::Space> DigitalPlane;
 
 	po::options_description general_opt("Allowed options are: ");
 	general_opt.add_options()
@@ -1016,7 +910,7 @@ int main( int  argc, char**  argv )
 				Z3i::DigitalSet restrictEdge = restrictedAdjacentEdges[i];
 				if (restrictEdge.size() == 0) continue;
 				vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(restrictEdge, b);
-				vector<pair<Z3i::Point, Z3i::DigitalSet> > planes = computePlanes(vcmSurface, chiSurface, orientedEdge,
+				vector<DigitalPlane> planes = computePlanes(vcmSurface, chiSurface, orientedEdge,
 																				  dt, setVolume, setVolumeWeighted, domainVolume);
 				vector< pair< Z3i::Point, double > > pointToAreas = computeArea(planes);
 				if (pointToAreas.size() == 0) continue;
@@ -1076,6 +970,7 @@ int main( int  argc, char**  argv )
 			vector<pair<Z3i::Point, Z3i::DigitalSet> > planesB = computePlanes(vcmSurface, chiSurface, restrictEdgeBOriented,
 																			  dt, setVolume, setVolumeWeighted, domainVolume);
 			vector<Z3i::DigitalSet> cuttingPlanes;
+			vector<pair<Z3i::Point, Z3i::RealVector> > cuttingPlaneNormals;
 			//Find two max :  two planes
 			for (int i = 0, end = filteredPlanes.size(); i < end; ++i) {
 				pair<Z3i::Point, Z3i::DigitalSet> pointToPlane = filteredPlanes[i];
@@ -1119,6 +1014,8 @@ int main( int  argc, char**  argv )
 						omega = std::max(std::abs(normalPlane2[0]), std::max(std::abs(normalPlane2[1]), std::abs(normalPlane2[2])));
 						VCMUtil::extractConnectedComponent3D(newPlane2, domainVolume, setVolumeWeighted, normalPlane2, current2, d, omega);
 
+						cuttingPlaneNormals.push_back(make_pair(current, normalPlane));
+
 						Z3i::RealVector delineatePlane = (b - current).getNormalized();
 						Z3i::RealVector delineatePlane2 = (b -current2).getNormalized();
 						normalPlane = (delineatePlane.dot(normalPlane) < 0) ? -normalPlane : normalPlane;
@@ -1130,6 +1027,8 @@ int main( int  argc, char**  argv )
 								delineatedNewPlane2.insert(p);
 						}
 						viewer << CustomColors3D(Color::Red, Color::Red) << delineatedNewPlane2;
+						if (delineatedNewPlane2.size() == 0)
+							trace.info() << newPlane.size() << " " << newPlane2.size() << " " << normalPlane << " " << normalPlane2 << " " << current << " " << current2 << endl;
 						cuttingPlanes.push_back(delineatedNewPlane2);
 
 						//Recentering
@@ -1184,19 +1083,19 @@ int main( int  argc, char**  argv )
 				normalNewB = -normalNewB;
 			pToNormals.push_back(make_pair(newB, normalNewB));
 			for (int i = 0; i < filteredPlanes.size(); i++) {
-				pair<Z3i::Point, Z3i::DigitalSet> pairPointToPlane = filteredPlanes[i];
-				Z3i::Point currentPoint = pairPointToPlane.first;
+				pair<Z3i::Point, Z3i::RealVector> pairPToN = cuttingPlaneNormals[i];
+				Z3i::RealVector normalCutting = pairPToN.second;
+				Z3i::Point currentPoint = pairPToN.first;
 				Z3i::RealVector dirVector = (b - currentPoint).getNormalized();
 				Z3i::DigitalSet correspondingEdge = edgesRecentering[i];
-				pair<Z3i::Point, Z3i::RealPoint> ptoNPlane = pointToNormal<VCM, KernelFunction>(currentPoint, correspondingEdge, domainVolume, setVolumeWeighted);
-				Z3i::RealVector normal = ptoNPlane.second;
-				if (dirVector.dot(normal) < 0)
-					normal = -normal;
-				pToNormals.push_back(make_pair(currentPoint, normal));
+				if (dirVector.dot(normalCutting) < 0)
+					normalCutting = -normalCutting;
+				pToNormals.push_back(make_pair(currentPoint, normalCutting));
 			}
-
 			Z3i::DigitalSet junctionToDelete = isolateJunctionAreas(pToNormals, setVolume);
-			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << junctionToDelete;
+		    if (junctionToDelete.size() > 18000)
+				viewer << CustomColors3D(Color::Green, Color::Green) << newB;
+//			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << junctionToDelete;
 
 			//Recentering
 			{

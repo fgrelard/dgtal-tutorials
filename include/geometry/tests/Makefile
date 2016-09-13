@@ -102,6 +102,19 @@ depend:
 .PHONY : depend
 
 #=============================================================================
+# Target rules for targets named TestDigitalPlane
+
+# Build rule for target.
+TestDigitalPlane: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 TestDigitalPlane
+.PHONY : TestDigitalPlane
+
+# fast build rule for target.
+TestDigitalPlane/fast:
+	$(MAKE) -f CMakeFiles/TestDigitalPlane.dir/build.make CMakeFiles/TestDigitalPlane.dir/build
+.PHONY : TestDigitalPlane/fast
+
+#=============================================================================
 # Target rules for targets named TestGeodesicMetric
 
 # Build rule for target.
@@ -127,18 +140,29 @@ TestPointUtil/fast:
 	$(MAKE) -f CMakeFiles/TestPointUtil.dir/build.make CMakeFiles/TestPointUtil.dir/build
 .PHONY : TestPointUtil/fast
 
-#=============================================================================
-# Target rules for targets named TestSliceUtils
+testDigitalPlane.o: testDigitalPlane.cpp.o
+.PHONY : testDigitalPlane.o
 
-# Build rule for target.
-TestSliceUtils: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 TestSliceUtils
-.PHONY : TestSliceUtils
+# target to build an object file
+testDigitalPlane.cpp.o:
+	$(MAKE) -f CMakeFiles/TestDigitalPlane.dir/build.make CMakeFiles/TestDigitalPlane.dir/testDigitalPlane.cpp.o
+.PHONY : testDigitalPlane.cpp.o
 
-# fast build rule for target.
-TestSliceUtils/fast:
-	$(MAKE) -f CMakeFiles/TestSliceUtils.dir/build.make CMakeFiles/TestSliceUtils.dir/build
-.PHONY : TestSliceUtils/fast
+testDigitalPlane.i: testDigitalPlane.cpp.i
+.PHONY : testDigitalPlane.i
+
+# target to preprocess a source file
+testDigitalPlane.cpp.i:
+	$(MAKE) -f CMakeFiles/TestDigitalPlane.dir/build.make CMakeFiles/TestDigitalPlane.dir/testDigitalPlane.cpp.i
+.PHONY : testDigitalPlane.cpp.i
+
+testDigitalPlane.s: testDigitalPlane.cpp.s
+.PHONY : testDigitalPlane.s
+
+# target to generate assembly for a file
+testDigitalPlane.cpp.s:
+	$(MAKE) -f CMakeFiles/TestDigitalPlane.dir/build.make CMakeFiles/TestDigitalPlane.dir/testDigitalPlane.cpp.s
+.PHONY : testDigitalPlane.cpp.s
 
 testGeodesicMetric.o: testGeodesicMetric.cpp.o
 .PHONY : testGeodesicMetric.o
@@ -188,50 +212,26 @@ testPointUtil.cpp.s:
 	$(MAKE) -f CMakeFiles/TestPointUtil.dir/build.make CMakeFiles/TestPointUtil.dir/testPointUtil.cpp.s
 .PHONY : testPointUtil.cpp.s
 
-testSliceUtils.o: testSliceUtils.cpp.o
-.PHONY : testSliceUtils.o
-
-# target to build an object file
-testSliceUtils.cpp.o:
-	$(MAKE) -f CMakeFiles/TestSliceUtils.dir/build.make CMakeFiles/TestSliceUtils.dir/testSliceUtils.cpp.o
-.PHONY : testSliceUtils.cpp.o
-
-testSliceUtils.i: testSliceUtils.cpp.i
-.PHONY : testSliceUtils.i
-
-# target to preprocess a source file
-testSliceUtils.cpp.i:
-	$(MAKE) -f CMakeFiles/TestSliceUtils.dir/build.make CMakeFiles/TestSliceUtils.dir/testSliceUtils.cpp.i
-.PHONY : testSliceUtils.cpp.i
-
-testSliceUtils.s: testSliceUtils.cpp.s
-.PHONY : testSliceUtils.s
-
-# target to generate assembly for a file
-testSliceUtils.cpp.s:
-	$(MAKE) -f CMakeFiles/TestSliceUtils.dir/build.make CMakeFiles/TestSliceUtils.dir/testSliceUtils.cpp.s
-.PHONY : testSliceUtils.cpp.s
-
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
-	@echo "... TestSliceUtils"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... TestPointUtil"
 	@echo "... TestGeodesicMetric"
+	@echo "... TestDigitalPlane"
+	@echo "... testDigitalPlane.o"
+	@echo "... testDigitalPlane.i"
+	@echo "... testDigitalPlane.s"
 	@echo "... testGeodesicMetric.o"
 	@echo "... testGeodesicMetric.i"
 	@echo "... testGeodesicMetric.s"
 	@echo "... testPointUtil.o"
 	@echo "... testPointUtil.i"
 	@echo "... testPointUtil.s"
-	@echo "... testSliceUtils.o"
-	@echo "... testSliceUtils.i"
-	@echo "... testSliceUtils.s"
 .PHONY : help
 
 

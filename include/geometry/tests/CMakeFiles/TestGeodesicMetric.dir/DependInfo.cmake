@@ -13,9 +13,6 @@ set(CMAKE_TARGET_DEFINITIONS
   "CGAL_EIGEN3_ENABLED"
   "CGAL_USE_GMP"
   "CGAL_USE_MPFR"
-  "CPP11_AUTO"
-  "CPP11_FORWARD_LIST"
-  "CPP11_INITIALIZER_LIST"
   "ITK_IO_FACTORY_REGISTER_MANAGER"
   "QT_CORE_LIB"
   "QT_GUI_LIB"
@@ -24,6 +21,7 @@ set(CMAKE_TARGET_DEFINITIONS
   "QT_XML_LIB"
   "UNIX"
   "WITH_QT4"
+  "vtkRenderingCore_AUTOINIT=4(vtkInteractionStyle,vtkRenderingFreeType,vtkRenderingFreeTypeOpenGL,vtkRenderingOpenGL)"
   )
 
 # Targets to which this target links.
@@ -33,6 +31,7 @@ set(CMAKE_TARGET_LINKED_INFO_FILES
 # The include file search paths:
 set(CMAKE_C_TARGET_INCLUDE_PATH
   "ITKIOFactoryRegistration"
+  "/usr/local/include/vtk-6.2"
   "/usr/local/include/ITK-4.10"
   "/usr/include/qt4"
   "/usr/include/qt4/QtOpenGL"

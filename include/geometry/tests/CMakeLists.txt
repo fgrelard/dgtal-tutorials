@@ -21,8 +21,11 @@ endif( Boost_FOUND )
 
 include_directories(/home/florent/Documents/DGtal/tutorials-copy/include/)
 ADD_EXECUTABLE(TestPointUtil testPointUtil.cpp)
-ADD_EXECUTABLE(TestSliceUtils testSliceUtils.cpp)
+#ADD_EXECUTABLE(TestSliceUtils testSliceUtils.cpp)
 ADD_EXECUTABLE(TestGeodesicMetric testGeodesicMetric.cpp)
+ADD_EXECUTABLE(TestDigitalPlane testDigitalPlane.cpp)
 TARGET_LINK_LIBRARIES(TestPointUtil ${DGTAL_LIBRARIES} ${Boost_LIBRAIRIES} ${Boost_PROGRAM_OPTIONS_LIBRARY} )
-TARGET_LINK_LIBRARIES(TestSliceUtils ${DGTAL_LIBRARIES} ${Boost_LIBRAIRIES} ${Boost_PROGRAM_OPTIONS_LIBRARY} )
+#TARGET_LINK_LIBRARIES(TestSliceUtils ${DGTAL_LIBRARIES} ${Boost_LIBRAIRIES} ${Boost_PROGRAM_OPTIONS_LIBRARY} )
 TARGET_LINK_LIBRARIES(TestGeodesicMetric ${DGTAL_LIBRARIES} ${Boost_LIBRAIRIES} ${Boost_PROGRAM_OPTIONS_LIBRARY} )
+TARGET_LINK_LIBRARIES(TestDigitalPlane ${DGTAL_LIBRARIES} ${Boost_LIBRAIRIES} ${Boost_PROGRAM_OPTIONS_LIBRARY} )
+
