@@ -150,9 +150,9 @@ vector<pair<DigitalPlane<Z3i::Space>, double> > computeArea(const vector<Digital
 
 template <typename VCM, typename KernelFunction, typename DTL2, typename Container, typename Domain>
 vector<DigitalPlane<Z3i::Space> > computePlanes(VCM& vcm, KernelFunction& chi,
-														 const vector<Z3i::Point>& orientedEdge, const DTL2& dt,
-														 const Z3i::DigitalSet& setSurface,
-														 const Container& setVolume, const Domain& domain) {
+												const vector<Z3i::Point>& orientedEdge, const DTL2& dt,
+												const Z3i::DigitalSet& setSurface,
+												const Container& setVolume, const Domain& domain) {
 	typedef ExactPredicateLpSeparableMetric<Z3i::Space, 2> Metric;
 	Metric l2;
 	vector<DigitalPlane<Z3i::Space> > planeProfile;
@@ -218,7 +218,7 @@ Z3i::DigitalSet associatedPlane(const Z3i::Point& point, const Container& setVCM
 	Metric l2;
 
 	map<Z3i::Point, Z3i::RealPoint> aMap;
-	double radius = setVCM.size() * 0.4;
+	double radius = setVCM.size();
 	radius = (radius < 2) ? 2 : radius;
 	VCM vcm(20, ceil(radius), l2, false);
 	vcm.init(setVCM.begin(), setVCM.end());
@@ -226,7 +226,7 @@ Z3i::DigitalSet associatedPlane(const Z3i::Point& point, const Container& setVCM
 	Z3i::RealPoint normal;
 	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
 																		 point, normal,
-																		 0, radius, radius*10, 6, false);
+																		 0, radius, radius*10, 6, true);
 	return connectedComponent3D;
 }
 
@@ -541,18 +541,19 @@ Z3i::DigitalSet smoothedSkeletonPoints(const Z3i::DigitalSet& subVolume,
 		subVolumeWeighted.insert(new WeightedPointCount(subPoint, 1));
 	}
 	int i = 0;
-	bool add= false;
+
 	for (const Z3i::Point& cp : existingSkeleton) {
-	    Z3i::DigitalSet connectedComponent3D = associatedPlane<VCM, KernelFunction>(cp, existingSkeleton, subVolume.domain(), subVolumeWeighted);
+		Z3i::Point currentPoint = extractNearestNeighborInSetFromPoint(subVolume, cp);
+	    Z3i::DigitalSet connectedComponent3D = associatedPlane<VCM, KernelFunction>(currentPoint, subVolume, subVolume.domain(), subVolumeWeighted);
 		Z3i::RealPoint realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 		Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 		bool stop = false;
-		for (const Z3i::Point& p : computedSkeleton)
-			if (Z3i::l2Metric(centerOfMass, p) <= sqrt(3))
-				stop = true;
-		if (stop && add) break;
+		// for (const Z3i::Point& p : computedSkeleton)
+		// 	if (Z3i::l2Metric(centerOfMass, p) <= sqrt(3))
+		// 		stop = true;
+		// if (stop) break;
 		if (realCenter != Z3i::RealPoint() && !stop) {
-			smoothSkeleton.insert(centerOfMass);
+			smoothSkeleton.insert(connectedComponent3D.begin(), connectedComponent3D.end());
 		}
 		i++;
 	}
@@ -926,7 +927,7 @@ int main( int  argc, char**  argv )
 				if (restrictEdge.size() == 0) continue;
 				vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(restrictEdge, b);
 				vector<DigitalPlane> planes = computePlanes(vcmSurface, chiSurface, orientedEdge,
-																				  dt, setVolume, setVolumeWeighted, domainVolume);
+															dt, setVolume, setVolumeWeighted, domainVolume);
 				vector< pair< DigitalPlane, double > > pointToAreas = computeArea(planes, setVolume);
 				if (pointToAreas.size() == 0) continue;
 
@@ -1041,6 +1042,7 @@ int main( int  argc, char**  argv )
 			{
 				Z3i::DigitalSet restrictedVolumePlane = createVolumeAroundPoint(setVolume, b, radius*1.5);
 				for (int i = 0; i < cuttingPlanes.size(); ++i) {
+					if (i != 1) continue;
 					DigitalPlane currentPlane = cuttingPlanes[i];
 					currentPlane = DigitalPlane(currentPlane.getCenter(), -currentPlane.getPlaneEquation().normal(), 6);
 					vector<DigitalPlane> currentCuttingPlane;
@@ -1051,19 +1053,21 @@ int main( int  argc, char**  argv )
 						if (i != j)
 							otherCuttingPlanes.push_back(cuttingPlanes[j]);
 					}
-					Z3i::DigitalSet currentEdge = restrictByDistanceToPoint(edgesRecentering[i], b, radius);
+
 					Z3i::DigitalSet subVolume =  createSubVolume (restrictedVolumePlane, otherCuttingPlanes);
 					Z3i::DigitalSet subVolumeUnder = createSubVolume (restrictedVolumePlane, currentCuttingPlane);
 					subVolume.insert(subVolumeUnder.begin(), subVolumeUnder.end());
 
+					Z3i::DigitalSet currentEdge = edgesRecentering[i];
 					std::vector<Z3i::Point> eEdge = CurveAnalyzer::findEndPoints(currentEdge);
+					trace.info() << eEdge.size() << endl;
 					Z3i::Point candEdge = b;
 					for (const Z3i::Point& p : eEdge) {
 						if (p != b)
 							candEdge = p;
 					}
-
-
+					viewer << CustomColors3D(Color::Green, Color::Green) << candEdge;
+					restrictEdgeB = restrictByDistanceToPoint(restrictEdgeB, b, restrictEdgeB.size() * 0.6);
 					Z3i::DigitalSet restrictEdgeInVol(domainVolume),restrictEdgeBInVol(domainVolume);
 					for (const Z3i::Point& pResVol : restrictedVolumePlane) {
 						if (currentEdge.find(pResVol) != currentEdge.end())
@@ -1075,17 +1079,17 @@ int main( int  argc, char**  argv )
 					std::vector<Z3i::Point> restrictEdgeOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeInVol, candEdge);
 					std::vector<Z3i::Point> restrictEdgeBOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeBInVol, b);
 
-
-
 					std::vector<Z3i::Point> edgesVolume;
 					edgesVolume.insert(edgesVolume.end(), restrictEdgeOriented.begin(), restrictEdgeOriented.end());
 					edgesVolume.insert(edgesVolume.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
 
 					Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume, edgesVolume, skeletonPoints);
 					skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
-					viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton;
+
+//					viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton;
 					int r = rand() % 256, g = rand() % 256, b = rand() % 256;
-					viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << subVolume;
+					// for (const auto& p : subVolume)
+					// 	viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << p;
 					processedEdges.insert(currentEdge.begin(), currentEdge.end());
 					processedEdges.insert(restrictEdgeB.begin(), restrictEdgeB.end());
 				}
