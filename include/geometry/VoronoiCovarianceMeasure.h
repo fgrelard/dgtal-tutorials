@@ -52,7 +52,7 @@
 #include "DGtal/geometry/volumes/distance/VoronoiMap.h"
 #include "DGtal/geometry/tools/SpatialCubicalSubdivision.h"
 #include "DGtal/math/linalg/EigenDecomposition.h"
-
+#include "DGtal/kernel/sets/DigitalSetSelector.h"
 //////////////////////////////////////////////////////////////////////////////
 
 namespace DGtal
@@ -93,7 +93,7 @@ namespace DGtal
 		typedef DGtal::HyperRectDomain<Space> Domain; ///< the type of rectangular domain of the VCM.
 		typedef DGtal::ImageContainerBySTLVector<Domain,bool> CharacteristicSet; ///< the type of a binary image that is the characteristic function of K.
 		typedef DGtal::SpatialCubicalSubdivision<Space> ProximityStructure; ///< the structure used for proximity queries.
-		
+		typedef typename DGtal::DigitalSetSelector< Domain, DGtal::BIG_DS+DGtal::HIGH_BEL_DS >::Type Container;
 		/**
 		   A predicate that returns 'true' whenever the given binary image contains 'true'.
 		   Model of concepts::CPointPredicate.
@@ -262,6 +262,8 @@ namespace DGtal
 		Point2Vector myPoint2Vector;
 		/// The structure used for proximity queries.
 		ProximityStructure* myProximityStructure;
+		/// Point container
+		Container myContainer;
 
 		// ------------------------- Hidden services ------------------------------
 	protected:

@@ -24,23 +24,33 @@ public :
         typedef DGtal::ExactPredicateLpSeparableMetric<TSpace, 2> L2Metric;
 
 public:
+
+        DigitalPlane() : myPoint(), myPlaneEquation() {}
+
         DigitalPlane(const Point& aPoint, const Vector& aNormal, int aConnexity = 26) : myPoint(aPoint) {
-                double omega, d;
+                typedef typename Vector::Scalar Scalar;
+                Scalar omega, d;
+
                 for (int i = 0; i < TSpace::dimension; i++)
                         d += aNormal[i] * aPoint[i];
                 if (aConnexity == 26 || aConnexity == 8) {
-                        omega = *std::max_element(aNormal.begin(), aNormal.end());
+                        omega = std::abs(*std::max_element(aNormal.begin(), aNormal.end(), [](Scalar one, Scalar two) {
+                                        return std::abs(one) < std::abs(two);
+                                        }));
                 }
                 else // if (aConnexity == 6 || aConnexity == 4)
                 {
                         for (auto it = aNormal.begin(), ite = aNormal.end(); it != ite; ++it)
-                                omega += *it;
+                                omega += std::abs(*it);
                 }
                 myPlaneEquation = PlaneEquation(d, aNormal, omega);
         }
 
 
-        DigitalSet intersectionWithSet(const DigitalSet& pointsV) {
+        DigitalPlane(const DigitalPlane& other) : myPoint(other.myPoint), myPlaneEquation(other.myPlaneEquation) {  }
+
+
+        DigitalSet intersectionWithSet(const DigitalSet& pointsV) const {
                 typedef typename DigitalSet::Point Value;
                 DigitalSet points(pointsV);
                 points.clear();
@@ -52,7 +62,7 @@ public:
                 return points;
         }
 
-        DigitalSet intersectionWithSetOneCC(const DigitalSet& pointsV) {
+        DigitalSet intersectionWithSetOneCC(const DigitalSet& pointsV) const {
                 typedef DGtal::Object<Topology, DigitalSet> ObjectType;
                 L2Metric l2Metric;
                 Adj26 adj26;
@@ -82,7 +92,7 @@ public:
                 return connectedComponent;
         }
 
-        bool contains(const Point& aPoint) {
+        bool contains(const Point& aPoint) const {
                 double valueToCheck;
                 double omega = myPlaneEquation.nu();
                 double d = myPlaneEquation.mu();
@@ -95,7 +105,7 @@ public:
                 return false;
         }
 
-        bool isPointAbove(const Point& aPoint) {
+        bool isPointAbove(const Point& aPoint) const {
                 double d = myPlaneEquation.mu();
                 Vector normal = myPlaneEquation.normal();
 
@@ -107,9 +117,12 @@ public:
                 return false;
         }
 
+        PlaneEquation getPlaneEquation() const { return myPlaneEquation; }
+        Point getCenter() const { return myPoint; }
+
 private:
-        PlaneEquation myPlaneEquation;
         Point myPoint;
+        PlaneEquation myPlaneEquation;
 };
 
 #endif

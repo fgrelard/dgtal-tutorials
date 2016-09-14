@@ -126,7 +126,9 @@ DGtal::Z3i::RealPoint VCMUtil::computeEigenValuesFromVCM(const DGtal::Z3i::Point
 
 
 template <typename Domain>
-DGtal::Z3i::DigitalSet VCMUtil::extractConnectedComponent3D(const Domain & domain, const DGtal::Z3i::DigitalSet& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double distanceMax = std::numeric_limits<double>::max()) {
+DGtal::Z3i::DigitalSet VCMUtil::extractConnectedComponent3D(const Domain & domain, const DGtal::Z3i::DigitalSet& volume,
+															const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint,
+															double d, double omega, double distanceMax = std::numeric_limits<double>::max()) {
 	typedef DGtal::Z3i::Object26_6 ObjectType;
 
 	DGtal::Z3i::DigitalSet intersection(domain);

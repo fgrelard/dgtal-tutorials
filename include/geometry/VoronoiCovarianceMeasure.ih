@@ -57,7 +57,8 @@ VoronoiCovarianceMeasure( double _R, double _r, Metric aMetric, bool verbose, bo
     myDomain( Point(0,0), Point(0,0) ), // dummy domain
     myCharSet( 0 ), 
     myVoronoi( 0 ),
-    myProximityStructure( 0 )
+      myProximityStructure( 0 ),
+      myContainer(myDomain)
 {
   mySmallR = (_r >= 2.0) ? _r : 2.0;
 }
@@ -68,7 +69,7 @@ DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
 VoronoiCovarianceMeasure( const VoronoiCovarianceMeasure& other )
   : myBigR( other.myBigR ), mySmallR( other.mySmallR ),
     myMetric( other.myMetric ), myVerbose( other.myVerbose ), myIsInDomain(other.myIsInDomain),
-    myDomain( other.myDomain )
+    myDomain( other.myDomain ), myContainer(other.myContainer)
 {
   if ( other.myCharSet ) myCharSet = new CharacteristicSet( *other.myCharSet );
   else                   myCharSet = 0;
@@ -97,6 +98,7 @@ operator=( const VoronoiCovarianceMeasure& other )
       if ( other.myVoronoi ) myVoronoi = new Voronoi( *other.myVoronoi );
       if ( other.myProximityStructure ) 
                              myProximityStructure = new ProximityStructure( *other.myVoronoi );
+      myContainer = other.myContainer;
     }
   return *this;
 }
@@ -221,6 +223,7 @@ init( PointInputIterator itb, PointInputIterator ite )
       Point p = *itb;
       myCharSet->setValue( p, true );
       myProximityStructure->push( p );
+      myContainer.insert(p);
     }
   if ( myVerbose ) trace.endBlock();
 
@@ -278,7 +281,7 @@ measure( Point2ScalarFunction chi_r, Point p ) const
  
   Point b = myProximityStructure->bin( p );
   Ball<Point> ball(p,mySmallR);
-  std::vector<Point> neighbors = ball.pointsInBall();
+  std::vector<Point> neighbors = ball.intersection(myContainer);
 
   MatrixNN vcm;
   // std::cout << *it << " has " << neighbors.size() << " neighbors." << std::endl;
@@ -290,12 +293,10 @@ measure( Point2ScalarFunction chi_r, Point p ) const
       Scalar coef = chi_r( q - p );
       if ( coef > 0.0 ) 
         {
-          typename std::map<Point,MatrixNN>::const_iterator it = myVCM.find( q );
-          if ( it != myVCM.end() ) {
-			  MatrixNN vcm_q = it->second;
+          MatrixNN vcm_q = myVCM.at(q);
 			  vcm_q *= coef;
 			  vcm += vcm_q;
-		  }
+
         }
     }
   return vcm;
@@ -383,7 +384,7 @@ vectorVariability(const std::vector<Z3i::Point>& points, const Vector& normal, c
   double angle = 0;
   std::vector<Vector> vectors;
   Ball<Point> ball(p,mySmallR);
-  std::vector<Point> neighbors = ball.pointsInBall();
+  std::vector<Point> neighbors = ball.intersection(myContainer);
   for ( typename std::vector<Point>::const_iterator it_neighbors = neighbors.begin(),
           it_neighbors_end = neighbors.end(); it_neighbors != it_neighbors_end; ++it_neighbors )
     {
@@ -392,11 +393,9 @@ vectorVariability(const std::vector<Z3i::Point>& points, const Vector& normal, c
       // Scalar coef = 1.0;
       if ( coef > 0.0 )
         {
-          typename std::map<Point,Vector>::const_iterator it = myPoint2Vector.find( q );
-          if ( it != myPoint2Vector.end() ) {
-            Vector vector = it->second;
-            vectors.push_back(vector);
-          }
+          Vector vector = myPoint2Vector.at(q);
+          vectors.push_back(vector);
+
         }
     }
   int number = 0;
