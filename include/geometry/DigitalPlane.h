@@ -8,6 +8,9 @@
 #include "DGtal/topology/DigitalTopology.h"
 #include "DGtal/topology/MetricAdjacency.h"
 #include "DGtal/geometry/volumes/distance/ExactPredicateLpSeparableMetric.h"
+#include "DGtal/graph/DistanceBreadthFirstVisitor.h"
+#include "geometry/DistanceToPointFunctor.h"
+
 template <typename TSpace>
 class DigitalPlane
 {
@@ -90,6 +93,30 @@ public:
                         }
                 }
                 return connectedComponent;
+        }
+
+        template <typename Graph>
+        DigitalSet intersectionWithSetOneCC(const Graph& graph) const {
+                typedef DGtal::BreadthFirstVisitor<Graph, std::set<Point>> Visitor;
+                typedef typename Visitor::Node MyNode;
+
+                DigitalSet digitalPlane(graph.pointSet().domain());
+                Visitor visitor(graph, myPoint);
+                MyNode node;
+                double lastDistance = 0;
+                while (!visitor.finished()) {
+                        node = visitor.current();
+                        Point point = node.first;
+                        double currentDistance = node.second;
+                        if (currentDistance - lastDistance > sqrt(3))
+                                break;
+                        if (contains(point)) {
+                                digitalPlane.insert(point);
+                                lastDistance = currentDistance;
+                        }
+                        visitor.expand();
+                }
+                return digitalPlane;
         }
 
         bool contains(const Point& aPoint) const {

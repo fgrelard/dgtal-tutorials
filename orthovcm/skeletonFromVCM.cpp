@@ -594,32 +594,22 @@ double highestAreaVariation(const pair<Z3i::DigitalSet, vector<Z3i::DigitalSet>>
 	return factorMax;
 }
 
-template <typename VCM, typename KernelFunction, typename Image, typename Container>
-pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, const Image& volume,
+template <typename VCM, typename KernelFunction, typename Domain, typename Container>
+pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, const Domain& domain,
 												 const Z3i::Point& p, double radius,
 												 const Container& setVolumeWeighted, const Z3i::DigitalSet& setVolume,
 												 Viewer3D<>& viewer) {
 	map<Z3i::DigitalSet, double> eigenValues;
 	Z3i::RealPoint normal;
-	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, setVolume.domain(), setVolumeWeighted,
+	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolumeWeighted,
 																		 p, normal,
 																		 0, radius, radius*10, 26, true);
 
-	//  Z3i::RealPoint realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
-    //  Z3i::Point	centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
-	//  double radiusIntersection = radius*2;
-	// connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, setVolume.domain(), setVolumeWeighted,
-	// 													 centerOfMass, normal,
-	// 													 0, radiusIntersection, radius*10, 26, false);
 
-	Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
+	// Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
 	vector<Z3i::Point> v(connectedComponent3D.begin(), connectedComponent3D.end());
-	double eigenVar = sqrt(eigenValue[0]);
+	// double eigenVar = sqrt(eigenValue[0]);
 	double angle = M_PI/2 - vcm.vectorVariability(v, normal, chi, p);
-	// Z3i::DigitalSet shell = computeShell (p, setVolume, radius*2, radius*4);
-	// int degree = computeDegree(shell);
-	// if (degree == 1)
-	// 	angle = 0;
 	Z3i::DigitalSet discretePlane(connectedComponent3D.domain());
 	for (const Z3i::Point& c : connectedComponent3D) {
 		if (Z3i::l2Metric(p, c) <= radius)
@@ -724,7 +714,9 @@ int main( int  argc, char**  argv )
 	SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, volume,
 												  thresholdMin-1, thresholdMax);
 
+	Z3i::Object26_6 graph(Z3i::dt26_6, setVolume);
 
+	trace.info() << setVolume.size() << endl;
 	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;
 	Image volumeBinary(volume.domain());
 	for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
@@ -822,7 +814,7 @@ int main( int  argc, char**  argv )
 		// 													 currentPoint->myPoint, normal,
 		// 													 0, radius, distanceMax, 26, true);
 
-	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, volume, currentPoint->myPoint, radius, setVolumeWeighted, setVolume, viewer);
+	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, domainVolume, currentPoint->myPoint, radius, setVolumeWeighted, setVolume, viewer);
 		pointToEigenValue[currentPoint->myPoint] =  std::min(pointToEigenValue[currentPoint->myPoint], value.second);
 		connectedComponent3D = value.first;
 		// for (const Z3i::Point& p : value.first) {

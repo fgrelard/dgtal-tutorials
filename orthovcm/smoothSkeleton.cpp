@@ -548,12 +548,12 @@ Z3i::DigitalSet smoothedSkeletonPoints(const Z3i::DigitalSet& subVolume,
 		Z3i::RealPoint realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 		Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 		bool stop = false;
-		// for (const Z3i::Point& p : computedSkeleton)
-		// 	if (Z3i::l2Metric(centerOfMass, p) <= sqrt(3))
-		// 		stop = true;
-		// if (stop) break;
+		for (const Z3i::Point& p : computedSkeleton)
+	    	if (Z3i::l2Metric(centerOfMass, p) <= sqrt(3))
+				stop = true;
+	    if (stop) break;
 		if (realCenter != Z3i::RealPoint() && !stop) {
-			smoothSkeleton.insert(connectedComponent3D.begin(), connectedComponent3D.end());
+			smoothSkeleton.insert(centerOfMass);
 		}
 		i++;
 	}
@@ -981,8 +981,8 @@ int main( int  argc, char**  argv )
 			}
 			std::vector<Z3i::Point> restrictEdgeBOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeB, b);
 
-			//vector<DigitalPlane > planesB = computePlanes(vcmSurface, chiSurface, restrictEdgeBOriented,
-			//											  dt, setVolume, setVolumeWeighted, domainVolume);
+			vector<DigitalPlane > planesB = computePlanes(vcmSurface, chiSurface, restrictEdgeBOriented,
+														  dt, setVolume, setVolumeWeighted, domainVolume);
 			vector<DigitalPlane> cuttingPlanes;
 			vector<Z3i::DigitalSet> cuttingPlaneSetV;
 			//Find two max :  two planes
@@ -1042,16 +1042,17 @@ int main( int  argc, char**  argv )
 			{
 				Z3i::DigitalSet restrictedVolumePlane = createVolumeAroundPoint(setVolume, b, radius*1.5);
 				for (int i = 0; i < cuttingPlanes.size(); ++i) {
-					if (i != 1) continue;
 					DigitalPlane currentPlane = cuttingPlanes[i];
-					currentPlane = DigitalPlane(currentPlane.getCenter(), -currentPlane.getPlaneEquation().normal(), 6);
 					vector<DigitalPlane> currentCuttingPlane;
 					currentCuttingPlane.push_back(currentPlane);
 
 					vector<DigitalPlane> otherCuttingPlanes;
 					for (int j = 0; j < cuttingPlanes.size(); ++j) {
-						if (i != j)
-							otherCuttingPlanes.push_back(cuttingPlanes[j]);
+						if (i != j) {
+							DigitalPlane otherCuttingPlane = cuttingPlanes[j];
+							otherCuttingPlane = DigitalPlane(otherCuttingPlane.getCenter(), -otherCuttingPlane.getPlaneEquation().normal(), 6);
+							otherCuttingPlanes.push_back(otherCuttingPlane);
+						}
 					}
 
 					Z3i::DigitalSet subVolume =  createSubVolume (restrictedVolumePlane, otherCuttingPlanes);
@@ -1059,15 +1060,15 @@ int main( int  argc, char**  argv )
 					subVolume.insert(subVolumeUnder.begin(), subVolumeUnder.end());
 
 					Z3i::DigitalSet currentEdge = edgesRecentering[i];
+					currentEdge = restrictByDistanceToPoint(currentEdge, b, currentEdge.size() * 0.6);
 					std::vector<Z3i::Point> eEdge = CurveAnalyzer::findEndPoints(currentEdge);
-					trace.info() << eEdge.size() << endl;
 					Z3i::Point candEdge = b;
 					for (const Z3i::Point& p : eEdge) {
 						if (p != b)
 							candEdge = p;
 					}
 					viewer << CustomColors3D(Color::Green, Color::Green) << candEdge;
-					restrictEdgeB = restrictByDistanceToPoint(restrictEdgeB, b, restrictEdgeB.size() * 0.6);
+					restrictEdgeB = restrictByDistanceToPoint(restrictEdgeB, b, restrictEdgeB.size()*0.6);
 					Z3i::DigitalSet restrictEdgeInVol(domainVolume),restrictEdgeBInVol(domainVolume);
 					for (const Z3i::Point& pResVol : restrictedVolumePlane) {
 						if (currentEdge.find(pResVol) != currentEdge.end())
@@ -1083,15 +1084,15 @@ int main( int  argc, char**  argv )
 					edgesVolume.insert(edgesVolume.end(), restrictEdgeOriented.begin(), restrictEdgeOriented.end());
 					edgesVolume.insert(edgesVolume.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
 
+					trace.info() << "test SmoothSkeleton" << endl;
 					Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume, edgesVolume, skeletonPoints);
+					trace.info() << smoothedSkeleton.size() << endl;
 					skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
 
-//					viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton;
-					int r = rand() % 256, g = rand() % 256, b = rand() % 256;
-					// for (const auto& p : subVolume)
-					// 	viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << p;
+					viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton;
 					processedEdges.insert(currentEdge.begin(), currentEdge.end());
 					processedEdges.insert(restrictEdgeB.begin(), restrictEdgeB.end());
+
 				}
 			}
 
@@ -1112,74 +1113,13 @@ int main( int  argc, char**  argv )
 			// 	vector<Z3i::Point> linkPoints = SurfaceTraversal::AStarAlgorithm(graph, centerOfMass, newB);
 			// 	for (const Z3i::Point& p : linkPoints) {
 			// 		viewer << CustomColors3D(Color::Red, Color::Red) << p;
+			// 		skeletonPoints.insert(p);
 			// 	}
 
 			// }
 //			viewer << CustomColors3D(Color::Green, Color::Green) << planeBranching.intersectionWithSetOneCC(setVolume);
 //			viewer << CustomColors3D(Color::Yellow, Color::Yellow) << junctionToDelete;
 
-			//Recentering
-			{
-				// Z3i::DigitalSet restrictedVolumePlane = createVolumeAroundPoint(setVolume, b, radius*1.5);
-				// Z3i::DigitalSet subVolume =  createSubVolume (restrictedVolumePlane, normalPlane, current);
-				// Z3i::DigitalSet subVolume2 = createSubVolume (restrictedVolumePlane, normalPlane2, current);
-				// Z3i::DigitalSet subVolumeUnder = createSubVolume (restrictedVolumePlane, -normalPlane2, current);
-				// Z3i::DigitalSet subVolumeUnder2 = createSubVolume (restrictedVolumePlane, -normalPlane, current);
-				// subVolume.insert(subVolumeUnder.begin(), subVolumeUnder.end());
-				// subVolume2.insert(subVolumeUnder2.begin(), subVolumeUnder2.end());
-
-				// std::vector<Z3i::Point> eEdge = CurveAnalyzer::findEndPoints(restrictEdge);
-				// std::vector<Z3i::Point> eEdge2 = CurveAnalyzer::findEndPoints(restrictEdge2);
-
-				// Z3i::Point candEdge = b;
-				// for (const Z3i::Point& p : eEdge) {
-				// 	if (p != b)
-				// 		candEdge = p;
-				// }
-
-
-				// Z3i::Point candEdge2 = b;
-				// for (const Z3i::Point& p : eEdge2) {
-				// 	if (p != b)
-				// 		candEdge2 = p;
-				// }
-
-				// Z3i::DigitalSet restrictEdgeInVol(domainVolume), restrictEdge2InVol(domainVolume), restrictEdgeBInVol(domainVolume);
-				// for (const Z3i::Point& pResVol : restrictedVolumePlane) {
-				// 	if (restrictEdge.find(pResVol) != restrictEdge.end())
-				// 		restrictEdgeInVol.insert(pResVol);
-				// 	if (restrictEdge2.find(pResVol) != restrictEdge2.end())
-				// 		restrictEdge2InVol.insert(pResVol);
-				// 	if (restrictEdgeB.find(pResVol) != restrictEdgeB.end())
-				// 		restrictEdgeBInVol.insert(pResVol);
-				// }
-
-				// std::vector<Z3i::Point> restrictEdgeOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeInVol, candEdge);
-				// std::vector<Z3i::Point> restrictEdge2Oriented = CurveAnalyzer::convertToOrientedEdge(restrictEdge2InVol, candEdge2);
-				// std::vector<Z3i::Point> restrictEdgeBOriented = CurveAnalyzer::convertToOrientedEdge(restrictEdgeBInVol, b);
-
-				// std::vector<Z3i::Point> edgesVolume;
-				// edgesVolume.insert(edgesVolume.end(), restrictEdge2Oriented.begin(), restrictEdge2Oriented.end());
-				// edgesVolume.insert(edgesVolume.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
-
-				// std::vector<Z3i::Point> edgesVolume2;
-				// edgesVolume2.insert(edgesVolume2.end(), restrictEdgeOriented.begin(), restrictEdgeOriented.end());
-				// edgesVolume2.insert(edgesVolume2.end(), restrictEdgeBOriented.begin(), restrictEdgeBOriented.end());
-
-				// Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume, edgesVolume, skeletonPoints);
-				// skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
-				// Z3i::DigitalSet smoothedSkeleton2 = smoothedSkeletonPoints<VCM, KernelFunction> (subVolume2, edgesVolume2, skeletonPoints);
-				// skeletonPoints.insert(smoothedSkeleton2.begin(), smoothedSkeleton2.end());
-
-				// viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton;
-				// viewer << CustomColors3D(Color::Blue, Color::Blue) << smoothedSkeleton2;
-
-				// viewer << CustomColors3D(Color::Red, Color::Red) << delineatedNewPlane << delineatedNewPlane2;
-
-				// processedEdges.insert(restrictEdge.begin(), restrictEdge.end());
-				// processedEdges.insert(restrictEdge2.begin(), restrictEdge2.end());
-				// processedEdges.insert(restrictEdgeB.begin(), restrictEdgeB.end());
-			}
 		}
 	}
 	//viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
@@ -1198,7 +1138,7 @@ int main( int  argc, char**  argv )
 		// Z3i::DigitalSet notProcessed(existingSkeleton.domain());
 		// for (const Z3i::Point& s : existingSkeleton) {
 		// 	if (processedEdges.find(s) == processedEdges.end())
-		// 		notProcessed.insert(s);
+		// 		notProcessed.inse1rt(s);
 		// }
 
 		// Z3i::Object26_6 objNotProcessed(Z3i::dt26_6, notProcessed);

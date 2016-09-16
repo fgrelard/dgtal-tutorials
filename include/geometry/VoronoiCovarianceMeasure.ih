@@ -147,8 +147,7 @@ updateProximityStructure(double r, PointInputIterator itb, PointInputIterator it
 		myProximityStructure = new ProximityStructure(lo, up, (Integer) ceil( mySmallR ) );
 
 		for (; itb != ite; ++itb) {
-			myProximityStructure->push(*itb);
-		
+            myProximityStructure->push(*itb);
 		}
 	}
 	
@@ -256,16 +255,30 @@ init( PointInputIterator itb, PointInputIterator ite )
               // Computes tensor product V^t x V
               for ( Dimension  i = 0; i < 3; ++i )
                 for ( Dimension j = 0; j < 3; ++j )
-                  m.setComponent( i, j, v[ i ] * v[ j ] ); 
-              myVCM[ q ] += m; 
-			 
+                  m.setComponent( i, j, v[ i ] * v[ j ] );
+              myVCM[ q ] += m;
 		  }
 	  }
   }
-
+  Point boundaryInf = lower + Point::diagonal( intR );
+  Point boundarySup = upper - Point::diagonal( intR );
+  myVCMMatrixDomain = Domain(boundaryInf, boundarySup);
+  for (typename Domain::ConstIterator itDomain = myVCMMatrixDomain.begin(), itDomainEnd = myVCMMatrixDomain.end(); itDomain != itDomainEnd; ++itDomain) {
+    Point point = *itDomain;
+    auto it = myVCM.find(point);
+    auto itV = myPoint2Vector.find(point);
+    if (it != myVCM.end())
+      myVCMMatrices.push_back(it->second);
+    else
+      myVCMMatrices.push_back(matrixZero);
+    if (itV != myPoint2Vector.end())
+      myVCMVector.push_back(itV->second);
+    else
+      myVCMVector.push_back(Vector::zero);
+  }
 
   if ( myVerbose ) trace.endBlock();
- 
+
   if ( myVerbose ) trace.endBlock();
 }
 
@@ -275,28 +288,32 @@ template <typename Point2ScalarFunction>
 inline
 typename DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::MatrixNN
 DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
-measure( Point2ScalarFunction chi_r, Point p ) const
+measure( const Point2ScalarFunction& chi_r, const Point& p )
 {
   ASSERT( myProximityStructure != 0 );
  
   Point b = myProximityStructure->bin( p );
   Ball<Point> ball(p,mySmallR);
-  std::vector<Point> neighbors = ball.intersection(myContainer);
+  Neighbors neighborsVCM(*this, mySmallR);
+  std::vector<MatrixNN> neighbors = neighborsVCM.getNeighbors(myVCMMatrices, p);
+//  std::vector<Point> neighbors = ball.intersection(myContainer);
 
-  MatrixNN vcm;
+  MatrixNN vcm, matrixZero;
   // std::cout << *it << " has " << neighbors.size() << " neighbors." << std::endl;
-  for ( typename std::vector<Point>::const_iterator it_neighbors = neighbors.begin(),
+  for ( typename std::vector<MatrixNN>::const_iterator it_neighbors = neighbors.begin(),
           it_neighbors_end = neighbors.end(); it_neighbors != it_neighbors_end; ++it_neighbors )
 
   {
-      Point q = *it_neighbors;
-      Scalar coef = chi_r( q - p );
+      // Point q = *it_neighbors;
+      // Scalar coef = chi_r( q - p );
+    Scalar coef = 1.0;
       if ( coef > 0.0 ) 
         {
-          MatrixNN vcm_q = myVCM.at(q);
-			  vcm_q *= coef;
-			  vcm += vcm_q;
-
+          MatrixNN vcm_q = *it_neighbors;
+          if (!(vcm_q == matrixZero)) {
+            vcm_q *= coef;
+            vcm += vcm_q;
+          }
         }
     }
   return vcm;
@@ -379,22 +396,21 @@ template <typename Point2ScalarFunction>
 inline
 double
 DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
-vectorVariability(const std::vector<Z3i::Point>& points, const Vector& normal, const Point2ScalarFunction& chi_r, Point p) const
+vectorVariability(const std::vector<Z3i::Point>& points, const Vector& normal, const Point2ScalarFunction& chi_r, const Point& p)
 {
   double angle = 0;
   std::vector<Vector> vectors;
   Ball<Point> ball(p,mySmallR);
-  std::vector<Point> neighbors = ball.intersection(myContainer);
-  for ( typename std::vector<Point>::const_iterator it_neighbors = neighbors.begin(),
+  Neighbors neighborsVCM(*this, mySmallR);
+  std::vector<Vector> neighbors = neighborsVCM.getNeighbors(myVCMVector, p);
+  //std::vector<Point> neighbors = ball.intersection(myContainer);
+  for ( typename std::vector<Vector>::const_iterator it_neighbors = neighbors.begin(),
           it_neighbors_end = neighbors.end(); it_neighbors != it_neighbors_end; ++it_neighbors )
     {
-      Point q = *it_neighbors;
-       Scalar coef = chi_r( q - p );
-      // Scalar coef = 1.0;
-      if ( coef > 0.0 )
+      Vector v = *it_neighbors;
+      if (v != Vector::zero)
         {
-          Vector vector = myPoint2Vector.at(q);
-          vectors.push_back(vector);
+          vectors.push_back(v);
 
         }
     }

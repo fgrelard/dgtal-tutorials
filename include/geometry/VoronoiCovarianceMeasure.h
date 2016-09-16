@@ -114,6 +114,11 @@ namespace DGtal
 		private:
 			const CharacteristicSet* ptrSet;
 		};
+
+
+
+
+
 		typedef DGtal::functors::NotPointPredicate<CharacteristicSetPredicate> NotPredicate; ///< the type of the point predicate used by the voronoi map.
 		typedef DGtal::VoronoiMap<Space, NotPredicate, Metric > Voronoi; ///< the type of the Voronoi map.
 
@@ -125,6 +130,50 @@ namespace DGtal
 		typedef std::vector<Point> PointContainer;                ///< the list of points
 		typedef std::map<Point,MatrixNN> Point2MatrixNN;          ///< Associates a matrix to points.
 		typedef std::map<Point, Vector> Point2Vector;
+
+
+	private:
+		class Neighbors {
+		public:
+			typedef VoronoiCovarianceMeasure<TSpace, TSeparableMetric> VCM;
+		private:
+			double myRadius;
+			int myWidth, myHeight;
+			VCM& myParent;
+			Point myLower, myUpper;
+		public:
+			Neighbors(VCM& aParent, double aRadius) : myParent(aParent), myRadius(aRadius) {
+				myLower = myParent.myVCMMatrixDomain.lowerBound();
+				myUpper = myParent.myVCMMatrixDomain.upperBound();
+				myWidth = std::abs(myUpper[0] - myLower[0]) + 1;
+				myHeight = std::abs(myUpper[1] - myLower[1]) + 1;
+			}
+
+			int getIndex(const Point& current) {
+				return current[0]-myLower[0] + (current[1]-myLower[1])*myWidth + (current[2]-myLower[2])*myWidth*myHeight;
+			}
+
+			template <typename Value>
+			std::vector<Value> getNeighbors(const std::vector<Value>& values, const Point& current) {
+				std::vector<Value> myNeighborsVCM;
+				if (myParent.myVCMMatrixDomain.isInside(current)) {
+					int indexCurrent = getIndex(current);
+					myNeighborsVCM.push_back(values.at(indexCurrent));
+					for (int i = -myRadius + current[0], iend = myRadius + current[0] + 1; i < iend; i++) {
+						for (int j = -myRadius + current[1], jend = myRadius + current[1] + 1; j < jend; j++) {
+							for (int k = -myRadius + current[2], kend = myRadius + current[2] + 1; k < kend; k++) {
+								Point neigh(i, j, k);
+								if (myParent.myVCMMatrixDomain.isInside(neigh)) {
+									int neighIndex = getIndex(neigh);
+									myNeighborsVCM.push_back(values.at(neighIndex));
+								}
+							}
+						}
+					}
+				}
+				return myNeighborsVCM;
+			}
+		};
 
 		// ----------------------- Standard services ------------------------------
 	public:
@@ -209,7 +258,7 @@ namespace DGtal
 		   @param p the point where the kernel function is moved. It must lie within domain.
 		*/
 		template <typename Point2ScalarFunction>
-		MatrixNN measure( Point2ScalarFunction chi_r, Point p ) const;
+		MatrixNN measure( const Point2ScalarFunction& chi_r, const Point& p );
 
 		template <typename Point2ScalarFunction>
 		MatrixNN measure( const std::vector<Point>& neighbors, Point2ScalarFunction chi_r, Point p ) const;
@@ -218,7 +267,7 @@ namespace DGtal
 		MatrixNN measureJunction( const Vector& dirVector, Point2ScalarFunction chi_r, Point p ) const;
 
 		template <typename Point2ScalarFunction>
-		double vectorVariability(const std::vector<Z3i::Point>& v, const Vector& normal, const Point2ScalarFunction& chi_r, Point p) const;
+		double vectorVariability(const std::vector<Z3i::Point>& v, const Vector& normal, const Point2ScalarFunction& chi_r, const Point& p);
 		// ----------------------- Interface --------------------------------------
 	public:
 
@@ -251,7 +300,7 @@ namespace DGtal
 		/// Sets whether points inside the domain should be taken into account
 		bool myIsInDomain;
 		/// The domain in which all computations are done.
-		Domain myDomain;
+		Domain myDomain, myVCMMatrixDomain;
 		/// A binary image that defines the characteristic set of K.
 		CharacteristicSet* myCharSet;
 		/// Stores the voronoi map.
@@ -264,6 +313,9 @@ namespace DGtal
 		ProximityStructure* myProximityStructure;
 		/// Point container
 		Container myContainer;
+		/// Vector containing VCM matrices
+		std::vector<MatrixNN> myVCMMatrices;
+		std::vector<Vector> myVCMVector;
 
 		// ------------------------- Hidden services ------------------------------
 	protected:

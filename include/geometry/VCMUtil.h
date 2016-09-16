@@ -24,12 +24,12 @@
 
 namespace VCMUtil {
 	template <typename VCM, typename KernelFunction>
-	DGtal::Z3i::RealPoint computeNormalFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi,
+	DGtal::Z3i::RealPoint computeNormalFromVCM(const DGtal::Z3i::Point& currentPoint, VCM& vcm, const KernelFunction& chi,
 											   int coordinate, const DGtal::Z3i::RealVector& dirVector = DGtal::Z3i::RealVector(),
 											   const std::vector<DGtal::Z3i::Point>& v = std::vector<DGtal::Z3i::Point>());
 
 	template <typename VCM, typename KernelFunction>
-	DGtal::Z3i::RealPoint computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi,
+	DGtal::Z3i::RealPoint computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, VCM& vcm, const KernelFunction& chi,
 													const std::vector<DGtal::Z3i::Point>& v = std::vector<DGtal::Z3i::Point>());
 
 
@@ -88,7 +88,7 @@ namespace VCMUtil {
 }
 
 template <typename VCM, typename KernelFunction>
-DGtal::Z3i::RealPoint VCMUtil::computeNormalFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi, int coordinate, const DGtal::Z3i::RealVector& dirVector, const std::vector<DGtal::Z3i::Point>& v) {
+DGtal::Z3i::RealPoint VCMUtil::computeNormalFromVCM(const DGtal::Z3i::Point& currentPoint, VCM& vcm, const KernelFunction& chi, int coordinate, const DGtal::Z3i::RealVector& dirVector, const std::vector<DGtal::Z3i::Point>& v) {
 
 	typedef DGtal::EigenDecomposition<3,double> LinearAlgebraTool;
 	LinearAlgebraTool::Matrix vcm_r, evec;
@@ -108,7 +108,7 @@ DGtal::Z3i::RealPoint VCMUtil::computeNormalFromVCM(const DGtal::Z3i::Point& cur
 }
 
 template <typename VCM, typename KernelFunction>
-DGtal::Z3i::RealPoint VCMUtil::computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, const VCM& vcm, const KernelFunction& chi,
+DGtal::Z3i::RealPoint VCMUtil::computeEigenValuesFromVCM(const DGtal::Z3i::Point& currentPoint, VCM& vcm, const KernelFunction& chi,
 														 const std::vector<DGtal::Z3i::Point>& v) {
 	typedef DGtal::EigenDecomposition<3,double> LinearAlgebraTool;
 	LinearAlgebraTool::Matrix vcm_r, evec;
@@ -382,7 +382,7 @@ DGtal::Z3i::DigitalSet VCMUtil::computeDiscretePlane(VCM& vcm, KernelFunction& c
 		//Naive plane (26 connexity)
 
 		connectedComponent3D = DGtal::Z3i::DigitalSet(domainVolume);
-	    extractConnectedComponent3D(connectedComponent3D, domainVolume, setVolumeWeighted, normal, point, d, omega, currentDistance);
+		extractConnectedComponent3D(connectedComponent3D, domainVolume, setVolumeWeighted, normal, point, d, omega, currentDistance);
 		alright = isRadiusMaximal(setVolumeWeighted, connectedComponent3D, point, currentDistance, dirVector);
 	} while (!alright && dilate && currentDistance < distanceMax);
 
