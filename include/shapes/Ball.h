@@ -26,8 +26,8 @@ public:
 
 	std::set<Point> pointsSurfaceBall() const;
 	bool operator!=(const Ball & other) const {return (myCenter != other.myCenter || myRadius != other.myRadius);}
-	Point getCenter()  {return myCenter;}
-	double getRadius() {return myRadius;}
+	Point getCenter() const {return myCenter;}
+	double getRadius() const {return myRadius;}
 private:
 	Point myCenter;
 	double myRadius;
