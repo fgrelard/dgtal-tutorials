@@ -67,7 +67,8 @@ class Watershed {
         };
 
 
-
+public:
+        typedef WatershedInformation WatershedInformation;
 
 public:
         template <typename Container>
@@ -80,6 +81,7 @@ public:
 
         std::map<Point, WatershedInformation> getWatershed();
         int getBins();
+        void closeWatershed();
 private:
         std::map<Point, WatershedInformation> myImageWatershed;
         std::map<WatershedInformation, Point> sortedMap;
@@ -115,14 +117,14 @@ void Watershed<Point>::compute() {
   DGtal::trace.beginBlock("Watershed");
   double altitude = 0;
   while ( currentI < myImageWatershed.size() ) {
+          DGtal::trace.progressBar(currentI, myImageWatershed.size());
           altitude = myImageWatershed[current].getValue();
-          DGtal::trace.info() << altitude << " " << currentI << " " << myImageWatershed.size() << endl;
           pixelsAtSameAltitude(fifo, current, currentI, altitude);
           extendBasins(fifo);
           detectMinima(fifo, label, altitude);
   }
+  closeWatershed();
   DGtal::trace.endBlock();
-//  closeWatershed(t_pixels);
 }
 
 
@@ -253,6 +255,29 @@ void Watershed<Point>::detectMinima(std::queue<Point>& fifo, int& label, double 
                                                 }
                                         }
 
+                                }
+                        }
+                }
+        }
+}
+
+template <typename Point>
+void Watershed<Point>::closeWatershed() {
+        DGtal::MetricAdjacency<DGtal::Z3i::Space, 1> adj;
+        for (const std::pair<Point, WatershedInformation>& pairWatershed : myImageWatershed) {
+                Point p = pairWatershed.first;
+                WatershedInformation wp = pairWatershed.second;
+                std::vector<Point> neighbors;
+                std::back_insert_iterator<std::vector<Point> > inserter(neighbors);
+                adj.writeNeighbors(inserter, p);
+                for (const Point& n : neighbors) {
+                        if (myImageWatershed.find(n) != myImageWatershed.end()) {
+                                WatershedInformation wn = myImageWatershed.at(n);
+                                if (wp.getLabel() != wn.getLabel() &&
+                                    wn.getLabel() != WATERSHED &&
+                                    wp.getLabel() != WATERSHED) {
+                                        wp.setLabel(WATERSHED);
+                                        myImageWatershed[p] = wp;
                                 }
                         }
                 }

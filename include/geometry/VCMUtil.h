@@ -351,21 +351,22 @@ bool VCMUtil::markConnectedComponent3D(std::set<WeightedPoint*, WeightedPointCou
 
 template <typename VCM, typename KernelFunction, typename Domain, typename Container>
 DGtal::Z3i::DigitalSet VCMUtil::computeDiscretePlane(VCM& vcm, KernelFunction& chi,
-													 const Domain& domainVolume, const Container& setVolumeWeighted,
-													 const DGtal::Z3i::Point& point, DGtal::Z3i::RealPoint& normal, int coordinate, double& radius,
+													 const Domain& domain, const Container& setVolumeWeighted,
+													 const DGtal::Z3i::Point& point, DGtal::Z3i::RealPoint& normal,
+													 int coordinate, double& radius,
 													 double distanceMax, int connexity, bool dilate, const DGtal::Z3i::RealVector& dirVector,
 													 const std::vector<DGtal::Z3i::Point>& v) {
 
 	typedef typename Container::value_type Point;
 
 	bool alright = false;
-	DGtal::Z3i::DigitalSet connectedComponent3D(domainVolume);
+	DGtal::Z3i::DigitalSet connectedComponent3D(domain);
 	double currentDistance = radius;
 	do  {
-
 	    currentDistance++;
 		chi = KernelFunction(1.0, currentDistance);
 		vcm.setMySmallR(currentDistance);
+
 		if (dirVector != DGtal::Z3i::RealVector())
 			normal = computeNormalFromVCM(point, vcm, chi, coordinate, dirVector);
 		else if (v != std::vector<DGtal::Z3i::Point>())
@@ -379,13 +380,12 @@ DGtal::Z3i::DigitalSet VCMUtil::computeDiscretePlane(VCM& vcm, KernelFunction& c
 		else
 			omega = std::abs(normal[0]) + std::abs(normal[1]) + std::abs(normal[2]);
 		double d = -(-normal[0] * point[0] - normal[1] * point[1] - normal[2] * point[2]);
-		//Naive plane (26 connexity)
 
-		connectedComponent3D = DGtal::Z3i::DigitalSet(domainVolume);
-		extractConnectedComponent3D(connectedComponent3D, domainVolume, setVolumeWeighted, normal, point, d, omega, currentDistance);
+		//Naive plane (26 connexity)
+		connectedComponent3D = DGtal::Z3i::DigitalSet(domain);
+		extractConnectedComponent3D(connectedComponent3D, domain, setVolumeWeighted, normal, point, d, omega, currentDistance);
 		alright = isRadiusMaximal(setVolumeWeighted, connectedComponent3D, point, currentDistance, dirVector);
 	} while (!alright && dilate && currentDistance < distanceMax);
-
 	 radius = currentDistance;
 	// DGtal::Z3i::DigitalSet discretePlane(domainVolume);
 	// for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {

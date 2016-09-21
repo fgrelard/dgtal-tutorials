@@ -258,7 +258,7 @@ namespace DGtal
 		   @param p the point where the kernel function is moved. It must lie within domain.
 		*/
 		template <typename Point2ScalarFunction>
-		MatrixNN measure( const Point2ScalarFunction& chi_r, const Point& p );
+		MatrixNN measure( const Point2ScalarFunction& chi_r, const Point& p ) const;
 
 		template <typename Point2ScalarFunction>
 		MatrixNN measure( const std::vector<Point>& neighbors, Point2ScalarFunction chi_r, Point p ) const;
@@ -267,7 +267,7 @@ namespace DGtal
 		MatrixNN measureJunction( const Vector& dirVector, Point2ScalarFunction chi_r, Point p ) const;
 
 		template <typename Point2ScalarFunction>
-		double vectorVariability(const std::vector<Z3i::Point>& v, const Vector& normal, const Point2ScalarFunction& chi_r, const Point& p);
+		double vectorVariability(const Vector& normal, const Point2ScalarFunction& chi_r, const Point& p) const;
 		// ----------------------- Interface --------------------------------------
 	public:
 
@@ -313,9 +313,9 @@ namespace DGtal
 		ProximityStructure* myProximityStructure;
 		/// Point container
 		Container myContainer;
-		/// Vector containing VCM matrices
-		std::vector<MatrixNN> myVCMMatrices;
-		std::vector<Vector> myVCMVector;
+		// /// Vector containing VCM matrices
+		// std::vector<MatrixNN> myVCMMatrices;
+		// std::vector<Vector> myVCMVector;
 
 		// ------------------------- Hidden services ------------------------------
 	protected:

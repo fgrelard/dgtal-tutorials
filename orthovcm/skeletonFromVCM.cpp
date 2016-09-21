@@ -607,9 +607,8 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, 
 
 
 	// Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
-	vector<Z3i::Point> v(connectedComponent3D.begin(), connectedComponent3D.end());
 	// double eigenVar = sqrt(eigenValue[0]);
-	double angle = M_PI/2 - vcm.vectorVariability(v, normal, chi, p);
+	double angle = M_PI/2 - vcm.vectorVariability(normal, chi, p);
 	Z3i::DigitalSet discretePlane(connectedComponent3D.domain());
 	for (const Z3i::Point& c : connectedComponent3D) {
 		if (Z3i::l2Metric(p, c) <= radius)
@@ -617,6 +616,115 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, 
 	}
 
 	return make_pair(discretePlane, angle);
+}
+
+Z3i::DigitalSet determineWatershedSet(const map<Z3i::Point, Watershed<Z3i::Point>::WatershedInformation>& watershedResult,
+									  const Z3i::DigitalSet& setVolume) {
+	Z3i::DigitalSet watershedSet(setVolume.domain());
+    for (const auto & pairWatershed : watershedResult) {
+        Z3i::Point current = pairWatershed.first;
+        double label = pairWatershed.second.getLabel();
+        if (label == WATERSHED) {
+            watershedSet.insert(current);
+        }
+    }
+	return watershedSet;
+}
+
+map<int, set<Z3i::Point> > neighboringTubes(const map<Z3i::Point, Watershed<Z3i::Point>::WatershedInformation>& watershedResult,
+											const Z3i::DigitalSet& setVolume,
+											const Z3i::Object26_6& ccWatershed) {
+	map<int, set<Z3i::Point> > decompositionMap;
+	 Z3i::Object26_6 obj(Z3i::dt26_6, setVolume);
+	Z3i::DigitalSet surroundingVoxels(ccWatershed.pointSet().domain());
+	for (const Z3i::Point& p : ccWatershed) {
+		vector<Z3i::Point> neighbors;
+		back_insert_iterator<vector<Z3i::Point> > inserter(neighbors);
+		obj.writeNeighbors(inserter, p);
+		surroundingVoxels.insert(neighbors.begin(), neighbors.end());
+	}
+	for (const Z3i::Point& p : surroundingVoxels) {
+		int label = watershedResult.at(p).getLabel();
+		if (label == WATERSHED) continue;
+		decompositionMap[label].insert(p);
+	}
+	return decompositionMap;
+}
+
+int parentTubeLabel(const map<int, set<Z3i::Point> >& decompositionMap) {
+	double maxSize = 0;
+	int labelParent;
+	for (const pair<int, set<Z3i::Point> >& pairTube : decompositionMap) {
+		double sum = 0;
+		set<Z3i::Point> currentSet = pairTube.second;
+		double currentSize = currentSet.size();
+		if (currentSize > maxSize) {
+			maxSize = currentSize;
+			labelParent = pairTube.first;
+		}
+	}
+	return labelParent;
+}
+
+
+
+double maxDistanceSet(const Z3i::DigitalSet& aSet) {
+	double distanceMax = 0;
+	for (auto it = aSet.begin(), ite = aSet.end(); it != ite; ++it) {
+		DGtal::Z3i::Point firstP = *it;
+		DGtal::Z3i::Point farthestPoint =  *max_element(aSet.begin(), aSet.end(), [&](const DGtal::Z3i::Point& one, const DGtal::Z3i::Point& two) {
+				return DGtal::Z3i::l2Metric(one, firstP) < DGtal::Z3i::l2Metric(two, firstP);
+			});
+		double distance = DGtal::Z3i::l2Metric(farthestPoint, firstP);
+		if (distance > distanceMax)
+			distanceMax = distance;
+	}
+	return distanceMax;
+}
+
+Z3i::DigitalSet extractSubVolume(const Z3i::DigitalSet& setVolume,
+								 const map<Z3i::Point, Watershed<Z3i::Point>::WatershedInformation>& watershedResult,
+								 const Z3i::DigitalSet& watershedDelineation,
+								 int currentLabel, int parentLabel)  {
+	Z3i::DigitalSet involvedTubes(setVolume.domain());
+	for (const Z3i::Point& p : setVolume) {
+		int label = watershedResult.at(p).getLabel();
+		if (label == currentLabel || label == parentLabel) {
+			involvedTubes.insert(p);
+		}
+	}
+
+	Z3i::Point center = Statistics::extractCenterOfMass3D(watershedDelineation);
+	double maxDistWatershedSet = maxDistanceSet(watershedDelineation);
+	Ball<Z3i::Point> ball(center, 2*maxDistWatershedSet);
+	vector<Z3i::Point> subVolumeV = ball.intersection(setVolume);
+	Z3i::DigitalSet subVolume(setVolume.domain());
+	subVolume.insert(subVolumeV.begin(), subVolumeV.end());
+	return subVolume;
+}
+
+
+Z3i::DigitalSet computeSkeletonInJunctions(const map<Z3i::Point, Watershed<Z3i::Point>::WatershedInformation>& watershedResult,
+                     const map<Z3i::Point, double> pointToValue,
+                     const Z3i::DigitalSet& setVolume, Viewer3D<>& viewer) {
+	Z3i::DigitalSet skeleton(setVolume.domain());
+    Z3i::DigitalSet watershedSet = determineWatershedSet(watershedResult, setVolume);
+    Z3i::Object26_6 watershedObj(Z3i::dt26_6, watershedSet);
+    vector<Z3i::Object26_6> cc;
+    back_insert_iterator<vector<Z3i::Object26_6> > inserter(cc);
+    unsigned int nbCC = watershedObj.writeComponents(inserter);
+
+    for (const Z3i::Object26_6& object : cc) {
+		Z3i::DigitalSet setCC = object.pointSet();
+		map<int, set<Z3i::Point> > neighborTubes = neighboringTubes(watershedResult, setVolume, object);
+		int parentLabel = parentTubeLabel(neighborTubes);
+		for (const pair<int, set<Z3i::Point> > & currentTube : neighborTubes) {
+			if (currentTube.first == parentLabel) continue;
+			Z3i::DigitalSet subVolume = extractSubVolume(setVolume, watershedResult, setCC, currentTube.first, parentLabel);
+			skeleton.insert(subVolume.begin(), subVolume.end());
+		}
+    }
+	return skeleton;
 }
 
 
@@ -793,12 +901,12 @@ int main( int  argc, char**  argv )
 		currentPoint = *it;
 		currentPoint->myProcessed = true;
 		double radius = r;
-
+		Point closestPointToCurrent = *min_element(vPoints.begin(), vPoints.end(), [&](const Point& one, const Point& two) {
+					return Z3i::l2Metric(one, currentPoint->myPoint) < Z3i::l2Metric(two, currentPoint->myPoint);
+			});
 		//Distance transform value for VCM radius
 		if (isDT) {
-			Point closestPointToCurrent = *min_element(vPoints.begin(), vPoints.end(), [&](const Point& one, const Point& two) {
-					return Z3i::l2Metric(one, currentPoint->myPoint) < Z3i::l2Metric(two, currentPoint->myPoint);
-				});
+
 			if (dt(closestPointToCurrent) > dt(currentPoint->myPoint))
 				radius = dt(closestPointToCurrent);
 			else
@@ -813,10 +921,20 @@ int main( int  argc, char**  argv )
 		// connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 		// 													 currentPoint->myPoint, normal,
 		// 													 0, radius, distanceMax, 26, true);
+		double criterionValue = pointToEigenValue.at(closestPointToCurrent);
+		if (criterionValue == numeric_limits<double>::max()) {
+			pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM(vcm, chi, domainVolume,
+																	 currentPoint->myPoint, radius,
+																	 setVolumeWeighted, setVolume, viewer);
+			pointToEigenValue[currentPoint->myPoint] = value.second;
+			pointToEigenValue[closestPointToCurrent] = value.second;
+		}
+		else {
+			pointToEigenValue[currentPoint->myPoint] = criterionValue;
+		}
 
-	    pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM (vcm, chi, domainVolume, currentPoint->myPoint, radius, setVolumeWeighted, setVolume, viewer);
-		pointToEigenValue[currentPoint->myPoint] =  std::min(pointToEigenValue[currentPoint->myPoint], value.second);
-		connectedComponent3D = value.first;
+//		pointToEigenValue[currentPoint->myPoint] =  std::min(pointToEigenValue[currentPoint->myPoint], value.second);
+//		connectedComponent3D = value.first;
 		// for (const Z3i::Point& p : value.first) {
 		//     if (connectedComponent3D.find(p) != connectedComponent3D.end())
 		// 		pointToEigenValue[p] = std::min(pointToEigenValue[p], value.second);
@@ -907,32 +1025,32 @@ int main( int  argc, char**  argv )
 			maxVal = pair.second;
 	}
 	trace.info() << minVal << " " << maxVal << endl;
-	vector<map<Z3i::Point, double>::iterator> itToRemove;
-	for (auto it = pointToEigenValue.begin(), ite = pointToEigenValue.end(); it != ite; ++it) {
-		if (it->second == numeric_limits<double>::max())
-			itToRemove.push_back(it);
-	}
-	for (const auto& iterator : itToRemove) {
-	    pointToEigenValue.erase(iterator);
-	}
-	// trace.info() << pointToEigenValue.size() << " " << setVolume.size() << endl;
-	// trace.info() << minVal << " " << maxVal << endl;
-	// Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
-	// watershed.compute();
-	// auto resultWatershed = watershed.getWatershed();
-    // int bins = watershed.getBins();
-
-	// GradientColorMap<int, CMAP_JET > hueShade(0, bins);
-	// trace.info() << "Bins= " << bins << endl;
-	// for (const auto& complexPoint : resultWatershed) {
-	// 	viewer << CustomColors3D(hueShade(complexPoint.second.getLabel()), hueShade(complexPoint.second.getLabel())) << complexPoint.first;
+	// vector<map<Z3i::Point, double>::iterator> itToRemove;
+	// for (auto it = pointToEigenValue.begin(), ite = pointToEigenValue.end(); it != ite; ++it) {
+	// 	if (it->second == numeric_limits<double>::max())
+	// 		itToRemove.push_back(it);
+	// }
+	// for (const auto& iterator : itToRemove) {
+	//     pointToEigenValue.erase(iterator);
 	// }
 
-	GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
-	for (const auto& pToL : pointToEigenValue) {
-		if (pToL.second > maxVal) continue;
-		viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
+	watershed.compute();
+	auto resultWatershed = watershed.getWatershed();
+    int bins = watershed.getBins();
+
+	GradientColorMap<int, CMAP_JET > hueShade(0, bins);
+	trace.info() << "Bins= " << bins << endl;
+	for (const auto& complexPoint : resultWatershed) {
+		viewer << CustomColors3D(hueShade(complexPoint.second.getLabel()), hueShade(complexPoint.second.getLabel())) << complexPoint.first;
 	}
+
+//	 Z3i::DigitalSet skeletonJunction = computeSkeletonInJunctions(
+	// GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
+	// for (const auto& pToL : pointToEigenValue) {
+	// 	if (pToL.second > maxVal) continue;
+	// 	viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
+	// }
 
 
 

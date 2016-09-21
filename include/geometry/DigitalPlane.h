@@ -32,7 +32,7 @@ public:
 
         DigitalPlane(const Point& aPoint, const Vector& aNormal, int aConnexity = 26) : myPoint(aPoint) {
                 typedef typename Vector::Scalar Scalar;
-                Scalar omega, d;
+                Scalar omega = 0, d = 0;
 
                 for (int i = 0; i < TSpace::dimension; i++)
                         d += aNormal[i] * aPoint[i];
@@ -95,29 +95,6 @@ public:
                 return connectedComponent;
         }
 
-        template <typename Graph>
-        DigitalSet intersectionWithSetOneCC(const Graph& graph) const {
-                typedef DGtal::BreadthFirstVisitor<Graph, std::set<Point>> Visitor;
-                typedef typename Visitor::Node MyNode;
-
-                DigitalSet digitalPlane(graph.pointSet().domain());
-                Visitor visitor(graph, myPoint);
-                MyNode node;
-                double lastDistance = 0;
-                while (!visitor.finished()) {
-                        node = visitor.current();
-                        Point point = node.first;
-                        double currentDistance = node.second;
-                        if (currentDistance - lastDistance > sqrt(3))
-                                break;
-                        if (contains(point)) {
-                                digitalPlane.insert(point);
-                                lastDistance = currentDistance;
-                        }
-                        visitor.expand();
-                }
-                return digitalPlane;
-        }
 
         bool contains(const Point& aPoint) const {
                 double valueToCheck;
