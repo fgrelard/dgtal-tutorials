@@ -77,12 +77,12 @@ void create2DNaive() {
 
 template <typename Point>
 void createJunction(vector<Point>& v, set<Point>& s, float increment) {
-	createStraightLine(v, 35, increment);
+	createStraightLine(v, 70, increment);
 
-	createRotatedVolumeFromV(v, s, 0, M_PI/2);
-	createRotatedVolumeFromV(v, s, 0, -0.61111*M_PI/2.2222// , -Eigen::Vector3d(0, sqrt(2)/2, sqrt(2)/2)
+	createRotatedVolumeFromCurve(v, s, 7, M_PI/2);
+	createRotatedVolumeFromCurve(v, s, 7, -0.61111*M_PI/2.2222// , -Eigen::Vector3d(0, sqrt(2)/2, sqrt(2)/2)
 		);
-	createRotatedVolumeFromV(v, s, 0, -1.61111*M_PI/2.2222//, Eigen::Vector3d(sqrt(2)/2, sqrt(2)/2, 0)
+	createRotatedVolumeFromCurve(v, s, 7, -1.61111*M_PI/2.2222//, Eigen::Vector3d(sqrt(2)/2, sqrt(2)/2, 0)
 		);
 }
 
@@ -109,7 +109,7 @@ int main( int argc, char** argv )
 	vector<PointVector<3, double>> curve;
 	set<PointVector<3,double>> vectorPoints;
 
-	drawCone(curve, 32, 15, increment);
+//	drawCone(curve, 32, 15, increment);
 
 //	createContinuousLogarithmicCurve(curve, 50, increment);
 //	construct26ConnectedCurve(curve);
@@ -117,8 +117,9 @@ int main( int argc, char** argv )
 
 //	createRotatedVolumeFromCurve(curve, vectorPoints, 5, 2*M_PI/3);
 
-	Ball<PointVector<3, double>> ball(Point(0,0,0), 10);
-	Z3i::Domain domain(Z3i::Point(-100,-100,-100), Z3i::Point(100, 300, 300));
+	createJunction(curve, vectorPoints, 0.5);
+//	Ball<PointVector<3, double>> ball(Point(0,0,0), 10);
+	Z3i::Domain domain(Z3i::Point(-100,-100,-100)-Z3i::Point::diagonal(2), Z3i::Point(100, 300, 300)+Z3i::Point::diagonal(2));
 	//domain = Z3i::Domain(Z3i::Point(-20,-20,-20), Z3i::Point(20,20,60));
 //	createVolumeFromCurve(curve, vectorPoints, 10);
 	//createHelixCurve(vectorPoints, range, radius, pitch, increment);
@@ -129,7 +130,7 @@ int main( int argc, char** argv )
 //	create2DNaive();
 //	vectorPoints = ball.pointsInBall();
 	DigitalSet set(domain);
-	for (auto it = curve.begin(), itE = curve.end(); it != itE; ++it) {
+	for (auto it = vectorPoints.begin(), itE = vectorPoints.end(); it != itE; ++it) {
 		set.insert(*it);
 	}
 	DigitalSet set2 = addNoise(set, noise);
