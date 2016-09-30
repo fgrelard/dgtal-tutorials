@@ -264,6 +264,7 @@ init( PointInputIterator itb, PointInputIterator ite )
   }
 
 
+
   if ( myVerbose ) trace.endBlock();
  
   if ( myVerbose ) trace.endBlock();
@@ -275,14 +276,13 @@ template <typename Point2ScalarFunction>
 inline
 typename DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::MatrixNN
 DGtal::VoronoiCovarianceMeasure<TSpace,TSeparableMetric>::
-measure( const Point2ScalarFunction& chi_r, const Point& p ) const
+measure( const Point2ScalarFunction& chi_r, const Point& p) const
 {
   ASSERT( myProximityStructure != 0 );
- 
+
   Point b = myProximityStructure->bin( p );
   Ball<Point> ball(p,mySmallR);
   std::vector<Point> neighbors = ball.intersection(myContainer);
-
   MatrixNN vcm;
   // std::cout << *it << " has " << neighbors.size() << " neighbors." << std::endl;
   for ( typename std::vector<Point>::const_iterator it_neighbors = neighbors.begin(),
@@ -296,7 +296,6 @@ measure( const Point2ScalarFunction& chi_r, const Point& p ) const
           MatrixNN vcm_q = myVCM.at(q);
           vcm_q *= coef;
           vcm += vcm_q;
-
         }
     }
   return vcm;

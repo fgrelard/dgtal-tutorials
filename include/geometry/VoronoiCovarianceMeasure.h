@@ -258,7 +258,7 @@ namespace DGtal
 		   @param p the point where the kernel function is moved. It must lie within domain.
 		*/
 		template <typename Point2ScalarFunction>
-		MatrixNN measure( const Point2ScalarFunction& chi_r, const Point& p ) const;
+		MatrixNN measure( const Point2ScalarFunction& chi_r, const Point& p) const;
 
 		template <typename Point2ScalarFunction>
 		MatrixNN measure( const std::vector<Point>& neighbors, Point2ScalarFunction chi_r, Point p ) const;

@@ -113,11 +113,12 @@ DGtal::Z3i::RealPoint VCMUtil::computeEigenValuesFromVCM(const DGtal::Z3i::Point
 	typedef DGtal::EigenDecomposition<3,double> LinearAlgebraTool;
 	LinearAlgebraTool::Matrix vcm_r, evec;
 	DGtal::Z3i::RealVector eval;
+	double size = 0;
 // Compute VCM and diagonalize it.
 	if (v != std::vector<DGtal::Z3i::Point>())
 		vcm_r = vcm.measure(v, chi, currentPoint);
 	else
-		vcm_r = vcm.measure( chi, currentPoint );
+		vcm_r = vcm.measure(chi, currentPoint );
 	LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
 
 	return eval;
@@ -350,7 +351,7 @@ bool VCMUtil::markConnectedComponent3D(std::set<WeightedPoint*, WeightedPointCou
 
 
 template <typename VCM, typename KernelFunction, typename Domain, typename Container>
-DGtal::Z3i::DigitalSet VCMUtil::computeDiscretePlane(VCM& vcm, KernelFunction& chi,
+DGtal::Z3i::DigitalSet VCMUtil::computeDiscretePlane( VCM& vcm, KernelFunction& chi,
 													 const Domain& domain, const Container& setVolumeWeighted,
 													 const DGtal::Z3i::Point& point, DGtal::Z3i::RealPoint& normal,
 													 int coordinate, double& radius,
@@ -368,11 +369,11 @@ DGtal::Z3i::DigitalSet VCMUtil::computeDiscretePlane(VCM& vcm, KernelFunction& c
 		vcm.setMySmallR(currentDistance);
 
 		if (dirVector != DGtal::Z3i::RealVector())
-			normal = computeNormalFromVCM(point, vcm, chi, coordinate, dirVector);
+			normal = computeNormalFromVCM( point, vcm, chi, coordinate, dirVector);
 		else if (v != std::vector<DGtal::Z3i::Point>())
-			normal = computeNormalFromVCM(point, vcm, chi, coordinate, DGtal::Z3i::RealVector(), v);
+			normal = computeNormalFromVCM( point, vcm, chi, coordinate, DGtal::Z3i::RealVector(), v);
 		else
-			normal = computeNormalFromVCM(point, vcm, chi, coordinate);
+			normal = computeNormalFromVCM( point, vcm, chi, coordinate);
 
 		double omega;
 		if (connexity == 26)
@@ -466,7 +467,7 @@ double VCMUtil::computeCurvatureJunction(const DGtal::Z3i::RealPoint& lambda) {
 	double lambda0 = (lambda[0] < 1) ? 1.0 : lambda[0];
 	double lambda1 = (lambda[1] < 1) ? 1.0 : lambda[1];
 	double lambda2 = (lambda[2] < 1) ? 1.0 : lambda[2];
-	double ratio = (lambda0) / (lambda0 + lambda1 + lambda2);
+	double ratio = lambda0 / (lambda0 + lambda1 + lambda2);
 //    ratio = (sqrt(lambda1) * sqrt(lambda2)) / (sqrt(lambda0));
 	return ratio;
 }
