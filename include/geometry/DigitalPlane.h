@@ -16,7 +16,7 @@ class DigitalPlane
 {
 public :
         typedef DGtal::ParallelStrip<TSpace> PlaneEquation;
-        typedef typename TSpace::Point Point;
+        typedef typename TSpace::RealVector Point;
         typedef typename TSpace::RealVector Vector;
         typedef typename DGtal::HyperRectDomain< TSpace > Domain;
         typedef typename DGtal::DigitalSetSelector< Domain, DGtal::BIG_DS+DGtal::HIGH_BEL_DS >::Type DigitalSet;

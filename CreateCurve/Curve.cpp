@@ -79,7 +79,7 @@ template <typename Point>
 void createJunction(vector<Point>& v, set<Point>& s, float increment) {
 	createStraightLine(v, 70, increment);
 
-	createRotatedVolumeFromCurve(v, s, 7, M_PI/2);
+//	createRotatedVolumeFromCurve(v, s, 7, M_PI/2);
 	createRotatedVolumeFromCurve(v, s, 7, -0.61111*M_PI/2.2222// , -Eigen::Vector3d(0, sqrt(2)/2, sqrt(2)/2)
 		);
 	createRotatedVolumeFromCurve(v, s, 7, -1.61111*M_PI/2.2222//, Eigen::Vector3d(sqrt(2)/2, sqrt(2)/2, 0)

@@ -76,6 +76,7 @@
 #include "geometry/WeightedPointCount.h"
 #include "geometry/DigitalPlane.h"
 #include "surface/SurfaceTraversal.h"
+#include "geometry/CurveAnalyzer.h"
 #include "Statistics.h"
 #include "shapes/Ball.h"
 ///////////////////////////////////////////////////////////////////////////////
@@ -97,18 +98,64 @@ class LabelledPoint : public WeightedPoint<Z3i::Point> {
 
 Z3i::DigitalSet computeShell(const Z3i::Point& center, const Z3i::DigitalSet& setVolume, double radiusInnerBall, double radiusOuterBall) {
 	Ball<Z3i::Point> ballInnerBall(center, radiusInnerBall);
-	Ball<Z3i::Point> ballOuterBall(center, radiusOuterBall);
-
+	std::vector<Z3i::Point> points = ballInnerBall.surfaceIntersection(setVolume);
 	Z3i::DigitalSet shell(setVolume.domain());
-	for (auto it = setVolume.begin(), ite = setVolume.end();
-		 it != ite; ++it) {
-		Z3i::Point current = *it;
-		if (!(ballInnerBall.contains(current)) && ballOuterBall.contains(current)) {
-			shell.insert(current);
-		}
+	for (const Z3i::Point& p : points) {
+		shell.insert(p);
 	}
-
 	return shell;
+	// Z3i::DigitalSet shell(setVolume.domain());
+	// for (auto it = setVolume.begin(), ite = setVolume.end();
+	// 	 it != ite; ++it) {
+	// 	Z3i::Point current = *it;
+	// 	if (!(ballInnerBall.contains(current)) && ballOuterBall.contains(current)) {
+	// 		shell.insert(current);
+	// 	}
+	// }
+
+	// return shell;
+}
+
+Z3i::DigitalSet computeHalfShell(const Z3i::Point& center, const Z3i::RealVector& dirVector,
+								 const Z3i::DigitalSet& plane,
+								 const Z3i::DigitalSet& setVolume, double radiusInnerBall) {
+	typedef BreadthFirstVisitor<Z3i::Object26_6, std::set<Z3i::Point> > Visitor;
+	typedef Visitor::Node Node;
+
+	Z3i::Object26_6 obj(Z3i::dt26_6, setVolume);
+    Visitor visitor(obj, plane.begin(), plane.end());
+	Z3i::DigitalSet shell(setVolume.domain());
+	int radius = (int) radiusInnerBall;
+	while (!visitor.finished()) {
+		Node node = visitor.current();
+		if (node.second > radius) break;
+		if (node.second == radius && VCMUtil::abovePlane(node.first, dirVector, center))
+			shell.insert(node.first);
+		visitor.expand();
+
+	}
+	// Ball<Z3i::Point> ballInnerBall(center, radiusInnerBall);
+	// std::vector<Z3i::Point> points = ballInnerBall.pointsInHalfBall(dirVector);
+	// std::vector<Z3i::Point> surface = ballInnerBall.surfaceIntersection(setVolume);
+	// sort(points.begin(), points.end());
+	// sort(surface.begin(), surface.end());
+	// std::vector<Z3i::Point> intersection;
+	// std::set_intersection(points.begin(), points.end(),
+	// 					  surface.begin(), surface.end(),
+	// 					  back_inserter(intersection));
+
+	// Z3i::DigitalSet shell(setVolume.domain());
+
+
+	// for (const Z3i::Point& p : intersection) {
+	// 	std::vector<Z3i::Point> neighbors;
+	// 	back_insert_iterator<std::vector<Z3i::Point> > inserter(neighbors);
+	// 	obj.writeNeighbors(inserter, p);
+	// 	for (const auto& n : neighbors)
+	// 		shell.insert(n);
+	// 	shell.insert(p);
+	// }
+    return shell;
 }
 
 
@@ -119,8 +166,13 @@ unsigned int computeDegree(const Z3i::DigitalSet& shell) {
 	vector<ObjectType> objects;
 	back_insert_iterator< std::vector<ObjectType> > inserter( objects );
 	unsigned int nbConnectedComponents = objectImage.writeComponents(inserter);
+	unsigned int cpt = 0;
 
-	return nbConnectedComponents;
+	for (const auto& obj : objects) {
+		if (obj.size() > 1)
+			cpt++;
+	}
+	return cpt;
 }
 
 
@@ -570,12 +622,14 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, 
 	Ball<Z3i::Point> ball(p, radius);
 	vector<Z3i::Point> vPoints = ball.intersection(setVolume);
 	Z3i::RealVector eigenValue = VCMUtil::computeEigenValuesFromVCM(p, vcm, chi);
+	Z3i::DigitalSet shell = computeShell(p, setVolume, radius*1.5, radius*3);
+	unsigned int nbCC = computeDegree(shell);
 	double factor = (pow(vcm.R(), 4) * radius) / 8;
 	double l0 = eigenValue[0];
 	double l1 = eigenValue[1];
 	double l2 = eigenValue[2] ;
 	double eigenVar = l0 / (l0 + l1 + l2);
-
+	eigenVar = nbCC;
 	double angle = M_PI/2 - vcm.vectorVariability(normal, chi, p);
 	Z3i::DigitalSet discretePlane(connectedComponent3D.domain());
 	for (const Z3i::Point& c : connectedComponent3D) {
@@ -584,6 +638,94 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, 
 	}
 
 	return make_pair(discretePlane, eigenVar);
+}
+
+void fillHoles(Z3i::DigitalSet& skeletonPoints) {
+	Z3i::Object26_6 objectImage(Z3i::dt26_6, skeletonPoints);
+	vector<Z3i::Object26_6> skeletonCC;
+	back_insert_iterator< std::vector<Z3i::Object26_6> > inserterCC( skeletonCC );
+	objectImage.writeComponents(inserterCC);
+	for (size_t i = 0; i < skeletonCC.size(); i++) {
+		Z3i::DigitalSet currentCC = skeletonCC[i].pointSet();
+		std::vector<Z3i::Point> endPointCurrent = CurveAnalyzer::findEndPoints(currentCC);
+		for (size_t j = 0; j < skeletonCC.size(); j++) {
+			Z3i::DigitalSet otherCC = skeletonCC[j].pointSet();
+			std::vector<Z3i::Point> endPointOther = CurveAnalyzer::findEndPoints(otherCC);
+			double distance = numeric_limits<double>::max();
+			Z3i::Point currentLink, otherLink;
+			for (auto itCurrent = endPointCurrent.begin(), itCurrentE = endPointCurrent.end();
+				 itCurrent != itCurrentE; ++itCurrent) {
+				Z3i::Point current = *itCurrent;
+				for (auto itOther = endPointOther.begin(), itOtherE = endPointOther.end(); itOther != itOtherE;
+					 ++itOther) {
+					Z3i::Point other = *itOther;
+					double currentDistance = Z3i::l2Metric(current, other);
+					if (currentDistance > sqrt(3) &&
+						currentDistance <= 2 * sqrt(3) &&
+						currentDistance < distance) {
+						distance = currentDistance;
+						currentLink = current;
+						otherLink = other;
+					}
+				}
+			}
+			vector<Z3i::Point> link = PointUtil::linkTwoPoints(currentLink, otherLink);
+			for (auto itL = link.begin(), itLe = link.end(); itL != itLe; ++itL) {
+				skeletonPoints.insert(*itL);
+			}
+		}
+	}
+}
+
+void completeSkeleton(Z3i::DigitalSet& skeletonPoints, const Z3i::DigitalSet& setVolume,
+					  const Z3i::DigitalSet& junctionPoints) {
+	Z3i::Object26_6 objectImage(Z3i::dt26_6, skeletonPoints);
+	Z3i::Object26_6 objectVolume(Z3i::dt26_6, setVolume);
+	vector<Z3i::Object26_6> skeletonCC;
+	back_insert_iterator< std::vector<Z3i::Object26_6> > inserterCC( skeletonCC );
+	objectImage.writeComponents(inserterCC);
+	for (size_t i = 0; i < skeletonCC.size(); i++) {
+		Z3i::DigitalSet currentCC = skeletonCC[i].pointSet();
+		std::vector<Z3i::Point> endPointCurrent = CurveAnalyzer::findEndPoints(currentCC);
+		trace.info() << endPointCurrent.size() << endl;
+		for (size_t j = 0; j < skeletonCC.size(); j++) {
+			if (i == j) continue;
+			Z3i::DigitalSet otherCC = skeletonCC[j].pointSet();
+			std::vector<Z3i::Point> endPointOther = CurveAnalyzer::findEndPoints(otherCC);
+			double distance = numeric_limits<double>::max();
+			Z3i::Point currentLink, otherLink;
+			for (auto itCurrent = endPointCurrent.begin(), itCurrentE = endPointCurrent.end();
+				 itCurrent != itCurrentE; ++itCurrent) {
+				Z3i::Point current = *itCurrent;
+				for (auto itOther = endPointOther.begin(), itOtherE = endPointOther.end(); itOther != itOtherE;
+					 ++itOther) {
+					Z3i::Point other = *itOther;
+					vector<Z3i::Point> link = SurfaceTraversal::AStarAlgorithm(objectVolume, current, other);
+					double currentDistance = link.size();
+					if (currentDistance < distance) {
+						distance = currentDistance;
+						currentLink = current;
+						otherLink = other;
+					}
+				}
+			}
+			bool add = true;
+			vector<Z3i::Point> link = SurfaceTraversal::AStarAlgorithm(objectVolume, currentLink, otherLink);
+			for (const Z3i::Point& p : link) {
+				if (junctionPoints.find(p) != junctionPoints.end())
+					add = false;
+			}
+			if (add) {
+				for (auto itL = link.begin(), itLe = link.end(); itL != itLe; ++itL) {
+					skeletonPoints.insert(*itL);
+				}
+			}
+		}
+	}
+}
+
+void curvesInJunctions(Z3i::DigitalSet& skeletonPoints, const Z3i::DigitalSet& setVolume) {
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -707,13 +849,17 @@ int main( int  argc, char**  argv )
 
 
 	Metric l2;
-	SaddleComputer<DTL2, BackgroundPredicate> saddleComputer(setVolume, dt, backgroundPredicate, R, r, delta);
-	vector<pair<Z3i::Point, double> > pointToEigenValue = saddleComputer.mapPointToEigenvalue();
+	//SaddleComputer<DTL2, BackgroundPredicate> saddleComputer(setVolume, dt, backgroundPredicate, R, r, delta);
+	//vector<pair<Z3i::Point, double> > pointToEigenValue = saddleComputer.mapPointToEigenvalue();
 	// Z3i::DigitalSet branchingPoints = saddleComputer.extractSaddlePoints(setVolume);
 	// vector<Z3i::Object26_6> objSaddle = saddleComputer.saddleConnectedComponents(branchingPoints);
  	// Z3i::DigitalSet maxCurvaturePoints = saddleComputer.saddlePointsToOnePoint<Matrix>(objSaddle);
 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin-1, thresholdMax);
-
+	// Z3i::DigitalSet saddlePoints(domainVolume);
+	// for (const pair<Z3i::Point, double>& pair : pointToEigenValue) {
+	// 	if (pair.second > thresholdFeature)
+	// 		saddlePoints.insert(pair.first);
+	// }
 
 
 	WeightedPointCount* currentPoint = *setVolumeWeighted.begin();
@@ -742,135 +888,174 @@ int main( int  argc, char**  argv )
 	Z3i::DigitalSet branches(setVolume.domain());
 	bool isNewSeed = true;
 	vector<Z3i::DigitalSet> planes;
-//     map<Z3i::Point, double> pointToEigenValue;
+	map<Z3i::Point, Z3i::Point> trackToSkeletonPoint;
 
-// 	for (const Z3i::Point& p : setVolume) {
-// 		pointToEigenValue[p] = numeric_limits<double>::max();
-// 	}
-// 	trace.beginBlock("Computing skeleton");
+    map<Z3i::Point, double> pointToEigenValue;
+	// for (const Z3i::Point& p : setVolume) {
+	// 	pointToEigenValue[p] = numeric_limits<double>::max();
+	// }
+	trace.beginBlock("Computing skeleton");
 
-// 	//Main loop to compute skeleton (stop when no vol points left to process)
-// 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it)
-// 	//while (numberLeft > 0)
-// 	{
-// 		i++;
-// 		trace.progressBar(i, setVolumeWeighted.size());
-// 		//trace.progressBar((setVolumeWeighted.size() - numberLeft), setVolumeWeighted.size());
-// 		currentPoint = *it;
-// 		currentPoint->myProcessed = true;
-// 		double radius = r;
-// 		Point closestPointToCurrent = *min_element(vPoints.begin(), vPoints.end(), [&](const Point& one, const Point& two) {
-// 					return Z3i::l2Metric(one, currentPoint->myPoint) < Z3i::l2Metric(two, currentPoint->myPoint);
-// 			});
-// 		//Distance transform value for VCM radius
-// 		if (isDT) {
-// 			if (dt(closestPointToCurrent) > dt(currentPoint->myPoint))
-// 				radius = dt(closestPointToCurrent);
-// 			else
-// 				radius = dt(currentPoint->myPoint);
-// 			radius += delta;
-// 			if (radius > 0) {
-// 				chi = KernelFunction(1.0, radius);
-// 			}
-//  		}
+	//Main loop to compute skeleton (stop when no vol points left to process)
+	//for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it)
+	while (numberLeft > 0)
+	{
+		i++;
+		//trace.progressBar(i, setVolumeWeighted.size());
+		trace.progressBar((setVolumeWeighted.size() - numberLeft), setVolumeWeighted.size());
+//		currentPoint = *it;
+		currentPoint->myProcessed = true;
+		double radius = r;
+		Point closestPointToCurrent = *min_element(vPoints.begin(), vPoints.end(), [&](const Point& one, const Point& two) {
+					return Z3i::l2Metric(one, currentPoint->myPoint) < Z3i::l2Metric(two, currentPoint->myPoint);
+			});
+		//Distance transform value for VCM radius
+		if (isDT) {
+			if (dt(closestPointToCurrent) > dt(currentPoint->myPoint))
+				radius = dt(closestPointToCurrent);
+			else
+				radius = dt(currentPoint->myPoint);
+			radius += delta;
+			if (radius > 0) {
+				chi = KernelFunction(1.0, radius);
+			}
+ 		}
 
-// 		// Compute discrete plane
-// 		// connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
-// 		// 													 currentPoint->myPoint, normal,
-// 		// 													 0, radius, distanceMax, 26, true);
-// 		double criterionValue = pointToEigenValue.at(closestPointToCurrent);
-// 		if (criterionValue == numeric_limits<double>::max()) {
-// 			pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM(vcm, chi, domainVolume,
-// 																	 currentPoint->myPoint, radius,
-// 																	 setVolumeWeighted, setVolume, viewer);
-// 			pointToEigenValue[currentPoint->myPoint] = value.second;
-// 			pointToEigenValue[closestPointToCurrent] = value.second;
-// 		}
-// 		else {
-// 			pointToEigenValue[currentPoint->myPoint] = criterionValue;
-// 		}
+		// Compute discrete plane
+		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+		 													 currentPoint->myPoint, normal,
+		 													 0, radius, distanceMax, 26, true);
 
-// //		pointToEigenValue[currentPoint->myPoint] =  std::min(pointToEigenValue[currentPoint->myPoint], value.second);
-// //		connectedComponent3D = value.first;
-// 		// for (const Z3i::Point& p : value.first) {
-// 		//     if (connectedComponent3D.find(p) != connectedComponent3D.end())
-// 		// 		pointToEigenValue[p] = std::min(pointToEigenValue[p], value.second);
-// 		// }
+		// double criterionValue = pointToEigenValue.at(closestPointToCurrent);
+		// if (criterionValue == numeric_limits<double>::max()) {
+		// pair<Z3i::DigitalSet, double> value = eigenValuesWithVCM(vcm, chi, domainVolume,
+		//  														 currentPoint->myPoint, radius,
+		// 														 setVolumeWeighted, setVolume, viewer);
+		// 	pointToEigenValue[currentPoint->myPoint] = value.second;
+		// 	pointToEigenValue[closestPointToCurrent] = value.second;
+		// }
+		// else {
+		// 	pointToEigenValue[currentPoint->myPoint] = criterionValue;
+		// }
 
-// 	    // realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
+		//pointToEigenValue[currentPoint->myPoint] =  std::min(pointToEigenValue[currentPoint->myPoint], value.second);
+		// connectedComponent3D = value.first;
+		// for (const Z3i::Point& p : value.first) {
+		//     if (connectedComponent3D.find(p) != connectedComponent3D.end())
+		// 		pointToEigenValue[p] = std::min(pointToEigenValue[p], value.second);
+		// }
+
+	    realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 
 
-// 		// //Center of mass computation
-// 		// if (realCenter != Z3i::RealPoint()) {
-// 		// 	centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
+		//Center of mass computation
+		if (realCenter != Z3i::RealPoint()) {
+			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
+//			if (value.second < 3)
+			//	pointToEigenValue[centerOfMass] = std::min(pointToEigenValue[centerOfMass], value.second);
 
-// 		// 	double radiusIntersection = computeRadiusFromIntersection(volume, centerOfMass, normal, distanceMax*2);
 
-// 		// 	bool processed = false;
-// 		// 	for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
-// 		// 		for (auto itS = skeletonPoints.begin(), itSe = skeletonPoints.end(); itS != itSe; ++itS)  {
-// 		// 			if (*itS == *it)
-// 		// 				processed = true;
-// 		// 		}
-// 		// 	}
+			Z3i::DigitalSet shell = computeHalfShell(currentPoint->myPoint, Z3i::RealVector(0,0,0), connectedComponent3D, setVolume, radius);
 
-// 		// 	//VCMUtil::markConnectedComponent3D(setVolumeWeighted, connectedComponent3D, 0);
+			unsigned int nbCC = computeDegree(shell);
 
-// 		// 	if (!processed && Z3i::l2Metric(currentPoint->myPoint, centerOfMass) <= sqrt(3)
-// 		// 		){
-// 		// 		if (!isNewSeed && Z3i::l2Metric(previousCenter, centerOfMass) <= 2 * sqrt(3)
-// 		// 			) {
-// 		// 			// Z3i::DigitalSet diffPlanes = VCMUtil::markDifferenceBetweenPlanes(setVolumeWeighted,
-// 		// 			// 																  previousNormal, previousCenter,
-// 		// 			// 																   normal, centerOfMass,
-// 		// 			// 																   domainVolume, radius);
-// 		// 			// planes.push_back(diffPlanes);
-// 		// 			// for (const Z3i::Point & p : diffPlanes) {
-// 		// 			// 	if (DGtal::Z3i::l2Metric(p, currentPoint->myPoint) <= radius)
-// 		// 			// 		pointToEigenValue[p] = std::min(pointToEigenValue[p], value.second);
-// 		// 			// }
-// 		// 			//	VCMUtil::markConnectedComponent3D(setVolumeWeighted, diffPlanes, 0);
+			int r = rand() % 256, b = rand() % 256, g = rand() % 256;
+			if (nbCC >= 3) {
+				Z3i::DigitalSet halfShellNormal1 = computeHalfShell(currentPoint->myPoint, normal, connectedComponent3D, setVolume, radius);
+				Z3i::DigitalSet halfShellNormal2 = computeHalfShell(currentPoint->myPoint, -normal, connectedComponent3D, setVolume, radius);
+				unsigned int nbCC1 = computeDegree(halfShellNormal1);
+				unsigned int nbCC2 = computeDegree(halfShellNormal2);
+				Ball<Z3i::Point> ball(currentPoint->myPoint, dt(centerOfMass));
+				std::vector<Z3i::Point> points;
+				if (nbCC1 > nbCC2 && nbCC1 > 1 && nbCC2 > 0) {
+					points = ball.pointsInHalfBall(normal);
+				} else if (nbCC2 > nbCC1 && nbCC2 > 1 && nbCC2 > 0) {
+					points = ball.pointsInHalfBall(-normal);
+				}
+				std::vector<Z3i::Point> inVolume = ball.intersection(setVolume);
+				sort(points.begin(), points.end());
+				sort(inVolume.begin(), inVolume.end());
+				std::vector<Z3i::Point> pointsInVolume;
+				set_intersection(points.begin(), points.end(),
+								 inVolume.begin(), inVolume.end(),
+								 back_inserter(pointsInVolume));
+				//branches.insert(halfShellNormal1.begin(), halfShellNormal1.end());
+				//viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << halfShellNormal1;
+				branches.insert(pointsInVolume.begin(), pointsInVolume.end());
+			}
 
-// 		// 		}
+			double radiusIntersection = computeRadiusFromIntersection(volume, centerOfMass, normal, distanceMax*2);
 
-// 		// 		// Branching detection
-// 		// 		skeletonPoints.insert(centerOfMass);
-// 		// 		previousNormal = normal;
-// 		// 		previousCenter = centerOfMass;
+			bool processed = false;
+			for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
+				for (auto itS = skeletonPoints.begin(), itSe = skeletonPoints.end(); itS != itSe; ++itS)  {
+					if (*itS == *it)
+						processed = true;
+				}
+			}
 
-// 		// 		viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
-// 		// 		viewer << Viewer3D<>::updateDisplay;
-// 		// 		qApp->processEvents();
+			Z3i::DigitalSet toMark(connectedComponent3D.domain());
+			for (const Z3i::Point& p : connectedComponent3D) {
+				if (Z3i::l2Metric(p, currentPoint->myPoint) <= radius)
+					toMark.insert(p);
+			}
+			VCMUtil::markConnectedComponent3D(setVolumeWeighted, toMark, 0);
 
-// 		// 	}
-// 		// }
+			if (!processed && Z3i::l2Metric(currentPoint->myPoint, centerOfMass) <= sqrt(3)
+				){
+				if (!isNewSeed && Z3i::l2Metric(previousCenter, centerOfMass) <= 2 * sqrt(3)
+					) {
+					Z3i::DigitalSet diffPlanes = VCMUtil::markDifferenceBetweenPlanes(setVolumeWeighted,
+																					  previousNormal, previousCenter,
+																					   normal, centerOfMass,
+																					   domainVolume, radius);
+					planes.push_back(diffPlanes);
+					// for (const Z3i::Point & p : diffPlanes) {
+					// 	if (DGtal::Z3i::l2Metric(p, currentPoint->myPoint) <= radius)
+					// 		pointToEigenValue[p] = std::min(pointToEigenValue[p], value.second);
+					// }
+						VCMUtil::markConnectedComponent3D(setVolumeWeighted, diffPlanes, 0);
 
-// 		// //Go to next point according to normal OR to max value in DT
-// 		// // if (isNewSeed) {
-// 		// // 	seedNormal = normal;
-// 		// // 	seedCenter = centerOfMass;
-// 		// // 	seedConnectedComponent3D = connectedComponent3D;
-// 		// // }
-// 		// bool previousSeed = isNewSeed;
-// 		// isNewSeed = VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
-// 		// if (!isNewSeed && !previousSeed)
-// 		// 	planes.push_back(connectedComponent3D);
+				}
 
-// 		// // if (isNewSeed) {
-// 		// // 	trace.info() << currentPoint->myPoint << endl;
-// 		// // 	WeightedPointCount* otherPoint = new WeightedPointCount(*currentPoint);
-// 		// // 	isNewSeed = VCMUtil::trackNextPoint(otherPoint, setVolumeWeighted, seedConnectedComponent3D, seedCenter, seedNormal);
-// 		// // 	if (!isNewSeed) {
-// 		// // 		currentPoint = otherPoint;
-// 		// // 	}
-// 		// // }
-// 		// numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
-// 		// 					  [&](WeightedPointCount* wpc) {
-// 		// 						  return (!wpc->myProcessed);
-// 		// 					  });
-//   		// i++;
-// 	}
-// 	trace.endBlock();
+				// Branching detection
+//				skeletonPoints.insert(centerOfMass);
+				trackToSkeletonPoint[currentPoint->myPoint] = centerOfMass;
+				previousNormal = normal;
+				previousCenter = centerOfMass;
+
+				 // viewer << CustomColors3D(Color::Red, Color::Red) << centerOfMass;
+				 // viewer << Viewer3D<>::updateDisplay;
+				 // qApp->processEvents();
+
+			}
+		}
+
+		//Go to next point according to normal OR to max value in DT
+		// if (isNewSeed) {
+		// 	seedNormal = normal;
+		// 	seedCenter = centerOfMass;
+		// 	seedConnectedComponent3D = connectedComponent3D;
+		// }
+		bool previousSeed = isNewSeed;
+		isNewSeed = VCMUtil::trackNextPoint(currentPoint, setVolumeWeighted, connectedComponent3D, centerOfMass, normal);
+		if (!isNewSeed && !previousSeed)
+			planes.push_back(connectedComponent3D);
+
+		// if (isNewSeed) {
+		// 	trace.info() << currentPoint->myPoint << endl;
+		// 	WeightedPointCount* otherPoint = new WeightedPointCount(*currentPoint);
+		// 	isNewSeed = VCMUtil::trackNextPoint(otherPoint, setVolumeWeighted, seedConnectedComponent3D, seedCenter, seedNormal);
+		// 	if (!isNewSeed) {
+		// 		currentPoint = otherPoint;
+		// 	}
+		// }
+		numberLeft = count_if(setVolumeWeighted.begin(), setVolumeWeighted.end(),
+							  [&](WeightedPointCount* wpc) {
+								  return (!wpc->myProcessed);
+							  });
+	}
+	trace.endBlock();
 	double minVal = min_element(pointToEigenValue.begin(), pointToEigenValue.end(), [&](const pair<Z3i::Point, double>& one,
 																						const pair<Z3i::Point, double>& two) {
 									return (one.second < two.second);
@@ -882,6 +1067,11 @@ int main( int  argc, char**  argv )
 			maxVal = pair.second;
 	}
 	trace.info() << minVal << " " << maxVal << endl;
+
+	for (const auto & pair : trackToSkeletonPoint) {
+		if (branches.find(pair.first) == branches.end())
+			skeletonPoints.insert(pair.second);
+	}
 	// vector<map<Z3i::Point, double>::iterator> itToRemove;
 	// for (auto it = pointToEigenValue.begin(), ite = pointToEigenValue.end(); it != ite; ++it) {
 	// 	if (it->second == numeric_limits<double>::max())
@@ -891,24 +1081,12 @@ int main( int  argc, char**  argv )
 	//     pointToEigenValue.erase(iterator);
 	// }
 
-	// Watershed<Z3i::Point> watershed(pointToEigenValue, thresholdFeature);
-	// watershed.compute();
-	// auto resultWatershed = watershed.getWatershed();
-    // int bins = watershed.getBins();
 
-//	GradientColorMap<int, CMAP_JET > hueShade(0, bins);
-	// trace.info() << "Bins= " << bins << endl;
-	// for (const auto& complexPoint : resultWatershed) {
-	//  	viewer << CustomColors3D(hueShade(complexPoint.second.getLabel()), hueShade(complexPoint.second.getLabel())) << complexPoint.first;
+	// GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
+	// for (const auto& pToL : pointToEigenValue) {
+	// 	if (pToL.second > maxVal) continue;
+	// 	viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
 	// }
-
-	// Z3i::DigitalSet skeletonJunction = computeSkeletonInJunctions<VCM, KernelFunction>(resultWatershed, pointToEigenValue, setVolume, setVolumeWeighted,vPoints, dt);
-	// viewer << CustomColors3D(Color::Red, Color::Red) << skeletonJunction;
-	GradientColorMap<double, CMAP_JET > hueShade(minVal, maxVal);
-	for (const auto& pToL : pointToEigenValue) {
-		if (pToL.second > maxVal) continue;
-		viewer << CustomColors3D(hueShade(pToL.second), hueShade(pToL.second)) << pToL.first;
-	}
 
 	//Discarding points being in branching parts
 	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
@@ -917,15 +1095,16 @@ int main( int  argc, char**  argv )
 	 		skeletonPoints.erase(itToErase);
 	}
 
-//	fillHoles(skeletonPoints, viewer);
+	fillHoles(skeletonPoints);
 
 	// for (auto it=skeletonPoints.begin(), ite = skeletonPoints.end(); it != ite; ++it) {
 	// 	viewer << CustomColors3D(Color::Red, Color::Red) << *it;
 	// }
 
-	// for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
-	//  	viewer << CustomColors3D(Color(0,50,0,50), Color(0,50,0,50)) <<*it;
-	// }
+	viewer << CustomColors3D(Color::Red, Color::Red) << skeletonPoints;
+	 for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
+		 viewer << CustomColors3D(Color(0,50,0,50), Color(0,50,0,50)) <<*it;
+	 }
 
 	//second pass
 	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
