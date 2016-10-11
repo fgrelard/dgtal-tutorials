@@ -28,7 +28,7 @@ public :
 
 public:
 
-        DigitalPlane() : myPoint(), myPlaneEquation() {}
+        DigitalPlane() : myPoint(), myPlaneEquation(0, {0,0,1}, 0) {}
 
         DigitalPlane(const Point& aPoint, const Vector& aNormal, int aConnexity = 26) : myPoint(aPoint) {
                 typedef typename Vector::Scalar Scalar;

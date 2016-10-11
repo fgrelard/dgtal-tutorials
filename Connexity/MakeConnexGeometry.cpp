@@ -352,19 +352,19 @@ int main( int  argc, char**  argv )
 	back_insert_iterator< std::vector<ObjectType> > inserter( objects );
 	unsigned int nbConnectedComponents = objectImage.writeComponents(inserter);
 	trace.info() << nbConnectedComponents << endl;
-	// sort(objects.begin(), objects.end(), [&](const ObjectType& a, const ObjectType& b)->bool {
-	// 		double maxa = 0, maxb = 0;
-	// 		for (auto it = a.begin(), ite = a.end(); it != ite; ++it) {
-	// 			if (dt(*it) > maxa)
-	// 				maxa = dt(*it);
-	// 		}
+	sort(objects.begin(), objects.end(), [&](const ObjectType& a, const ObjectType& b)->bool {
+			double maxa = 0, maxb = 0;
+			for (auto it = a.begin(), ite = a.end(); it != ite; ++it) {
+				if (dt(*it) > maxa)
+					maxa = dt(*it);
+			}
 
-	// 		for (auto it = b.begin(), ite = b.end(); it != ite; ++it) {
-	// 			if (dt(*it) > maxb)
-	// 				maxb = dt(*it);
-	// 		}
-	// 		return maxa > maxb;
-	// 	});
+			for (auto it = b.begin(), ite = b.end(); it != ite; ++it) {
+				if (dt(*it) > maxb)
+					maxb = dt(*it);
+			}
+			return maxa > maxb;
+		});
 	ObjectType reference = *(objects.begin());
 	objects.erase(objects.begin());
 
