@@ -212,7 +212,7 @@ std::vector<Point> PointUtil::bezierCurve(const Point& source,
 				3 * pow((1-t), 2) * t * controlPoint1[k] +
 				3 * (1-t) * pow(t, 2) * controlPoint2[k] +
 				pow(t, 3) * destination[k];
-			current[k] = coordinateAtK;
+			current[k] = std::round(coordinateAtK);
 		}
 		bezier.push_back(current);
 	}
