@@ -586,7 +586,7 @@ int main( int  argc, char**  argv )
 
 				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 																	 s, normal,
-																	 0, radius, distanceMax, false);
+																	 0, radius, distanceMax, 26, true);
 
 				//Z3i::DigitalSet surfelSet = extractRelevantSurfacePointsForVolVCM(connectedComponent3D, dt, s);
 
@@ -600,8 +600,15 @@ int main( int  argc, char**  argv )
 				vcmSurface.setMySmallR(distanceMaxEdge);
 
 
-				double radiusSurface = dt(s) + delta;
+				Z3i::Point farthestPoint = *max_element(surfelSet.begin(), surfelSet.end(), [&](const Z3i::Point& one,
+																								const Z3i::Point& two)  {
+															return Z3i::l2Metric(one, s) < Z3i::l2Metric(s, two);
+														});
+				double radiusSurface =dt(s) + delta;
 				Z3i::RealPoint normalSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
+				// connectedComponent3D = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume, setVolumeWeighted,
+				// 													 s, normalSurface,
+				// 													 0, radiusSurface, distanceMax, 26, true);
 				double angle = normalSurface.cosineSimilarity(normal);
 				double otherAngle = normalSurface.cosineSimilarity(-normal);
 				angle = (angle < otherAngle) ? angle : otherAngle;

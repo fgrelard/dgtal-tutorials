@@ -140,6 +140,19 @@ TestPointUtil/fast:
 	$(MAKE) -f CMakeFiles/TestPointUtil.dir/build.make CMakeFiles/TestPointUtil.dir/build
 .PHONY : TestPointUtil/fast
 
+#=============================================================================
+# Target rules for targets named TestSliceUtils
+
+# Build rule for target.
+TestSliceUtils: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 TestSliceUtils
+.PHONY : TestSliceUtils
+
+# fast build rule for target.
+TestSliceUtils/fast:
+	$(MAKE) -f CMakeFiles/TestSliceUtils.dir/build.make CMakeFiles/TestSliceUtils.dir/build
+.PHONY : TestSliceUtils/fast
+
 testDigitalPlane.o: testDigitalPlane.cpp.o
 .PHONY : testDigitalPlane.o
 
@@ -212,12 +225,37 @@ testPointUtil.cpp.s:
 	$(MAKE) -f CMakeFiles/TestPointUtil.dir/build.make CMakeFiles/TestPointUtil.dir/testPointUtil.cpp.s
 .PHONY : testPointUtil.cpp.s
 
+testSliceUtils.o: testSliceUtils.cpp.o
+.PHONY : testSliceUtils.o
+
+# target to build an object file
+testSliceUtils.cpp.o:
+	$(MAKE) -f CMakeFiles/TestSliceUtils.dir/build.make CMakeFiles/TestSliceUtils.dir/testSliceUtils.cpp.o
+.PHONY : testSliceUtils.cpp.o
+
+testSliceUtils.i: testSliceUtils.cpp.i
+.PHONY : testSliceUtils.i
+
+# target to preprocess a source file
+testSliceUtils.cpp.i:
+	$(MAKE) -f CMakeFiles/TestSliceUtils.dir/build.make CMakeFiles/TestSliceUtils.dir/testSliceUtils.cpp.i
+.PHONY : testSliceUtils.cpp.i
+
+testSliceUtils.s: testSliceUtils.cpp.s
+.PHONY : testSliceUtils.s
+
+# target to generate assembly for a file
+testSliceUtils.cpp.s:
+	$(MAKE) -f CMakeFiles/TestSliceUtils.dir/build.make CMakeFiles/TestSliceUtils.dir/testSliceUtils.cpp.s
+.PHONY : testSliceUtils.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
+	@echo "... TestSliceUtils"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... TestPointUtil"
@@ -232,6 +270,9 @@ help:
 	@echo "... testPointUtil.o"
 	@echo "... testPointUtil.i"
 	@echo "... testPointUtil.s"
+	@echo "... testSliceUtils.o"
+	@echo "... testSliceUtils.i"
+	@echo "... testSliceUtils.s"
 .PHONY : help
 
 
