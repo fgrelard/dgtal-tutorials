@@ -586,7 +586,7 @@ int main( int  argc, char**  argv )
 
 				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
 																	 s, normal,
-																	 0, radius, distanceMax, 26, true);
+																	 0, radius, distanceMax, 26, false);
 
 				//Z3i::DigitalSet surfelSet = extractRelevantSurfacePointsForVolVCM(connectedComponent3D, dt, s);
 
@@ -604,7 +604,7 @@ int main( int  argc, char**  argv )
 																								const Z3i::Point& two)  {
 															return Z3i::l2Metric(one, s) < Z3i::l2Metric(s, two);
 														});
-				double radiusSurface =dt(s) + delta;
+				double radiusSurface = dt(s) + sqrt(3);
 				Z3i::RealPoint normalSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
 				// connectedComponent3D = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume, setVolumeWeighted,
 				// 													 s, normalSurface,
