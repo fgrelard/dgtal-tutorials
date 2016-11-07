@@ -426,7 +426,7 @@ int main( int  argc, char**  argv )
 //	Z3i::DigitalSet branchingPoints(domainSkeleton);
 	SetFromImage<Z3i::DigitalSet>::append<Image>(setSkeleton, skeleton, thresholdMin-1, thresholdMax);
 
-	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
+	Z3i::DigitalSet existingSkeleton = setSkeleton;
 	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
 	Metric l2;
@@ -481,9 +481,9 @@ int main( int  argc, char**  argv )
 	//  		viewer << CustomColors3D(Color::Red, Color::Red);
 	//  	viewer << edge->pointSet();
 	//  }
-	//  viewer << Viewer3D<>::updateDisplay;
-	//  application.exec();
-	//  return 0;
+	 // viewer << Viewer3D<>::updateDisplay;
+	 // application.exec();
+	 // return 0;
 
 
 	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;
@@ -556,7 +556,7 @@ int main( int  argc, char**  argv )
 			Z3i::DigitalSet edge = graphEdge->pointSet();
 			if (edge.size() == 0 //|| graphEdge->getLabel() != 1
 				) continue;
-			Z3i::DigitalSet restrictedEdge = edge;//restrictEdge(edge, branchingPoints, dt);
+			Z3i::DigitalSet restrictedEdge = restrictEdge(edge, branchingPoints, dt);
 
 			trace.progressBar(i, edgeGraph.size());
 
@@ -605,10 +605,10 @@ int main( int  argc, char**  argv )
 															return Z3i::l2Metric(one, s) < Z3i::l2Metric(s, two);
 														});
 				double radiusSurface = dt(s) + sqrt(3);
-				Z3i::RealPoint normalSurface = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
-				// connectedComponent3D = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume, setVolumeWeighted,
-				// 													 s, normalSurface,
-				// 													 0, radiusSurface, distanceMax, 26, true);
+				Z3i::RealPoint normalSurface; // = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
+				connectedComponent3D = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume, setVolumeWeighted,
+				 													 s, normalSurface,
+				 													 0, radiusSurface, distanceMax, 26, true);
 				double angle = normalSurface.cosineSimilarity(normal);
 				double otherAngle = normalSurface.cosineSimilarity(-normal);
 				angle = (angle < otherAngle) ? angle : otherAngle;
