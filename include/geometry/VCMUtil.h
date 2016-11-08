@@ -149,17 +149,29 @@ DGtal::Z3i::DigitalSet VCMUtil::extractConnectedComponent3D(const Domain & domai
 	double min = std::numeric_limits<double>::max();
 	if (nbConnectedComponents > 1) {
 		for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
-			double sum = 0;
 			DGtal::Z3i::DigitalSet ccSet = it->pointSet();
-		    for (auto it = ccSet.begin(), ite = ccSet.end(); it != ite; ++it) {
-				sum += DGtal::Z3i::l2Metric(*it, referencePoint);
-			}
-			sum /= ccSet.size();
+			DGtal::Z3i::Point closest = *std::min_element(ccSet.begin(), ccSet.end(), [&](const DGtal::Z3i::Point& one,
+																						  const DGtal::Z3i::Point& two) {
+															  return DGtal::Z3i::l2Metric(one, referencePoint) < DGtal::Z3i::l2Metric(two, referencePoint);
+														  });
+			double sum = DGtal::Z3i::l2Metric(closest, referencePoint);
 			if (sum < min) {
 				min = sum;
 				connectedComponent = ccSet;
 			}
 		}
+		// for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
+		// 	double sum = 0;
+		// 	DGtal::Z3i::DigitalSet ccSet = it->pointSet();
+		//     for (auto it = ccSet.begin(), ite = ccSet.end(); it != ite; ++it) {
+		// 		sum += DGtal::Z3i::l2Metric(*it, referencePoint);
+		// 	}
+		// 	sum /= ccSet.size();
+		// 	if (sum < min) {
+		// 		min = sum;
+		// 		connectedComponent = ccSet;
+		// 	}
+		// }
 	}
 	return connectedComponent;
 }
@@ -237,13 +249,26 @@ void VCMUtil::extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, 
 	std::vector<ObjectType> objects;
 	std::back_insert_iterator<std::vector<ObjectType>> inserter(objects);
 	unsigned int nbConnectedComponents = objectIntersection.writeComponents(inserter);
+	double min = std::numeric_limits<double>::max();
 	if (nbConnectedComponents > 1) {
 		for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
 			DGtal::Z3i::DigitalSet ccSet = it->pointSet();
-			if (ccSet.find(referencePoint) != ccSet.end()) {
+			DGtal::Z3i::Point closest = *std::min_element(ccSet.begin(), ccSet.end(), [&](const DGtal::Z3i::Point& one,
+																						  const DGtal::Z3i::Point& two) {
+															  return DGtal::Z3i::l2Metric(one, referencePoint) < DGtal::Z3i::l2Metric(two, referencePoint);
+														  });
+			double sum = DGtal::Z3i::l2Metric(closest, referencePoint);
+			if (sum < min) {
+				min = sum;
 				intersection = ccSet;
 			}
 		}
+		// for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
+		// 	DGtal::Z3i::DigitalSet ccSet = it->pointSet();
+		// 	if (ccSet.find(referencePoint) != ccSet.end()) {
+		// 		intersection = ccSet;
+		// 	}
+		// }
 	} else {
 		intersection = aSet;
 	}

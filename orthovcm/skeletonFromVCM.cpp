@@ -243,9 +243,10 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, 
 	return make_pair(discretePlane, eigenVar);
 }
 
-template <typename DTL2>
-void fillHoles(Z3i::DigitalSet& skeletonPoints, const DTL2& dt) {
+void fillHoles(Z3i::DigitalSet& skeletonPoints, const Z3i::DigitalSet& setVolume) {
 	Z3i::Object26_6 objectImage(Z3i::dt26_6, skeletonPoints);
+	Z3i::Object26_6 objectVolume(Z3i::dt26_6, setVolume);
+
 	vector<Z3i::Object26_6> skeletonCC;
 	back_insert_iterator< std::vector<Z3i::Object26_6> > inserterCC( skeletonCC );
 	objectImage.writeComponents(inserterCC);
@@ -284,7 +285,7 @@ void fillHoles(Z3i::DigitalSet& skeletonPoints, const DTL2& dt) {
 			}
 		}
 		if (objectsToLink) {
-			vector<Z3i::Point> link = PointUtil::linkTwoPoints26(currentLink, otherLink);
+			vector<Z3i::Point> link = SurfaceTraversal::AStarAlgorithm(objectVolume, currentLink, otherLink);
 			Z3i::DigitalSet toKeep = skeletonCC[indexDelete1].pointSet();
 			Z3i::DigitalSet toDelete = skeletonCC[indexDelete2].pointSet();
 			toKeep.insert(link.begin(), link.end());
@@ -318,13 +319,7 @@ void fillHoles(Z3i::DigitalSet& skeletonPoints, const DTL2& dt) {
 				skeletonCC.pop_back();
 			}
 			skeletonCC.push_back(toAdd);
-			bool isAdd = true;
-			for (const auto & p: link) {
-				if (dt(p) == 0)
-					isAdd=false;
-			}
-			if (isAdd)
-				skeletonPoints.insert(link.begin(), link.end());
+			skeletonPoints.insert(link.begin(), link.end());
 		}
 	}
 }
@@ -341,6 +336,7 @@ Z3i::DigitalSet endPointCurves(const Z3i::DigitalSet& curves, const Z3i::Digital
 	objCurves.writeComponents(inserter);
 	for (const ObjectType& curve : curvesCC) {
 		Z3i::DigitalSet curveSet = curve.pointSet();
+		if (curveSet.size() < 2) continue;
 		vector<Z3i::Point> localEndPoints = CurveAnalyzer::findEndPoints(curveSet);
 		for (const Z3i::Point& e : localEndPoints) {
 			if (endPoints.find(e) == endPoints.end() && curves.find(e) != curves.end())
@@ -809,6 +805,65 @@ void ensureSkeletonConnexity(Z3i::DigitalSet& skeletonPoints, const Z3i::Digital
 }
 
 
+Z3i::DigitalSet endPointsExtremities(const std::map<Z3i::Point, Z3i::RealVector>& mapPointToNormal,
+									 const Z3i::DigitalSet& endPoints,
+									 const Z3i::DigitalSet& setVolume,
+									 const Z3i::DigitalSet& junctions) {
+	Z3i::DigitalSet newEndPoints(endPoints.domain());
+	for (const Z3i::Point& e : endPoints) {
+		auto iterator = mapPointToNormal.find(e);
+		if (iterator == mapPointToNormal.end()) {
+			continue;
+		}
+		Z3i::RealVector n = iterator->second;
+		DigitalPlane<Z3i::Space> digPlane(e, n);
+		Z3i::DigitalSet planeSet(setVolume.domain());
+		for (const Z3i::Point& p : setVolume) {
+			if (digPlane.isPointAbove(p))
+				planeSet.insert(p);
+		}
+		Z3i::Object26_6 obj(Z3i::dt26_6, planeSet);
+		vector<Z3i::Object26_6> cc;
+		back_insert_iterator<vector<Z3i::Object26_6> > inserter(cc);
+		obj.writeComponents(inserter);
+
+		Z3i::DigitalSet involvedPart(setVolume);
+		for (const Z3i::Object26_6& part : cc) {
+			Z3i::DigitalSet partSet = part.pointSet();
+			if (partSet.find(e) != partSet.end())
+				involvedPart = partSet;
+		}
+
+		bool add = false;
+		for (const Z3i::Point& p : involvedPart) {
+			if (junctions.find(p) != junctions.end()) {
+				add = true;
+				break;
+			}
+		}
+
+		if (add) {
+			newEndPoints.insert(e);
+		}
+	}
+	return newEndPoints;
+}
+
+
+void completePointToNormals(std::map<Z3i::Point, Z3i::RealVector>& pointToNormal,
+							const Z3i::DigitalSet& setVolume) {
+	for (const Z3i::Point& p : setVolume) {
+		auto iterator = pointToNormal.find(p);
+		if (iterator == pointToNormal.end()) {
+			pair<Z3i::Point, Z3i::RealVector> pairNeighbor = *min_element(pointToNormal.begin(), pointToNormal.end(), [&](
+																			  const pair<Z3i::Point, Z3i::RealVector>& one,
+																			  const pair<Z3i::Point, Z3i::RealVector>& two) {
+																			  return Z3i::l2Metric(one.first, p) < Z3i::l2Metric(two.first, p);
+																		  });
+			pointToNormal[p] = pairNeighbor.second;
+		}
+	}
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
@@ -1027,7 +1082,7 @@ int main( int  argc, char**  argv )
 			double radiusCurrent = computeRadiusFromIntersection(volume, centerOfMass, normal, radius*6)+sqrt(3);
 			double radiusCurrentMinus = computeRadiusFromIntersection(volume, centerOfMass, -normal, radius*6)+sqrt(3);
 
-			double radiusShell = std::max(radiusCurrent, radiusCurrentMinus);
+			double radiusShell = std::max(radiusCurrent, std::max(4.0, radiusCurrentMinus));
 
 			if (Z3i::l2Metric(currentPoint->myPoint, realCenter) <= sqrt(3)
 				) {
@@ -1134,8 +1189,8 @@ int main( int  argc, char**  argv )
 	}
 	trace.endBlock();
 
-	fillHoles(skeletonPoints, dt);
-
+	completePointToNormals(pointToNormal, setVolume);
+	fillHoles(skeletonPoints, setVolume);
 	branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
 	Z3i::DigitalSet newBranches = dilateJunctions(setVolume, skeletonPoints, branches);
 	for (const Z3i::Point& p : newBranches)
@@ -1148,10 +1203,13 @@ int main( int  argc, char**  argv )
 	 		skeletonPoints.erase(itToErase);
 	}
 
-	Z3i::DigitalSet endPointsParts = endPointCurves(skeletonPoints, endPoints);
+	Z3i::DigitalSet endPointsParts = endPointCurves(skeletonPoints, Z3i::DigitalSet(setVolume.domain()));
 	vector<Z3i::DigitalSet> junctionCCSet = decompositionCCToSets(branches);
 	vector<Z3i::DigitalSet> parts = decompositionCCToSets(skeletonPoints);
 	orientNormalsEndPoints(pointToNormal, endPointsParts, parts);
+	endPointsParts = endPointsExtremities (pointToNormal, endPointsParts, setVolume, branches);
+		viewer << CustomColors3D(Color::Red, Color::Red) << endPointsParts;
+
 	vector<WeightedPointCount*> distanceMapJunctions = distanceMapFromBranches (skeletonPoints, junctionCCSet, endPointsParts,
 																				parts, pointToNormal, viewer);
 	int maxLabel = (*max_element(distanceMapJunctions.begin(), distanceMapJunctions.end(),

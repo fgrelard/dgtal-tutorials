@@ -891,8 +891,8 @@ int main( int  argc, char**  argv )
 	/* Working with 3 planes */
 	Z3i::DigitalSet processedEdges(existingSkeleton.domain());
 	Z3i::DigitalSet skeletonPoints(setVolume.domain());
+	int i = 0;
 	for (const Z3i::Point& b : branchingPoints) {
-
 		vector<Z3i::DigitalSet> adjacentEdges = adjacentEdgesToBranchPoint(edgeGraph, b, existingSkeleton);
 		vector<Z3i::DigitalSet> junctions;
 		vector<Z3i::DigitalSet> restrictedAdjacentEdges;
@@ -937,14 +937,15 @@ int main( int  argc, char**  argv )
 				if (pointToAreas.size() == 0) continue;
 
 				DigitalPlane cuttingPoint = pointsVaryingNeighborhood (planes, setVolume);
-				DigitalPlaneSet cuttingPlaneSet(cuttingPoint, setVolume);
+				Z3i::DigitalSet cuttingSet = cuttingPoint.intersectionWithSetOneCC (setVolume);
+				DigitalPlaneSet cuttingPlaneSet(cuttingPoint, cuttingSet);
 				DigitalPlane endPoint = *(--planes.end());
 
 				pointToPlanes.push_back(cuttingPlaneSet);
 				endPointToPlanes.push_back(endPoint);
 //				viewer << CustomColors3D(Color::Yellow, Color::Yellow) << endPoint.second;
-				viewer << CustomColors3D(Color::Yellow, Color::Yellow) << cuttingPoint.getCenter();
-				viewer << cuttingPlaneSet.pointSet();
+				// viewer << CustomColors3D(Color::Yellow, Color::Yellow) << cuttingPoint.getCenter();
+				// viewer << cuttingPlaneSet.pointSet();
 			}
 			trace.info() << endl;
 
@@ -956,14 +957,15 @@ int main( int  argc, char**  argv )
 
 			DigitalPlane referencePlane = DigitalPlane(b, normal, 6);
 			vector<DigitalPlaneSet> filteredPlanes = filterPlanesWithHalfSpaces(endPointToPlanes, pointToPlanes, referencePlane);
+			trace.info() << filteredPlanes.size() << endl;
 //			viewer << CustomColors3D(Color::Blue, Color::Blue) << referencePlane.intersectionWithSetOneCC(setVolume);
 			if (filteredPlanes.size() < 2) {
-			    for (const Z3i::DigitalSet& restrictedAdj : restrictedAdjacentEdges) {
-					skeletonPoints.insert(restrictedAdj.begin(), restrictedAdj.end());
-					processedEdges.insert(restrictedAdj.begin(), restrictedAdj.end());
-					viewer << CustomColors3D(Color::Red, Color::Red) << restrictedAdj;
-				}
-				continue;
+			//     for (const Z3i::DigitalSet& restrictedAdj : restrictedAdjacentEdges) {
+			// 		skeletonPoints.insert(restrictedAdj.begin(), restrictedAdj.end());
+			// 		processedEdges.insert(restrictedAdj.begin(), restrictedAdj.end());
+			// 		viewer << CustomColors3D(Color::Red, Color::Red) << restrictedAdj;
+			// 	}
+			 	continue;
 			}
 			vector<Z3i::DigitalSet> edgesRecentering;
 			for (const DigitalPlaneSet& plane : filteredPlanes) {
@@ -1045,8 +1047,8 @@ int main( int  argc, char**  argv )
 				}
 			}
 
-
-
+			trace.info() << i << endl;
+			trace.beginBlock("Recentering");
 			//Recentering
 			{
 				Z3i::DigitalSet restrictedVolumePlane = createVolumeAroundPoint(setVolume, b, radius*1.5);
@@ -1101,6 +1103,7 @@ int main( int  argc, char**  argv )
 
 				}
 			}
+			trace.endBlock();
 
 
 
@@ -1128,11 +1131,11 @@ int main( int  argc, char**  argv )
 
 		}
 	}
-	//viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-	viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
-	viewer << Viewer3D<>::updateDisplay;
-	application.exec();
-	return 0;
+	// viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
+	// viewer << CustomColors3D(Color(0,0,120,20), Color(0,0,120,20)) << setVolume;
+	// viewer << Viewer3D<>::updateDisplay;
+	// application.exec();
+	// return 0;
 	{
 	// vector<Z3i::DigitalSet> parts = computeSubVolumes(setVolume, planes);
 	// for (const Z3i::DigitalSet& part : parts) {
@@ -1141,22 +1144,22 @@ int main( int  argc, char**  argv )
 	// }
 	}
 	{
-		// Z3i::DigitalSet notProcessed(existingSkeleton.domain());
-		// for (const Z3i::Point& s : existingSkeleton) {
-		// 	if (processedEdges.find(s) == processedEdges.end())
-		// 		notProcessed.inse1rt(s);
-		// }
+		Z3i::DigitalSet notProcessed(existingSkeleton.domain());
+		for (const Z3i::Point& s : existingSkeleton) {
+			if (processedEdges.find(s) == processedEdges.end())
+				notProcessed.insert(s);
+		}
 
-		// Z3i::Object26_6 objNotProcessed(Z3i::dt26_6, notProcessed);
-		// vector<Z3i::Object26_6> objects;
-		// back_insert_iterator<vector<Z3i::Object26_6> > inserter(objects);
-		// objNotProcessed.writeComponents(inserter);
-		// for (const Z3i::Object26_6& o : objects) {
-		// 	Z3i::DigitalSet currentSet = o.pointSet();
-		// 	Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction>(setVolume, currentSet, Z3i::DigitalSet(setVolume.domain()));
-		// 	viewer << CustomColors3D(Color::Red, Color::Red) << smoothedSkeleton;
-		// 	skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
-		// }
+		Z3i::Object26_6 objNotProcessed(Z3i::dt26_6, notProcessed);
+		vector<Z3i::Object26_6> objects;
+		back_insert_iterator<vector<Z3i::Object26_6> > inserter(objects);
+		objNotProcessed.writeComponents(inserter);
+		for (const Z3i::Object26_6& o : objects) {
+			Z3i::DigitalSet currentSet = o.pointSet();
+			Z3i::DigitalSet smoothedSkeleton = smoothedSkeletonPoints<VCM, KernelFunction>(setVolume, currentSet, Z3i::DigitalSet(setVolume.domain()));
+			viewer << CustomColors3D(Color::Red, Color::Red) << smoothedSkeleton;
+			skeletonPoints.insert(smoothedSkeleton.begin(), smoothedSkeleton.end());
+		}
 	}
 	Image outImage(volume.domain());
 	DGtal::imageFromRangeAndValue(skeletonPoints.begin(), skeletonPoints.end(), outImage, 10);

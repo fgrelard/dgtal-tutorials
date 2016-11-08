@@ -80,12 +80,17 @@ public:
                 double min = std::numeric_limits<double>::max();
                 if (nbConnectedComponents > 1) {
                         for (auto it = objects.begin(), ite = objects.end(); it != ite; ++it) {
-                                double sum = 0;
                                 DigitalSet ccSet = it->pointSet();
-                                for (auto it = ccSet.begin(), ite = ccSet.end(); it != ite; ++it) {
-                                        sum += l2Metric(*it, myPoint);
-                                }
-                                sum /= ccSet.size();
+                                Point closest = *std::min_element(ccSet.begin(), ccSet.end(), [&](const Point& one,
+                                                                                               const Point& two) {
+                                                                       return l2Metric(one, myPoint) < l2Metric(two, myPoint);
+                                                               });
+                                double sum = l2Metric(closest, myPoint);
+                                // DigitalSet ccSet = it->pointSet();
+                                // for (auto it = ccSet.begin(), ite = ccSet.end(); it != ite; ++it) {
+                                //         sum += l2Metric(*it, myPoint);
+                                // }
+                                // sum /= ccSet.size();
                                 if (sum < min) {
                                         min = sum;
                                         connectedComponent = ccSet;
