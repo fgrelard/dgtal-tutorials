@@ -12,6 +12,20 @@
 using namespace DGtal;
 using namespace std;
 
+void testBezier(Viewer3D<>& viewer) {
+	Z3i::Point first(2, 16, 31);
+	Z3i::Point destination(3, -1, 22);
+	Z3i::Point control2(0, 1, 25);
+	Z3i::Point control1(1, 5, 10);
+
+	vector<Z3i::Point> points = PointUtil::bezierCurve(first, destination, control1, control2);
+	for (const Z3i::Point& p : points) {
+		viewer << CustomColors3D(Color::Red, Color::Red) << p;
+	}
+	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << first << destination << control1 << control2;
+	viewer << Viewer3D<>::updateDisplay;
+}
+
 void testBezierDeCasteljau(Viewer3D<>& viewer) {
 	Z3i::Point first(2, 16, 31);
 	Z3i::Point destination(3, -1, 23);
@@ -77,8 +91,8 @@ int main(int argc, char** argv) {
 	QApplication app(argc, argv);
 	Viewer3D<> viewer;
 	viewer.show();
-	testLinking26(viewer);
-//	testBezierDeCasteljau(viewer);
+//	testLinking26(viewer);
+	testBezier(viewer);
 //	testLinking();
 //	testDSSLinking();
 	app.exec();

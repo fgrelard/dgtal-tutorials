@@ -78,7 +78,7 @@ int main( int  argc, char**  argv )
 	typedef ImageSelector<Domain, unsigned char>::Type Image;
 	typedef VoronoiCovarianceMeasure<Space,Metric> VCM;
 	typedef functors::BallConstantPointFunction<Point,double> KernelFunction;
-  
+
 	typedef MSTTangent<Point> Tangent;
 	typedef Pencil<Point, Tangent, RealPoint> Pencil;
 	typedef DGtal::ConstImageAdapter<Image,Z2i::Domain,DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain>, Image::Value, DGtal::functors::Identity> ImageAdapterExtractor;
@@ -92,27 +92,27 @@ int main( int  argc, char**  argv )
 		("thresholdMax,M", po::value<int>()->default_value(255), "maximum threshold for binarization")
 		("radiusInside,R", po::value<double>()->default_value(10), "radius of the ball inside voronoi cell")
 		("radiusNeighbour,r", po::value<double>()->default_value(10), "radius of the ball for the neighbourhood")
-		; 
+		;
 
 	bool parseOK=true;
 	po::variables_map vm;
 	try{
-		po::store(po::parse_command_line(argc, argv, general_opt), vm);  
+		po::store(po::parse_command_line(argc, argv, general_opt), vm);
 	} catch(const std::exception& ex){
 		parseOK=false;
 		trace.info()<< "Error checking program options: "<< ex.what()<< endl;
 	}
-	po::notify(vm);    
+	po::notify(vm);
 	if( !parseOK || vm.count("help")||argc<=1)
 	{
 		std::cout << "Usage: " << argv[0] << " [input]\n"
 				  << "Display volume file as a voxel set by using QGLviewer"<< endl
 				  << general_opt << "\n";
 		return 0;
-	}  
+	}
 	if(!vm.count("input"))
 	{
-		trace.error() << " The file name was not defined" << endl;      
+		trace.error() << " The file name was not defined" << endl;
 		return 0;
 	}
 	string skeletonFilename = vm["skeleton"].as<std::string>();
@@ -126,11 +126,11 @@ int main( int  argc, char**  argv )
 	Image volume = VolReader<Image>::importVol(inputFilename);
 	Z3i::Domain domainVolume = volume.domain();
 	Z3i::DigitalSet setSurface = SurfaceUtils::extractSurfaceVoxels(volume, thresholdMin, thresholdMax);
-	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer; 
+	typedef DGtal::functors::IntervalForegroundPredicate<Image> Binarizer;
 	Binarizer binarizer(volume, thresholdMin-1, thresholdMax);
-	Image image = VolReader<Image>::importVol(skeletonFilename); 
+	Image image = VolReader<Image>::importVol(skeletonFilename);
 	typedef DGtal::DistanceTransformation<Space, Binarizer, Z3i::L2Metric> DTL2;
-	Point p;	
+	Point p;
 	vector<Point> vPoints;
 	for (auto it = image.domain().begin(), itE = image.domain().end(); it != itE; ++it) {
 		if (image(*it) >= thresholdMin && image(*it) <= thresholdMax) {
@@ -144,7 +144,7 @@ int main( int  argc, char**  argv )
 
 
 
-	
+
 // We have to visit the direct neighbours in order to have a container with voxels
 // ordered sequentially by their connexity
 // Otherwise we have a point container with points which are not neighbours
@@ -152,13 +152,13 @@ int main( int  argc, char**  argv )
 	typedef MetricAdjacency<Space, 3> Graph;
 	typedef DepthFirstVisitor<Graph, set<Point> > Visitor;
 	typedef typename Visitor::Node MyNode;
-  
+
 	Graph graph;
 	Visitor visitor( graph, p );
 	MyNode node;
 
-    
-	while ( !visitor.finished() ) 
+
+	while ( !visitor.finished() )
 	{
 		node = visitor.current();
 		if ( image.domain().isInside(node.first) &&
@@ -171,10 +171,10 @@ int main( int  argc, char**  argv )
 			visitor.ignore();
 	}
 
-	
+
 	trace.info() << "Big radius   R = " << R << std::endl;
 	trace.info() << "Small radius r = " << r << std::endl;
-  
+
 	const double size = 20.0; // size of displayed normals
 
 
@@ -200,17 +200,18 @@ int main( int  argc, char**  argv )
 	DGtal::functors::Identity idV;
 	int i = 0;
 	double sumDotProduct = 0;
+
+	Z3i::Point lower = *min_element(vPoints.begin(), vPoints.end());
+	Z3i::Point upper = *max_element(vPoints.begin(), vPoints.end());
+
 	for ( auto it = ++tangents.begin(), itE = tangents.end();
 		  it != itE; ++it )
 	{
-		DGtal::functors::Point2DEmbedderIn3D<DGtal::Z3i::Domain >  embedder(domain3Dyup, it->getPoint(), it->getTangent(), IMAGE_PATCH_WIDTH);
-		ImageAdapterExtractor extractedImage(volume, domainImage2D, embedder, idV);
-		extractedImage.setDefaultValue(0);
-		double radius  = SliceUtils::computeRadiusFromImage(extractedImage, thresholdMin, thresholdMax);
+
 		// Compute VCM and diagonalize it.
 		viewer.setFillColor(Color::Gray);
 		viewer.setFillTransparency(255);
-		
+
 		//viewer << it->getPoint();
 		/*if (radius > 0) {
 			vcm.updateProximityStructure(radius, vPoints.begin(), vPoints.end());
@@ -229,12 +230,16 @@ int main( int  argc, char**  argv )
 
 		RealVector normal = evec.column(0).getNormalized();
 		sumDotProduct += std::abs(normal.dot(it->getTangent().getNormalized()));
-		if(sliceNumber > 2560 && sliceNumber < 2700 && sliceNumber % 10 ==0) {
+
+		float zmin = (upper[2] - lower[2]) / 2. + lower[2];
+		if( sliceNumber % 10 ==0) {
+			int z = p[2];
+			float a = (z - zmin) * 1.0 / (upper[2] - zmin);
 		//if(sliceNumber % 10 ==0) {
-			viewer.setLineColor(Color::Blue);
-			viewer.setFillColor(Color::Blue);
+			viewer.setLineColor(Color(0,0,255,a));
+			viewer.setFillColor(Color(0,0,255,a));
 			viewer.setFillTransparency(150);
-			viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);		
+			viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
 			i++;
 		}
 			//}
@@ -243,9 +248,12 @@ int main( int  argc, char**  argv )
 
 	trace.info() << sumDotProduct / sliceNumber << endl;
 
+
 	for (auto it = vPoints.begin(), ite = vPoints.end(); it != ite; ++it) {
-		//	if (volume(*it) >= thresholdMin)
-//			viewer << CustomColors3D(Color(0,0,255,20), Color(0,0,255,20))<<*it;
+		Z3i::Point p = *it;
+		int z = p[2];
+		float a = (z - lower[2]) * 1.0 / (upper[2] - lower[2]);
+		viewer << CustomColors3D(Color(255,0,0,a), Color(0,0,255,a))<< p;
 	}
 	viewer << CustomColors3D(Color(150,0,0,50), Color(150,0,0,50)) << setSurface;
 	viewer << Viewer3D<>::updateDisplay;

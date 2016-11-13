@@ -933,8 +933,7 @@ int main( int  argc, char**  argv )
 				vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(restrictEdge, b);
 				vector<DigitalPlane> planes = computePlanes(vcmSurface, chiSurface, orientedEdge,
 															dt, setVolume, setVolumeWeighted, domainVolume);
-				vector< pair< DigitalPlane, double > > pointToAreas = computeArea(planes, setVolume);
-				if (pointToAreas.size() == 0) continue;
+
 
 				DigitalPlane cuttingPoint = pointsVaryingNeighborhood (planes, setVolume);
 				Z3i::DigitalSet cuttingSet = cuttingPoint.intersectionWithSetOneCC (setVolume);
