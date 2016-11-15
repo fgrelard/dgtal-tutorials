@@ -226,6 +226,14 @@ double amountInformationLostRatio(const DTL2& dt,
     return qratio;
 }
 
+void divideRegions() {
+
+}
+
+void ascribeRegions() {
+
+}
+
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -367,10 +375,12 @@ int main( int  argc, char**  argv )
 
 
 
+    for (const Z3i::DigitalSet& zone : zonesOfInfluence) {
+        viewer << CustomColors3D(Color::Red, Color::Red) << zone;
+    }
 
     viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
-
-    trace.endBlock();
+    viewer << CustomColors3D(Color(210,210,210,20), Color(210,210,210,20)) << setVolume;
 
     //second pass
 
