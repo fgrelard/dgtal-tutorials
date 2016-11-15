@@ -322,7 +322,7 @@ int main( int  argc, char**  argv )
 
 	SetFromImage<Z3i::DigitalSet>::append<Image>(setSkeleton, skeleton, thresholdMin-1, thresholdMax);
 
-	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
+	Z3i::DigitalSet existingSkeleton = setSkeleton;
 	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
 		vector<Z3i::Point> endPointsV = CurveAnalyzer::findEndPoints(existingSkeleton);
@@ -346,14 +346,17 @@ int main( int  argc, char**  argv )
 
 
 	map<Z3i::Point, Z3i::Point> vToS;
+	trace.beginBlock("Construct first map");
 	for (const Z3i::Point& p : setVolume) {
-		Z3i::Point closestPoint = *min_element(setSkeleton.begin(), setSkeleton.end(), [&](const Z3i::Point& one,
+		Z3i::Point closestPoint = *min_element(existingSkeleton.begin(), existingSkeleton.end(), [&](const Z3i::Point& one,
 																						   const Z3i::Point& two) {
-												   return Z3i::l2Metric(closestPoint, one) < Z3i::l2Metric(closestPoint, two);
+												   return Z3i::l2Metric(p, one) < Z3i::l2Metric(p, two);
 											   });
 		vToS[p] = closestPoint;
 	}
+	trace.endBlock();
 
+	trace.beginBlock("Construct second map");
 	map<Z3i::Point, int> labelMap;
 	for (int i = 0; i < edgeGraph.size(); i++) {
 		Z3i::DigitalSet currentEdge = edgeGraph[i];
@@ -362,14 +365,15 @@ int main( int  argc, char**  argv )
 				labelMap[pair.first] = i;
 		}
 	}
+	trace.endBlock();
 
+	trace.beginBlock("Visu");
 	for (const auto& pair : labelMap) {
 		int r =	(pair.second * 80) % 256;
 		int g = (pair.second * 100) % 256;
 		int b =	(pair.second * 50) % 256;
 		viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << pair.first;
 	}
-
 
 	viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
 

@@ -175,7 +175,7 @@ int main( int  argc, char**  argv )
 	trace.info() << "Big radius   R = " << R << std::endl;
 	trace.info() << "Small radius r = " << r << std::endl;
 
-	const double size = 20.0; // size of displayed normals
+	const double size = 30.0; // size of displayed normals
 
 
 //Computing lambda MST tangents
@@ -201,16 +201,18 @@ int main( int  argc, char**  argv )
 	int i = 0;
 	double sumDotProduct = 0;
 
-	Z3i::Point lower = *min_element(vPoints.begin(), vPoints.end());
-	Z3i::Point upper = *max_element(vPoints.begin(), vPoints.end());
-
+	Z3i::Point lower = *min_element(vPoints.begin(), vPoints.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
+			return one[2] < two[2];
+		});
+	Z3i::Point upper = *max_element(vPoints.begin(), vPoints.end(), [&](const Z3i::Point& one, const Z3i::Point& two) {
+			return one[2] < two[2];
+		});
 	for ( auto it = ++tangents.begin(), itE = tangents.end();
 		  it != itE; ++it )
 	{
 
 		// Compute VCM and diagonalize it.
-		viewer.setFillColor(Color::Gray);
-		viewer.setFillTransparency(255);
+
 
 		//viewer << it->getPoint();
 		/*if (radius > 0) {
@@ -232,13 +234,17 @@ int main( int  argc, char**  argv )
 		sumDotProduct += std::abs(normal.dot(it->getTangent().getNormalized()));
 
 		float zmin = (upper[2] - lower[2]) / 2. + lower[2];
-		if( sliceNumber % 10 ==0) {
+		if( sliceNumber % 25 ==0) {
 			int z = p[2];
-			float a = (z - zmin) * 1.0 / (upper[2] - zmin);
+			float a;
+			if (z < zmin)
+				a = 0;
+			else
+				a = ((z - zmin) * 255.0) / (upper[2] - zmin);
 		//if(sliceNumber % 10 ==0) {
-			viewer.setLineColor(Color(0,0,255,a));
-			viewer.setFillColor(Color(0,0,255,a));
-			viewer.setFillTransparency(150);
+			viewer.setLineColor(Color::Blue);
+			viewer.setFillColor(Color::Blue);
+			viewer.setFillTransparency(a);
 			viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
 			i++;
 		}
@@ -252,10 +258,10 @@ int main( int  argc, char**  argv )
 	for (auto it = vPoints.begin(), ite = vPoints.end(); it != ite; ++it) {
 		Z3i::Point p = *it;
 		int z = p[2];
-		float a = (z - lower[2]) * 1.0 / (upper[2] - lower[2]);
-		viewer << CustomColors3D(Color(255,0,0,a), Color(0,0,255,a))<< p;
+		float a = ((z - lower[2]) * 255.0) / (upper[2] - lower[2]);
+		viewer << CustomColors3D(Color(255,0,0,a), Color(255,0,0,a))<< p;
 	}
-	viewer << CustomColors3D(Color(150,0,0,50), Color(150,0,0,50)) << setSurface;
+	viewer << CustomColors3D(Color(210,210,210,50), Color(210,210,210,50)) << setSurface;
 	viewer << Viewer3D<>::updateDisplay;
     application.exec();
 	return 0;

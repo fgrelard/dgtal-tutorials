@@ -1095,47 +1095,46 @@ int main( int  argc, char**  argv )
 		if (realCenter != Z3i::RealPoint()) {
 			centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
 			pointToNormal[centerOfMass] = normal;
-			// double radiusCurrent = computeRadiusFromIntersection(volume, centerOfMass, normal, radius*6)+sqrt(3);
-			// double radiusCurrentMinus = computeRadiusFromIntersection(volume, centerOfMass, -normal, radius*6)+sqrt(3);
+			double radiusCurrent = computeRadiusFromIntersection(volume, centerOfMass, normal, radius*6)+sqrt(3);
+			double radiusCurrentMinus = computeRadiusFromIntersection(volume, centerOfMass, -normal, radius*6)+sqrt(3);
 
-			// double radiusShell = std::max(radiusCurrent, std::max(4.0, radiusCurrentMinus));
+			double radiusShell = std::max(radiusCurrent, std::max(4.0, radiusCurrentMinus));
 
 			 if (Z3i::l2Metric(currentPoint->myPoint, realCenter) <= sqrt(3)
 				) {
-			// 	Z3i::DigitalSet startingPoint(domainVolume);
-			// 	startingPoint.insert(centerOfMass);
-			// 	Z3i::DigitalSet shell = computeHalfShell(centerOfMass, Z3i::RealVector(0,0,0), startingPoint, setVolume, radiusShell);
-			// 	unsigned int nbCC = computeDegree(shell);
-			// 	int r = rand() % 256, b = rand() % 256, g = rand() % 256;
-			// 	if (nbCC >= 3) {
-			// 		Z3i::DigitalSet halfShellNormal1 = computeHalfShell(centerOfMass, normal, startingPoint, setVolume, radiusShell);
-			// 		Z3i::DigitalSet halfShellNormal2 = computeHalfShell(centerOfMass, -normal, startingPoint, setVolume, radiusShell);
-			// 		unsigned int nbCC1 = computeDegree(halfShellNormal1);
-			// 		unsigned int nbCC2 = computeDegree(halfShellNormal2);
-			// 		Ball<Z3i::Point> ball(centerOfMass, dt(centerOfMass));
-			// 		std::vector<Z3i::Point> points;
-			// 		DigitalPlane emptyPlane;
-			// 		DigitalPlaneSet digPlaneSet(emptyPlane, Z3i::DigitalSet(domainVolume));
-			// 		if (nbCC1 > nbCC2 && nbCC1 > 1 && nbCC2 > 0) {
-			// 			points = ball.pointsInHalfBall(normal);
-			// 			DigitalPlane digPlane(centerOfMass, -normal);
-			// 			digPlaneSet = DigitalPlaneSet(digPlane, halfShellNormal1);
-			// 			shellPoints.push_back(digPlaneSet);
-			// 		} else if (nbCC2 > nbCC1 && nbCC2 > 1 && nbCC2 > 0) {
-			// 			points = ball.pointsInHalfBall(-normal);
-			// 			DigitalPlane digPlane(centerOfMass, normal);
-			// 			digPlaneSet = DigitalPlaneSet(digPlane, halfShellNormal2);
-			// 			shellPoints.push_back(digPlaneSet);
-			// 		}
-			// 		junctionPoints[centerOfMass] = nbCC;
+				Z3i::DigitalSet startingPoint(domainVolume);
+				startingPoint.insert(centerOfMass);
+				Z3i::DigitalSet shell = computeHalfShell(centerOfMass, Z3i::RealVector(0,0,0), startingPoint, setVolume, radiusShell);
+				unsigned int nbCC = computeDegree(shell);
+				if (nbCC >= 3) {
+					Z3i::DigitalSet halfShellNormal1 = computeHalfShell(centerOfMass, normal, startingPoint, setVolume, radiusShell);
+					Z3i::DigitalSet halfShellNormal2 = computeHalfShell(centerOfMass, -normal, startingPoint, setVolume, radiusShell);
+					unsigned int nbCC1 = computeDegree(halfShellNormal1);
+					unsigned int nbCC2 = computeDegree(halfShellNormal2);
+					Ball<Z3i::Point> ball(centerOfMass, dt(centerOfMass));
+					std::vector<Z3i::Point> points;
+					DigitalPlane emptyPlane;
+					DigitalPlaneSet digPlaneSet(emptyPlane, Z3i::DigitalSet(domainVolume));
+					if (nbCC1 > nbCC2 && nbCC1 > 1 && nbCC2 > 0) {
+						points = ball.pointsInHalfBall(normal);
+						DigitalPlane digPlane(centerOfMass, -normal);
+						digPlaneSet = DigitalPlaneSet(digPlane, halfShellNormal1);
+						shellPoints.push_back(digPlaneSet);
+					} else if (nbCC2 > nbCC1 && nbCC2 > 1 && nbCC2 > 0) {
+						points = ball.pointsInHalfBall(-normal);
+						DigitalPlane digPlane(centerOfMass, normal);
+						digPlaneSet = DigitalPlaneSet(digPlane, halfShellNormal2);
+						shellPoints.push_back(digPlaneSet);
+					}
+					junctionPoints[centerOfMass] = nbCC;
 
-			// 	}
-			// 	if (nbCC == 1) {
-			// 		// if ((nbCC1 == 0 && nbCC2 == 1) ||
-			// 		// 	(nbCC1 == 1 && nbCC2 == 0)) {
-			// 			endPoints.insert(centerOfMass);
-			// 		// }
-			// 	}
+				}
+				if (nbCC == 1) {
+					// if ((nbCC1 == 0 && nbCC2 == 1) ||
+					// 	(nbCC1 == 1 && nbCC2 == 0)) {
+						endPoints.insert(centerOfMass);
+					// }
+				}
 				if (Z3i::l2Metric(currentPoint->myPoint, realCenter) <= sqrt(3)) {
 					bool processed = false;
 					for (auto it = connectedComponent3D.begin(), ite = connectedComponent3D.end(); it != ite; ++it) {
