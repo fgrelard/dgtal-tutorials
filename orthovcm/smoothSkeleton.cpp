@@ -538,15 +538,12 @@ Z3i::DigitalSet smoothedSkeletonPoints(const Z3i::DigitalSet& subVolume,
 		return smoothSkeleton;
 	}
 
-	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> subVolumeWeighted;
-	for (const Z3i::Point& subPoint : subVolume) {
-		subVolumeWeighted.insert(new WeightedPointCount(subPoint, 1));
-	}
+
 	int i = 0;
 	bool add = false;
 	for (const Z3i::Point& cp : existingSkeleton) {
 		Z3i::Point currentPoint = extractNearestNeighborInSetFromPoint(subVolume, cp);
-	    Z3i::DigitalSet connectedComponent3D = associatedPlane<VCM, KernelFunction>(currentPoint, existingSkeleton, subVolume.domain(), subVolumeWeighted);
+	    Z3i::DigitalSet connectedComponent3D = associatedPlane<VCM, KernelFunction>(currentPoint, existingSkeleton, subVolume.domain(), subVolume);
 
 		Z3i::RealPoint realCenter = Statistics::extractCenterOfMass3D(connectedComponent3D);
 		Z3i::Point centerOfMass = extractNearestNeighborInSetFromPoint(connectedComponent3D, realCenter);
@@ -832,7 +829,6 @@ int main( int  argc, char**  argv )
 	SetFromImage<Z3i::DigitalSet>::append<Image>(setSkeleton, skeleton, thresholdMin-1, thresholdMax);
 
 	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
-	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;
 
 
 	Metric l2;
@@ -847,7 +843,6 @@ int main( int  argc, char**  argv )
 	for (auto it = domainDT.begin(), ite = domainDT.end(); it != ite; ++it) {
 		double value = dt(*it);
 		if (value > 0) {
-			setVolumeWeighted.insert(new WeightedPointCount(*it, value));
 			checkPointForMedialAxis(dt, vPoints, *it);
 		}
 	}
@@ -932,7 +927,7 @@ int main( int  argc, char**  argv )
 				if (restrictEdge.size() == 0) continue;
 				vector<Z3i::Point> orientedEdge = CurveAnalyzer::convertToOrientedEdge(restrictEdge, b);
 				vector<DigitalPlane> planes = computePlanes(vcmSurface, chiSurface, orientedEdge,
-															dt, setVolume, setVolumeWeighted, domainVolume);
+															dt, setVolume, setVolume, domainVolume);
 
 
 				DigitalPlane cuttingPoint = pointsVaryingNeighborhood (planes, setVolume);
@@ -950,7 +945,7 @@ int main( int  argc, char**  argv )
 
 			double radiusReference = dt(b) + 2;
 			Z3i::RealPoint normal;
-		    VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume, setVolumeWeighted,
+		    VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume, setVolume,
 										  b, normal,
 										  0, radiusReference, radiusReference*10, 26, true);
 

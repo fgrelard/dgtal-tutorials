@@ -38,8 +38,8 @@ namespace VCMUtil {
 
 	double radiusForVCMSurface(const DGtal::Z3i::DigitalSet& setSurface, const DGtal::Z3i::Point& point, const std::vector<DGtal::Z3i::RealPoint>& normals);
 
-	template <typename Domain, typename WeightedPoint>
-	void extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, const Domain & domain, const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint> >& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double distanceMax = std::numeric_limits<double>::max());
+	template <typename Domain, typename Container>
+	void extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, const Domain & domain, const Container& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double distanceMax = std::numeric_limits<double>::max());
 
 	template <typename Image>
 	DGtal::Z2i::DigitalSet extractConnectedComponent(const Image& image, const DGtal::Z2i::Point& referencePoint, int thresholdMin,
@@ -48,8 +48,8 @@ namespace VCMUtil {
 	template <typename Domain>
 	DGtal::Z3i::DigitalSet extractConnectedComponent3D(const Domain & domain, const DGtal::Z3i::DigitalSet& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double distanceMax = std::numeric_limits<double>::max());
 
-	template <typename WeightedPoint>
-	bool isRadiusMaximal(const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint>>& volume, const DGtal::Z3i::DigitalSet& intersection, const DGtal::Z3i::Point& referencePoint, double currentDistance, const DGtal::Z3i::RealVector& dirVector);
+	template <typename Container>
+	bool isRadiusMaximal(const Container& volume, const DGtal::Z3i::DigitalSet& intersection, const DGtal::Z3i::Point& referencePoint, double currentDistance, const DGtal::Z3i::RealVector& dirVector);
 
 
 	bool isRadiusMaximalOneCC(const DGtal::Z3i::DigitalSet& intersection);
@@ -233,15 +233,15 @@ double VCMUtil::radiusForVCMSurface(const DGtal::Z3i::DigitalSet& setSurface, co
 	return radiusVCM;
 }
 
-template <typename Domain, typename WeightedPoint>
-void VCMUtil::extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, const Domain & domain, const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint> >& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double distanceMax) {
+template <typename Domain, typename Container>
+void VCMUtil::extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, const Domain & domain, const Container& volume, const DGtal::Z3i::RealPoint& normal, const DGtal::Z3i::Point& referencePoint, double d, double omega, double distanceMax) {
 	typedef DGtal::Z3i::Object26_6 ObjectType;
 
 	DGtal::Z3i::DigitalSet aSet(domain);
 	for (auto it = volume.begin(), ite = volume.end(); it != ite; ++it) {
-		double valueToCheckForPlane = (*it)->myPoint[0] * normal[0] + (*it)->myPoint[1] * normal[1] + (*it)->myPoint[2] * normal[2];
+		double valueToCheckForPlane = (*it)[0] * normal[0] + (*it)[1] * normal[1] + (*it)[2] * normal[2];
 		if (valueToCheckForPlane >= d && valueToCheckForPlane < d + omega) {
-			aSet.insert((*it)->myPoint);
+			aSet.insert((*it));
 		}
 	}
 
@@ -275,8 +275,8 @@ void VCMUtil::extractConnectedComponent3D(DGtal::Z3i::DigitalSet& intersection, 
 
 }
 
-template <typename WeightedPoint>
-bool VCMUtil::isRadiusMaximal(const std::set<WeightedPoint*, WeightedPointCountComparator<WeightedPoint>>& volume, const DGtal::Z3i::DigitalSet& intersection, const DGtal::Z3i::Point& referencePoint, double currentDistance, const DGtal::Z3i::RealVector& dirVector) {
+template <typename Container>
+bool VCMUtil::isRadiusMaximal(const Container& volume, const DGtal::Z3i::DigitalSet& intersection, const DGtal::Z3i::Point& referencePoint, double currentDistance, const DGtal::Z3i::RealVector& dirVector) {
 	bool alright = true;
 	if (dirVector == DGtal::Z3i::RealVector()) {
 		for (auto it = intersection.begin(), ite = intersection.end(); it != ite; ++it) {
@@ -287,14 +287,14 @@ bool VCMUtil::isRadiusMaximal(const std::set<WeightedPoint*, WeightedPointCountC
 	} else {
 		DGtal::Z3i::Point current = referencePoint;
 		int scalar = 1;
-		auto itSetVolume = find_if(volume.begin(), volume.end(), [&](WeightedPoint* wpc) {
-				return wpc->myPoint == current;
+		auto itSetVolume = find_if(volume.begin(), volume.end(), [&](const DGtal::Z3i::Point& wpc) {
+				return wpc == current;
 			});
 		while (itSetVolume != volume.end()) {
 			current = referencePoint + dirVector * scalar;
 		 	scalar++;
-			itSetVolume = find_if(volume.begin(), volume.end(), [&](WeightedPoint* wpc) {
-				return wpc->myPoint == current;
+			itSetVolume = find_if(volume.begin(), volume.end(), [&](const DGtal::Z3i::Point& wpc) {
+				return wpc == current;
 			});
 		}
 		double distance = DGtal::Z3i::l2Metric(current, referencePoint);

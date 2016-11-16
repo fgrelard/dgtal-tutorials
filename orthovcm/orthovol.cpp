@@ -243,28 +243,29 @@ int main( int  argc, char**  argv )
 		// Compute VCM and diagonalize it.
 		viewer.setFillColor(Color::Gray);
 		viewer.setFillTransparency(255);
-
 		//viewer << it->getPoint();
 		/*if (radius > 0) {
 		  vcm.updateProximityStructure(radius, vPoints.begin(), vPoints.end());
 		  chi = KernelFunction( 1.0, radius);
 		  }*/
 		Z3i::Point current= *it; //it->getPoint();
-		vcm_r = vcm.measure( chi, current );
-		LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
+		Z3i::RealVector normal;
+		VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolume, current, normal, 0, radiusVCM, numeric_limits<double>:max(), 26, true);
+
+
 
 		// Display normal
-		RealVector n = evec.column( 2 );
+		RealVector n = VCMUtil::computeNormalFromVCM(current, vcm, chi, 2);
 		n*=size;
 		RealPoint p( current[ 0 ], current[ 1 ], current[2] );
-		RealVector n2 = evec.column( 1 );
+		RealVector n2 = VCMUtil::computeNormalFromVCM(current, vcm, chi, 2);
 		n2*=size;
 
-		RealVector normal = evec.column(0).getNormalized();
-		Z3i::RealPoint otherNormal = correspondingTangentToPointInVol(current, tangents);//it->getTangent();
-		if (otherNormal == Z3i::RealPoint()) continue;
+		//RealVector normal = evec.column(0).getNormalized();
+		//Z3i::RealPoint otherNormal = correspondingTangentToPointInVol(current, tangents);//it->getTangent();
+		//if (otherNormal == Z3i::RealPoint()) continue;
 		//if(sliceNumber > 2280 && sliceNumber < 2420 && sliceNumber % 10 ==0) {
-		if(sliceNumber % 5 ==0) {
+		if(sliceNumber % 35 ==0) {
 			viewer.setLineColor(Color::Blue);
 			viewer.setFillColor(Color::Blue);
 			viewer.setFillTransparency(150);

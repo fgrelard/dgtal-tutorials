@@ -221,7 +221,7 @@ pair<Z3i::DigitalSet, double> eigenValuesWithVCM(VCM& vcm, KernelFunction& chi, 
 	map<Z3i::DigitalSet, double> eigenValues;
 	Z3i::RealPoint normal;
 	double size = 0;
-	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolumeWeighted,
+	Z3i::DigitalSet connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domain, setVolume,
 																		 p, normal,
 																		 0, radius, radius*10, 26, true);
 
@@ -865,6 +865,61 @@ Z3i::DigitalSet endPointsExtremities(const std::map<Z3i::Point, Z3i::RealVector>
 	return newEndPoints;
 }
 
+Z3i::DigitalSet filterEndPoints(const std::map<Z3i::Point, Z3i::RealVector>& mapPointToNormal,
+								const Z3i::DigitalSet& endPoints,
+								const Z3i::DigitalSet& setVolume,
+								const Z3i::DigitalSet& junctions) {
+	typedef DGtal::BreadthFirstVisitor<Z3i::Object26_6, std::set<DGtal::Z3i::Point> > Visitor;
+	typedef typename Visitor::Node MyNode;
+	typedef DGtal::GraphVisitorRange<Visitor> VisitorRange;
+
+	Z3i::DigitalSet newEndPoints(setVolume.domain());
+	for (const Z3i::Point& e : endPoints) {
+		auto iterator = mapPointToNormal.find(e);
+		if (iterator == mapPointToNormal.end()) {
+			continue;
+		}
+		Z3i::RealVector n = iterator->second;
+		DigitalPlane<Z3i::Space> digPlane(e, n);
+		Z3i::DigitalSet planeSet(setVolume.domain());
+		for (const Z3i::Point& p : setVolume) {
+			if (digPlane.isPointAbove(p))
+				planeSet.insert(p);
+		}
+		Z3i::Object26_6 obj(Z3i::dt26_6, planeSet);
+		vector<Z3i::Object26_6> cc;
+		back_insert_iterator<vector<Z3i::Object26_6> > inserter(cc);
+		obj.writeComponents(inserter);
+
+		Z3i::DigitalSet involvedPart(setVolume);
+		for (const Z3i::Object26_6& part : cc) {
+			Z3i::DigitalSet partSet = part.pointSet();
+			if (partSet.find(e) != partSet.end())
+				involvedPart = partSet;
+		}
+		Z3i::Object26_6 graph(Z3i::dt26_6, involvedPart);
+		Visitor visitor( graph, e );
+		MyNode node;
+		bool branchingPointFound = false;
+		while ( !visitor.finished() )
+		{
+			node = visitor.current();
+			if (junctions.find(node.first) != junctions.end()) {
+				branchingPointFound = true;
+				break;
+			}
+			if (node.first != e && endPoints.find(node.first) != endPoints.end()) {
+				break;
+			}
+			visitor.expand();
+		}
+		if (branchingPointFound) {
+			newEndPoints.insert(e);
+		}
+	}
+	return newEndPoints;
+}
+
 
 void completePointToNormals(std::map<Z3i::Point, Z3i::RealVector>& pointToNormal,
 							const Z3i::DigitalSet& setVolume) {
@@ -1075,7 +1130,7 @@ int main( int  argc, char**  argv )
  		}
 
 		// Compute discrete plane
-		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+		connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolume,
 		 													 currentPoint->myPoint, normal,
 		 													 0, radius, distanceMax, 26, true);
 
@@ -1099,7 +1154,7 @@ int main( int  argc, char**  argv )
 			double radiusCurrentMinus = computeRadiusFromIntersection(volume, centerOfMass, -normal, radius*6)+sqrt(3);
 
 			double radiusShell = std::max(radiusCurrent, std::max(4.0, radiusCurrentMinus));
-
+			radiusShell *= 1.1;
 			 if (Z3i::l2Metric(currentPoint->myPoint, realCenter) <= sqrt(3)
 				) {
 				Z3i::DigitalSet startingPoint(domainVolume);
@@ -1222,8 +1277,8 @@ int main( int  argc, char**  argv )
 	vector<Z3i::DigitalSet> junctionCCSet = decompositionCCToSets(branches);
 	vector<Z3i::DigitalSet> parts = decompositionCCToSets(skeletonPoints);
 	orientNormalsEndPoints(pointToNormal, endPointsParts, parts);
-	endPointsParts = endPointsExtremities (pointToNormal, endPointsParts, setVolume, branches);
-		viewer << CustomColors3D(Color::Red, Color::Red) << endPointsParts;
+	endPointsParts = filterEndPoints (pointToNormal, endPointsParts, setVolume, branches);
+	viewer << CustomColors3D(Color::Red, Color::Red) << endPointsParts;
 
 	vector<WeightedPointCount*> distanceMapJunctions = distanceMapFromBranches (skeletonPoints, junctionCCSet, endPointsParts,
 																				parts, pointToNormal, viewer);

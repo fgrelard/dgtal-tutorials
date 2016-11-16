@@ -486,7 +486,7 @@ int main( int  argc, char**  argv )
 	 // return 0;
 
 
-	set<WeightedPointCount*, WeightedPointCountComparator<WeightedPointCount>> setVolumeWeighted;
+
 	Image volumeBinary(volume.domain());
 	for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
 		if (volume(*it) >= thresholdMin && volume(*it) <= thresholdMax)
@@ -503,7 +503,6 @@ int main( int  argc, char**  argv )
 	for (auto it = domainDT.begin(), ite = domainDT.end(); it != ite; ++it) {
 		double value = dt(*it);
 		if (value > 0) {
-			setVolumeWeighted.insert(new WeightedPointCount(*it, value));
 			checkPointForMedialAxis(dt, vPoints, *it);
 		}
 	}
@@ -584,7 +583,7 @@ int main( int  argc, char**  argv )
 				// Compute discrete plane
 				radius = edge.size()*0.4;
 
-				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolumeWeighted,
+				connectedComponent3D = VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolume,
 																	 s, normal,
 																	 0, radius, distanceMax, 26, false);
 
@@ -606,7 +605,7 @@ int main( int  argc, char**  argv )
 														});
 				double radiusSurface = dt(s) + sqrt(3);
 				Z3i::RealPoint normalSurface; // = VCMUtil::computeNormalFromVCM(s, vcmSurface, chiSurface, 0, Z3i::RealVector(), surfels);
-				connectedComponent3D = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume, setVolumeWeighted,
+				connectedComponent3D = VCMUtil::computeDiscretePlane(vcmSurface, chiSurface, domainVolume, setVolume,
 				 													 s, normalSurface,
 				 													 0, radiusSurface, distanceMax, 26, true);
 				double angle = normalSurface.cosineSimilarity(normal);
@@ -670,8 +669,8 @@ int main( int  argc, char**  argv )
 	viewer << CustomColors3D(Color::Red, Color::Red) << newSkeleton;
 
 	//second pass
-	for (auto it = setVolumeWeighted.begin(), ite = setVolumeWeighted.end(); it != ite; ++it) {
-	    viewer << CustomColors3D(Color(0,0,30,10), Color(0,0,30,10)) << (*it)->myPoint;
+	for (auto it = setVolume.begin(), ite = setVolume.end(); it != ite; ++it) {
+	    viewer << CustomColors3D(Color(0,0,30,10), Color(0,0,30,10)) << (*it);
 	}
 
 	Image outImage2(volume.domain());

@@ -226,14 +226,80 @@ double amountInformationLostRatio(const DTL2& dt,
     return qratio;
 }
 
-void divideRegions() {
-
+Z3i::DigitalSet differenceVolume(const Z3i::DigitalSet& setVolume, const Z3i::DigitalSet& zonesOfInfluence) {
+    Z3i::DigitalSet difference(setVolume.domain());
+    for (const Z3i::Point& p : setVolume) {
+        if (zonesOfInfluence.find(p) == zonesOfInfluence.end()) {
+            difference.insert(p);
+        }
+    }
+    return difference;
 }
 
-void ascribeRegions() {
 
+void ascribeRegions(const Z3i::DigitalSet& setVolume,
+                    vector<Z3i::DigitalSet>& parts,
+                    const vector<Z3i::Object26_6>& separateZones) {
+    Z3i::Object26_6 objVolume(Z3i::dt26_6, setVolume);
+    for (const Z3i::Object26_6& obj : separateZones) {
+        Z3i::DigitalSet objSet = obj.pointSet();
+        Z3i::Object26_6 border = obj.border();
+        Z3i::DigitalSet borderSet = border.pointSet();
+        vector<Z3i::Point> neighbors;
+        back_insert_iterator<vector<Z3i::Point> > inserter(neighbors);
+        for (const Z3i::Point& p : borderSet) {
+            objVolume.writeNeighbors(inserter, p);
+        }
+        int max = 0;
+        int index = 0;
+        int i = 0;
+        for (const Z3i::DigitalSet& part : parts) {
+            Z3i::DigitalSet areaSurfacePart(setVolume.domain());
+            for (const Z3i::Point& n : neighbors) {
+                if (part.find(n) != part.end())
+                    areaSurfacePart.insert(n);
+            }
+            if (areaSurfacePart.size() > max) {
+                max = areaSurfacePart.size();
+                index = i;
+            }
+            i++;
+        }
+
+        parts[index].insert(objSet.begin(), objSet.end());
+
+    }
 }
 
+void ascribeSmallRegions(vector<Z3i::DigitalSet>& parts, const Z3i::DigitalSet& setSkeleton) {
+    vector<Z3i::DigitalSet> newParts;
+    for (int i = 0; i < parts.size(); i++) {
+        Z3i::DigitalSet part = parts[i];
+        bool toKeep = false;
+        for (const Z3i::Point& p : part) {
+            if (setSkeleton.find(p) != setSkeleton.end()) {
+                toKeep = true;
+                break;
+            }
+        }
+        int index = 0;
+        if (!toKeep) {
+            double maxDistance = numeric_limits<double>::max();
+            for (int j = 0; j < parts.size(); j++) {
+                if (i == j) continue;
+                Z3i::DigitalSet otherPart = parts[j];
+                double distance = Distance::distanceSet(part, otherPart);
+                if (distance < maxDistance) {
+                    maxDistance = distance;
+                    index = j;
+                }
+            }
+            parts[index].insert(part.begin(), part.end());
+            parts.erase(parts.begin()+i);
+            --i;
+        }
+    }
+}
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -357,27 +423,57 @@ int main( int  argc, char**  argv )
     Binarizer binarizer(volume, thresholdMin-1, thresholdMax);
     DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
 
-    vector<Z3i::DigitalSet> zonesOfInfluence;
+    trace.beginBlock("Zones of Influence");
+    Z3i::DigitalSet zonesOfInfluence(setVolume.domain());
     for (const Z3i::Point& b : branchingPoints) {
-            Z3i::DigitalSet zoneOfInfluence(setVolume.domain());
-            double radius = dt(b);
-            Ball<Z3i::Point> ball(b, radius);
-            vector<Z3i::Point> pointsInBall = ball.intersection(setVolume);
-            zoneOfInfluence.insert(pointsInBall.begin(), pointsInBall.end());
-            for (const Z3i::Point& p : pointsInBall) {
-                    double radius = dt(p);
-                    Ball<Z3i::Point> ball(p, radius);
-                    vector<Z3i::Point> pointsInBall = ball.intersection(setVolume);
-                    zoneOfInfluence.insert(pointsInBall.begin(), pointsInBall.end());
-            }
-            zonesOfInfluence.push_back(zoneOfInfluence);
+        double radius = dt(b);
+        Ball<Z3i::Point> ball(b, radius);
+        vector<Z3i::Point> pointsInBall = ball.intersection(setVolume);
+        zonesOfInfluence.insert(pointsInBall.begin(), pointsInBall.end());
+        for (const Z3i::Point& p : pointsInBall) {
+            double radiusP = dt(p);
+            Ball<Z3i::Point> ballP(p, radiusP);
+            vector<Z3i::Point> pointsInBallP = ballP.intersection(setVolume);
+            zonesOfInfluence.insert(pointsInBallP.begin(), pointsInBallP.end());
+        }
+    }
+    trace.endBlock();
+
+
+    Z3i::Object26_6 objZones(Z3i::dt26_6, zonesOfInfluence);
+    vector<Z3i::Object26_6> ccZones;
+    back_insert_iterator<vector<Z3i::Object26_6> > inserterZone(ccZones);
+    objZones.writeComponents(inserterZone);
+
+    trace.beginBlock("Difference volume");
+    Z3i::DigitalSet difference = differenceVolume(setVolume, zonesOfInfluence);
+    Z3i::Object26_6 objDifference(Z3i::dt26_6, difference);
+    vector<Z3i::Object26_6> ccDifference;
+    back_insert_iterator<vector<Z3i::Object26_6> > inserter(ccDifference);
+    objDifference.writeComponents(inserter);
+    vector<Z3i::DigitalSet> parts;
+    for (const Z3i::Object26_6& o : ccDifference) {
+        parts.push_back(o.pointSet());
+    }
+    trace.endBlock();
+
+    trace.beginBlock("Ascribing regions");
+    ascribeRegions (setVolume, parts, ccZones);
+    ascribeSmallRegions(parts, setSkeleton);
+    trace.endBlock();
+    int i = 0;
+    for (const Z3i::DigitalSet& part : parts) {
+        int r =	(i * 80) % 256;
+        int g = (i * 100) % 256;
+        int b =	(i * 50) % 256;
+        viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << part;
+        i++;
     }
 
 
-
-    for (const Z3i::DigitalSet& zone : zonesOfInfluence) {
-        viewer << CustomColors3D(Color::Red, Color::Red) << zone;
-    }
+    // for (const Z3i::DigitalSet& zone : zonesOfInfluence) {
+    //     viewer << CustomColors3D(Color::Red, Color::Red) << zone;
+    // }
 
     viewer << CustomColors3D(Color::Red, Color::Red) << existingSkeleton;
     viewer << CustomColors3D(Color(210,210,210,20), Color(210,210,210,20)) << setVolume;

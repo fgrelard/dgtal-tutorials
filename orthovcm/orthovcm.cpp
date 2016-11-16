@@ -234,7 +234,7 @@ int main( int  argc, char**  argv )
 		sumDotProduct += std::abs(normal.dot(it->getTangent().getNormalized()));
 
 		float zmin = (upper[2] - lower[2]) / 2. + lower[2];
-		if( sliceNumber % 25 ==0) {
+		if( (sliceNumber+1) % 35 ==0) {
 			int z = p[2];
 			float a;
 			if (z < zmin)
