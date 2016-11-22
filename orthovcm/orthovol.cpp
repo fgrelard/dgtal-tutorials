@@ -50,7 +50,7 @@
 #include <boost/program_options/variables_map.hpp>
 #include "DGtal/images/imagesSetsUtils/SetFromImage.h"
 #include "DGtal/graph/DepthFirstVisitor.h"
-
+#include "geometry/CurveAnalyzer.h"
 #include "geometry/TangentUtils.h"
 #include "geometry/SliceUtils.h"
 #include "geometry/Pencil.h"
@@ -204,7 +204,7 @@ int main( int  argc, char**  argv )
 	trace.info() << "Big radius   R = " << R << std::endl;
 	trace.info() << "Small radius r = " << r << std::endl;
 
-	const double size = 10.0; // size of displayed normals
+	const double size = 35.0; // size of displayed normals
 
 
 //Computing lambda MST tangents
@@ -237,9 +237,15 @@ int main( int  argc, char**  argv )
 	vcm.setMySmallR(radiusVCM);
 	chi = KernelFunction( 1.0, radiusVCM );
 	int sliceNumber = 0;
-	for (auto it = setSkeleton.begin(), ite = setSkeleton.end();
-		 it != ite; ++it) {
+	Z3i::DigitalSet branchingPoints(setVolume.domain());
 
+	vector<Z3i::Point> orientedSkeleton = CurveAnalyzer::curveTraversalForGraphDecomposition(branchingPoints,
+																							 setSkeleton, *setSkeleton.begin());
+	trace.info() << orientedSkeleton.size() << " " << setSkeleton.size() << endl;
+	for (auto it = orientedSkeleton.begin(), ite = orientedSkeleton.end();
+		 it != ite; ++it) {
+		sliceNumber++;
+		if (sliceNumber % 35 != 0) continue;
 		// Compute VCM and diagonalize it.
 		viewer.setFillColor(Color::Gray);
 		viewer.setFillTransparency(255);
@@ -250,7 +256,7 @@ int main( int  argc, char**  argv )
 		  }*/
 		Z3i::Point current= *it; //it->getPoint();
 		Z3i::RealVector normal;
-		VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolume, current, normal, 0, radiusVCM, numeric_limits<double>:max(), 26, true);
+		VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolume, current, normal, 0, radiusVCM, numeric_limits<double>::max(), 26, true);
 
 
 
@@ -258,9 +264,8 @@ int main( int  argc, char**  argv )
 		RealVector n = VCMUtil::computeNormalFromVCM(current, vcm, chi, 2);
 		n*=size;
 		RealPoint p( current[ 0 ], current[ 1 ], current[2] );
-		RealVector n2 = VCMUtil::computeNormalFromVCM(current, vcm, chi, 2);
+		RealVector n2 = VCMUtil::computeNormalFromVCM(current, vcm, chi, 1);
 		n2*=size;
-
 		//RealVector normal = evec.column(0).getNormalized();
 		//Z3i::RealPoint otherNormal = correspondingTangentToPointInVol(current, tangents);//it->getTangent();
 		//if (otherNormal == Z3i::RealPoint()) continue;
@@ -273,13 +278,13 @@ int main( int  argc, char**  argv )
 			i++;
 		}
 		//}
-		sliceNumber++;
+
 	}
 
-	for (auto it = vPoints.begin(), ite = vPoints.end(); it != ite; ++it) {
-		if (volume(*it) >= thresholdMin)
-			viewer << CustomColors3D(Color(0,0,255,20), Color(0,0,255,20))<<*it;
-	}
+	// for (auto it = vPoints.begin(), ite = vPoints.end(); it != ite; ++it) {
+	// 	if (volume(*it) >= thresholdMin)
+	// 		viewer << CustomColors3D(Color(0,0,255,20), Color(0,0,255,20))<<*it;
+	// }
 
 	viewer << CustomColors3D(Color(220,220,220,20), Color(220,220,220,20)) << setVolume;
 	viewer << Viewer3D<>::updateDisplay;

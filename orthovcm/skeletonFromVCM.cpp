@@ -936,6 +936,21 @@ void completePointToNormals(std::map<Z3i::Point, Z3i::RealVector>& pointToNormal
 	}
 }
 
+
+Z3i::DigitalSet filterIsolatedPoints(const Z3i::DigitalSet& setSkeleton) {
+	Z3i::DigitalSet filteredSkeleton(setSkeleton.domain());
+	Z3i::Object26_6 obj(Z3i::dt26_6, setSkeleton);
+	vector<Z3i::Object26_6> cc;
+	back_insert_iterator<vector<Z3i::Object26_6> > inserter(cc);
+	obj.writeComponents(inserter);
+	for (const Z3i::Object26_6& o : cc ) {
+		if (o.size() > 1) {
+			filteredSkeleton.insert(o.begin(), o.end());
+		}
+	}
+	return filteredSkeleton;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main( int  argc, char**  argv )
 {
@@ -1261,16 +1276,17 @@ int main( int  argc, char**  argv )
 
 	completePointToNormals(pointToNormal, setVolume);
 	fillHoles(skeletonPoints, setVolume);
+	skeletonPoints = filterIsolatedPoints(skeletonPoints);
 	branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
-	Z3i::DigitalSet newBranches = dilateJunctions(setVolume, skeletonPoints, branches);
-	for (const Z3i::Point& p : newBranches)
-		junctionPoints[p] = 3;
-	branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
+	// Z3i::DigitalSet newBranches = dilateJunctions(setVolume, skeletonPoints, branches);
+	// for (const Z3i::Point& p : newBranches)
+	// 	junctionPoints[p] = 3;
+	// branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
 	//Discarding points being in branching parts
 	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
-	  	auto itToErase = skeletonPoints.find(*it);
-	  	if (itToErase != skeletonPoints.end())
-	 		skeletonPoints.erase(itToErase);
+	   	auto itToErase = skeletonPoints.find(*it);
+	   	if (itToErase != skeletonPoints.end())
+			skeletonPoints.erase(itToErase);
 	}
 
 	Z3i::DigitalSet endPointsParts = endPointCurves(skeletonPoints);
@@ -1289,6 +1305,7 @@ int main( int  argc, char**  argv )
 
 	trace.info() << junctionCCSet.size() << endl;
 
+	trace.beginBlock("Junction");
 	viewer << CustomColors3D(Color::Yellow, Color::Yellow) << skeletonPoints;
 	for (int i = 0; i < junctionCCSet.size(); i++) {
 		Z3i::DigitalSet pointsToLink = pointsToLinkWithJunction(distanceMapJunctions, endPointsParts, i);
@@ -1300,7 +1317,10 @@ int main( int  argc, char**  argv )
 			vector<Z3i::Point> curves = linkWithBezierCurves (pointToNormal, skeletonPoints, setVolumeWeighted, setVolume, ref, p, dt);
 			bool add = true;
 			for (const Z3i::Point& c : curves) {
-				if (dt(c) == 0)
+				if (!dt.domain().isInside(c)) {
+					add = false;
+				}
+				else if (dt(c) == 0)
 					add = false;
 			}
  			vector<Z3i::Point> thinPoints = thinCurves(skeletonPoints, curves);
@@ -1320,7 +1340,7 @@ int main( int  argc, char**  argv )
 		unsigned char b = (label * 50) % 256;
 		viewer << CustomColors3D(Color(r,g,b), Color(r,g,b)) << pointsToLink;
 	}
-
+	trace.endBlock();
 
 	viewer << CustomColors3D(Color::Blue, Color::Blue) << skeletonPoints;
 	ensureSkeletonConnexity(skeletonPoints, setVolume);

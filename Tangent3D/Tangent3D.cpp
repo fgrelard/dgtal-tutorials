@@ -138,39 +138,39 @@ int main(int argc, char **argv)
 		("output,o", po::value<std::string>(), "sliced vol file with orthogonal planes")
 		("thresholdMin,m", po::value<unsigned int>()->default_value(0), "minimum threshold for binarization")
 		("thresholdMax,M", po::value<unsigned int>()->default_value(255), "maximum threshold for binarization")
-		; 
+		;
 
 	bool parseOK=true;
 	po::variables_map vm;
 	try{
-		po::store(po::parse_command_line(argc, argv, general_opt), vm);  
+		po::store(po::parse_command_line(argc, argv, general_opt), vm);
 	} catch(const std::exception& ex){
 		parseOK=false;
 		trace.info()<< "Error checking program options: "<< ex.what()<< endl;
 	}
-	po::notify(vm);    
+	po::notify(vm);
 	if( !parseOK || vm.count("help")||argc<=1)
 	{
 		std::cout << "Usage: " << argv[0] << " [input]\n"
 				  << "Display volume file as a voxel set by using QGLviewer"<< endl
 				  << general_opt << "\n";
 		return 0;
-	}  
+	}
 	if(!vm.count("input"))
 	{
-		trace.error() << " The file name was not defined" << endl;      
+		trace.error() << " The file name was not defined" << endl;
 		return 0;
 	}
 	string inputFilename = vm["input"].as<std::string>();
 	unsigned int thresholdMin = vm["thresholdMin"].as<unsigned int>();
 	unsigned int thresholdMax = vm["thresholdMax"].as<unsigned int>();
-	
+
 	typedef PointVector<3,int> Point;
 	QApplication application(argc,argv);
 	Viewer3D<> viewer;
 	viewer.show();
-	
-	
+
+
 	typedef Z3i::Space Space;
 	typedef HyperRectDomain<Space> Domain;
 	typedef ImageSelector<Domain, unsigned char>::Type Image;
@@ -180,13 +180,13 @@ int main(int argc, char **argv)
 	typedef DGtal::PointVector<3, int> Point3D;
 	typedef MSTTangent<Point3D> Tangent;
 	typedef Pencil<Point3D, Tangent, Vector3D> Pencil;
-	
+
 	KSpace ks;
-	
+
 	Image image = VolReader<Image>::importVol(inputFilename);
 
 	//Extracts the first point belonging to the object
-	Point p;	
+	Point p;
 	vector<Point> vPoints;
 	for (auto it = image.domain().begin(), itE = image.domain().end(); it != itE; ++it) {
 		if (image(*it) >= thresholdMin && image(*it) <= thresholdMax) {
@@ -205,8 +205,8 @@ int main(int argc, char **argv)
 	Visitor visitor( graph, p );
 	MyNode node;
 
-    
-	while ( !visitor.finished() ) 
+
+	while ( !visitor.finished() )
 	{
   		node = visitor.current();
 		if ( image.domain().isInside(node.first) &&
@@ -226,7 +226,7 @@ int main(int argc, char **argv)
 		Image volume = VolReader<Image>::importVol(inputFileName2);
 		Image volumeBinary(volume.domain());
 	    for (auto it = volume.domain().begin(), ite = volume.domain().end(); it != ite; ++it) {
-			if (volume(*it) >= thresholdMin && volume(*it) <= thresholdMax) 
+			if (volume(*it) >= thresholdMin && volume(*it) <= thresholdMax)
 				volumeBinary.setValue(*it, 255);
 			else
 				volumeBinary.setValue(*it, 0);
@@ -242,7 +242,7 @@ int main(int argc, char **argv)
 
 	}
 
-	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;  
+	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
 
 	SegmentComputer algo;
@@ -251,23 +251,23 @@ int main(int argc, char **argv)
 	typename Segmentation::SegmentComputerIterator i = s.begin();
 	typename Segmentation::SegmentComputerIterator end = s.end();
 	for (; i != end; ++i) {
-		SegmentComputer currentSegmentComputer(*i); 
+		SegmentComputer currentSegmentComputer(*i);
 		viewer << CustomColors3D(Color::Green, Color::Green);
 	   	viewer << currentSegmentComputer;
 	}
-	
+
 	const Color  CURVE3D_COLOR( 100, 100, 140, 128 );
 	for (auto it = vPoints.begin(); it != vPoints.end(); ++it) {
 		viewer <<CustomColors3D(CURVE3D_COLOR, CURVE3D_COLOR)<< (*it);
 	}
 
-	
-	
+
+
 	int pos = 63;
 	viewer << CustomColors3D(Color::Red, Color::Red);
 	viewer << tangents[pos].getPoint();
     viewer.addLine(tangents[pos].getPoint()-tangents[pos].getTangent()*2, tangents[pos].getPoint()+tangents[pos].getTangent()*2, 5.0);
-	
+
 	viewer << Viewer3D<>::updateDisplay;
 	application.exec();
 
