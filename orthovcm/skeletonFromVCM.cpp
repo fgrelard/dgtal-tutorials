@@ -741,6 +741,10 @@ Z3i::DigitalSet curveThinning(const Z3i::DigitalSet& skeleton, const vector<vect
 
 void ensureSkeletonConnexity(Z3i::DigitalSet& skeletonPoints, const Z3i::DigitalSet& setVolume) {
 	typedef Z3i::Object26_6 ObjectType;
+	typedef DGtal::BreadthFirstVisitor<DGtal::Z3i::Object26_6, std::set<Z3i::Point> > Visitor;
+	typedef typename Visitor::Node MyNode;
+	DGtal::Z3i::Object26_6 graph(DGtal::Z3i::dt26_6, setVolume);
+
 
 	ObjectType objectVolume(Z3i::dt26_6, setVolume);
 	ObjectType objectImage(Z3i::dt26_6, skeletonPoints);
@@ -748,35 +752,52 @@ void ensureSkeletonConnexity(Z3i::DigitalSet& skeletonPoints, const Z3i::Digital
 	vector<ObjectType> skeletonCC;
 	back_insert_iterator< std::vector<ObjectType> > inserterCC( skeletonCC );
 	objectImage.writeComponents(inserterCC);
+	sort(skeletonCC.begin(), skeletonCC.end(), [&](const ObjectType& one,
+												   const ObjectType& two) {
+			 return one.size() < two.size();
+		 });
 	bool objectsToLink = true;
 	while (objectsToLink) {
 		objectsToLink = false;
 		double distance = numeric_limits<double>::max();
 		Z3i::Point currentLink, otherLink;
+
 		int indexDelete1, indexDelete2;
 		for (size_t i = 0; i < skeletonCC.size(); i++) {
 			Z3i::DigitalSet currentCC = skeletonCC[i].pointSet();
-			for (size_t j = 0; j < skeletonCC.size(); j++) {
-				if (i == j) continue;
-				Z3i::DigitalSet otherCC = skeletonCC[j].pointSet();
-				for (auto itCurrent = currentCC.begin(), itCurrentE = currentCC.end();
-					 itCurrent != itCurrentE; ++itCurrent) {
-					Z3i::Point current = *itCurrent;
-					for (auto itOther = otherCC.begin(), itOtherE = otherCC.end(); itOther != itOtherE;
-						 ++itOther) {
-						Z3i::Point other = *itOther;
-						double currentDistance = Z3i::l2Metric(current, other);
-						if (
-							currentDistance < distance) {
-							distance = currentDistance;
-							currentLink = current;
-							otherLink = other;
-							indexDelete1 = i;
-							indexDelete2 = j;
-							objectsToLink = true;
-						}
+			vector<Z3i::Point> endPointCurrent = CurveAnalyzer::findEndPoints(currentCC);
+			Z3i::Point candGeo;
+			for (const Z3i::Point&  e : endPointCurrent) {
+				Visitor visitor( graph, e );
+				MyNode node;
+				double currentDistance = std::numeric_limits<double>::max();
+				Z3i::Point candidate;
+				while ( !visitor.finished() )
+				{
+					node = visitor.current();
+					if (skeletonPoints.find(node.first) != skeletonPoints.end() &&
+						currentCC.find(node.first) == currentCC.end()) {
+						currentDistance = node.second;
+					    candidate = node.first;
+						break;
 					}
+					visitor.expand();
 				}
+				if (currentDistance < distance) {
+					currentLink = e;
+					otherLink = candidate;
+					distance = currentDistance;
+					indexDelete1 = i;
+					objectsToLink = true;
+				}
+			}
+		}
+		for (auto itCC = skeletonCC.begin(), itCCe = skeletonCC.end(); itCC!=itCCe; ++itCC) {
+			Z3i::DigitalSet oSet = itCC->pointSet();
+			auto iterator = oSet.find(otherLink);
+			if (iterator != oSet.end()) {
+				indexDelete2 = itCC - skeletonCC.begin();
+				break;
 			}
 		}
 		if (objectsToLink) {
@@ -1169,7 +1190,7 @@ int main( int  argc, char**  argv )
 			double radiusCurrentMinus = computeRadiusFromIntersection(volume, centerOfMass, -normal, radius*6)+sqrt(3);
 
 			double radiusShell = std::max(radiusCurrent, std::max(4.0, radiusCurrentMinus));
-			radiusShell *= 1.1;
+			radiusShell *= 1.2;
 			 if (Z3i::l2Metric(currentPoint->myPoint, realCenter) <= sqrt(3)
 				) {
 				Z3i::DigitalSet startingPoint(domainVolume);
@@ -1278,10 +1299,10 @@ int main( int  argc, char**  argv )
 	fillHoles(skeletonPoints, setVolume);
 	skeletonPoints = filterIsolatedPoints(skeletonPoints);
 	branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
-	// Z3i::DigitalSet newBranches = dilateJunctions(setVolume, skeletonPoints, branches);
-	// for (const Z3i::Point& p : newBranches)
-	// 	junctionPoints[p] = 3;
-	// branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
+	 Z3i::DigitalSet newBranches = dilateJunctions(setVolume, skeletonPoints, branches);
+	for (const Z3i::Point& p : newBranches)
+		junctionPoints[p] = 3;
+	 branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
 	//Discarding points being in branching parts
 	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
 	   	auto itToErase = skeletonPoints.find(*it);
@@ -1293,7 +1314,7 @@ int main( int  argc, char**  argv )
 	vector<Z3i::DigitalSet> junctionCCSet = decompositionCCToSets(branches);
 	vector<Z3i::DigitalSet> parts = decompositionCCToSets(skeletonPoints);
 	orientNormalsEndPoints(pointToNormal, endPointsParts, parts);
-	endPointsParts = filterEndPoints (pointToNormal, endPointsParts, setVolume, branches);
+	//endPointsParts = filterEndPoints (pointToNormal, endPointsParts, setVolume, branches);
 	viewer << CustomColors3D(Color::Red, Color::Red) << endPointsParts;
 
 	vector<WeightedPointCount*> distanceMapJunctions = distanceMapFromBranches (skeletonPoints, junctionCCSet, endPointsParts,

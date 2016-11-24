@@ -49,5 +49,25 @@ namespace Distance {
 		}
 		return distanceMax;
 	}
+
+	template <typename Point, typename Container>
+	inline double geodesicDistance(const Point& first, const Point& second, const Container& object) {
+		typedef DGtal::BreadthFirstVisitor<DGtal::Z3i::Object26_6, std::set<Point> > Visitor;
+		typedef typename Visitor::Node MyNode;
+		DGtal::Z3i::Object26_6 graph(DGtal::Z3i::dt26_6, object);
+		Visitor visitor( graph, first );
+		MyNode node;
+		double distance = std::numeric_limits<double>::max();
+		while ( !visitor.finished() )
+		{
+			node = visitor.current();
+		    if (node.first == second) {
+				distance = node.second;
+				break;
+			}
+			visitor.expand();
+		}
+		return distance;
+	}
 };
 #endif
