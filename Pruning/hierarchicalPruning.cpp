@@ -323,7 +323,7 @@ int main( int  argc, char**  argv )
 
 	SetFromImage<Z3i::DigitalSet>::append<Image>(setSkeleton, skeleton, thresholdMin-1, thresholdMax);
 
-	Z3i::DigitalSet existingSkeleton = CurveAnalyzer::ensureConnexity(setSkeleton);
+	Z3i::DigitalSet existingSkeleton = setSkeleton;
 	typedef StandardDSS6Computer<vector<Point>::iterator,int,8> SegmentComputer;
 	typedef GreedySegmentation<SegmentComputer> Segmentation;
 		vector<Z3i::Point> endPointsV = CurveAnalyzer::findEndPoints(existingSkeleton);

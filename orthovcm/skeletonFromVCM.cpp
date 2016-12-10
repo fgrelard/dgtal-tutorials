@@ -132,7 +132,7 @@ Z3i::DigitalSet computeHalfShell(const Z3i::Point& center, const Z3i::RealVector
 }
 
 
-unsigned int computeDegree(const Z3i::DigitalSet& shell) {
+unsigned int computeDegree(const Z3i::DigitalSet& shell, double radius) {
 	typedef Z3i::Object26_6 ObjectType;
 
 	ObjectType objectImage(Z3i::dt26_6, shell);
@@ -142,9 +142,12 @@ unsigned int computeDegree(const Z3i::DigitalSet& shell) {
 	unsigned int cpt = 0;
 
 	for (const auto& obj : objects) {
-		if (obj.size() > 1)
+		if (obj.size() > radius) //noise
 			cpt++;
 	}
+	if (cpt >= 3)
+		for (const auto& obj : objects)
+			trace.info() << obj.size() << endl;
 	return cpt;
 }
 
@@ -1193,15 +1196,16 @@ int main( int  argc, char**  argv )
 			radiusShell *= 1.2;
 			 if (Z3i::l2Metric(currentPoint->myPoint, realCenter) <= sqrt(3)
 				) {
+				 double noise = radiusShell / 2;
 				Z3i::DigitalSet startingPoint(domainVolume);
 				startingPoint.insert(centerOfMass);
 				Z3i::DigitalSet shell = computeHalfShell(centerOfMass, Z3i::RealVector(0,0,0), startingPoint, setVolume, radiusShell);
-				unsigned int nbCC = computeDegree(shell);
+				unsigned int nbCC = computeDegree(shell, noise);
 				if (nbCC >= 3) {
 					Z3i::DigitalSet halfShellNormal1 = computeHalfShell(centerOfMass, normal, startingPoint, setVolume, radiusShell);
 					Z3i::DigitalSet halfShellNormal2 = computeHalfShell(centerOfMass, -normal, startingPoint, setVolume, radiusShell);
-					unsigned int nbCC1 = computeDegree(halfShellNormal1);
-					unsigned int nbCC2 = computeDegree(halfShellNormal2);
+					unsigned int nbCC1 = computeDegree(halfShellNormal1, noise);
+					unsigned int nbCC2 = computeDegree(halfShellNormal2, noise);
 					Ball<Z3i::Point> ball(centerOfMass, dt(centerOfMass));
 					std::vector<Z3i::Point> points;
 					DigitalPlane emptyPlane;
@@ -1299,10 +1303,10 @@ int main( int  argc, char**  argv )
 	fillHoles(skeletonPoints, setVolume);
 	skeletonPoints = filterIsolatedPoints(skeletonPoints);
 	branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
-	 Z3i::DigitalSet newBranches = dilateJunctions(setVolume, skeletonPoints, branches);
+	Z3i::DigitalSet newBranches = dilateJunctions(setVolume, skeletonPoints, branches);
 	for (const Z3i::Point& p : newBranches)
 		junctionPoints[p] = 3;
-	 branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
+	branches = shellPointsToShellAreas (setVolume, junctionPoints, skeletonPoints);
 	//Discarding points being in branching parts
 	for (auto it = branches.begin(), ite = branches.end(); it != ite; ++it) {
 	   	auto itToErase = skeletonPoints.find(*it);

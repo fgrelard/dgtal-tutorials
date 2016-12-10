@@ -51,7 +51,7 @@
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
-
+#include "surface/SurfaceUtils.h"
 using namespace std;
 using namespace DGtal;
 using namespace Z3i;
@@ -178,6 +178,7 @@ int main( int argc, char** argv )
 		Z3i::DigitalSet setVolume(domain);
 		SetFromImage<Z3i::DigitalSet>::append<Image> (setVolume, image,
 													  0, 255);
+		setVolume = SurfaceUtils::extractSurfaceVoxels(image, 1, 255);
 		ThresholdedImage binarizer(image, thresholdMin-1, thresholdMax);
 		DTL2 dt(&image.domain(), &binarizer, &Z3i::l2Metric);
 
@@ -218,20 +219,17 @@ int main( int argc, char** argv )
 
 		// }
 
-		for(Domain::ConstIterator it = domain.begin(), itend=domain.end(); it!=itend; ++it){
-			unsigned char  val= image( (*it) );
+		for(auto it = setVolume.begin(), itend=setVolume.end(); it!=itend; ++it){
 			if(limitDisplay && numDisplayed > numDisplayedMax)
 				break;
-			Color c= gradient(val);
-			if(val<=thresholdMax && val >=thresholdMin){
-				// viewer <<  CustomColors3D(Color((float)(c.red()), (float)(c.green()),(float)(c.blue()), transp),
-				// 						  Color((float)(c.red()), (float)(c.green()),(float)(c.blue()), transp));
-				viewer <<  CustomColors3D(Color(204, 204, 204, transp),
-										  Color(204, 204, 204, transp));
+			// viewer <<  CustomColors3D(Color((float)(c.red()), (float)(c.green()),(float)(c.blue()), transp),
+			// 						  Color((float)(c.red()), (float)(c.green()),(float)(c.blue()), transp));
+			viewer <<  CustomColors3D(Color(204, 204, 204, transp),
+									  Color(204, 204, 204, transp));
 
-				viewer << *it;
-				numDisplayed++;
-			}
+			viewer << *it;
+			numDisplayed++;
+
 		}
 
 	}else if(extension=="sdp"){

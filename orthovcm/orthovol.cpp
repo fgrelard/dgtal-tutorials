@@ -204,7 +204,7 @@ int main( int  argc, char**  argv )
 	trace.info() << "Big radius   R = " << R << std::endl;
 	trace.info() << "Small radius r = " << r << std::endl;
 
-	const double size = 35.0; // size of displayed normals
+	const double size = 30.0; // size of displayed normals
 
 
 //Computing lambda MST tangents
@@ -233,9 +233,8 @@ int main( int  argc, char**  argv )
 	// 	  it != itE; ++it )
 	// {
 	trace.info() << setToProcess.size() << endl;
-	double radiusVCM = r;
-	vcm.setMySmallR(radiusVCM);
-	chi = KernelFunction( 1.0, radiusVCM );
+	vcm.setMySmallR(r);
+	chi = KernelFunction( 1.0, r );
 	int sliceNumber = 0;
 	Z3i::DigitalSet branchingPoints(setVolume.domain());
 
@@ -245,7 +244,7 @@ int main( int  argc, char**  argv )
 	for (auto it = orientedSkeleton.begin(), ite = orientedSkeleton.end();
 		 it != ite; ++it) {
 		sliceNumber++;
-		if (sliceNumber % 35 != 0) continue;
+		if (sliceNumber % 15 != 0) continue;
 		// Compute VCM and diagonalize it.
 		viewer.setFillColor(Color::Gray);
 		viewer.setFillTransparency(255);
@@ -254,29 +253,32 @@ int main( int  argc, char**  argv )
 		  vcm.updateProximityStructure(radius, vPoints.begin(), vPoints.end());
 		  chi = KernelFunction( 1.0, radius);
 		  }*/
+
+
 		Z3i::Point current= *it; //it->getPoint();
+		double radiusVCM = dt(current) +2;
 		Z3i::RealVector normal;
 		VCMUtil::computeDiscretePlane(vcm, chi, domainVolume, setVolume, current, normal, 0, radiusVCM, numeric_limits<double>::max(), 26, true);
 
 
 
 		// Display normal
+		double r = dt(current);
 		RealVector n = VCMUtil::computeNormalFromVCM(current, vcm, chi, 2);
-		n*=size;
+		n *= size;
 		RealPoint p( current[ 0 ], current[ 1 ], current[2] );
 		RealVector n2 = VCMUtil::computeNormalFromVCM(current, vcm, chi, 1);
-		n2*=size;
+		n2 *= size;
 		//RealVector normal = evec.column(0).getNormalized();
 		//Z3i::RealPoint otherNormal = correspondingTangentToPointInVol(current, tangents);//it->getTangent();
 		//if (otherNormal == Z3i::RealPoint()) continue;
 		//if(sliceNumber > 2280 && sliceNumber < 2420 && sliceNumber % 10 ==0) {
-		if(sliceNumber % 35 ==0) {
-			viewer.setLineColor(Color::Blue);
-			viewer.setFillColor(Color::Blue);
-			viewer.setFillTransparency(150);
-			viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
-			i++;
-		}
+		viewer.setLineColor(Color::Blue);
+		viewer.setFillColor(Color::Blue);
+		viewer.setFillTransparency(150);
+		viewer.addQuad(p-n-n2,p-n+n2,p+n+n2,p+n-n2);
+		i++;
+
 		//}
 
 	}

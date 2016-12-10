@@ -96,6 +96,7 @@ int main( int argc, char** argv )
 	const string examplesPath;
 	string filename = argv[1];
 	float increment = atof(argv[2]);
+
 	float noise = 0.0;
 	if (argc >= 4)
 		noise = atof(argv[3]);
@@ -105,9 +106,9 @@ int main( int argc, char** argv )
 	int range = 200;
 	int pitch =  20;
 	int radius = 10;
-
 	vector<PointVector<3, double>> curve;
-	set<PointVector<3,double>> vectorPoints;
+	vector<PointVector<3,double>> vectorPoints;
+	drawCylinder(vectorPoints, 50, 7, 1);
 
 //	drawCone(curve, 32, 15, increment);
 
@@ -117,7 +118,7 @@ int main( int argc, char** argv )
 
 //	createRotatedVolumeFromCurve(curve, vectorPoints, 5, 2*M_PI/3);
 
-	createJunction(curve, vectorPoints, 0.5);
+//	createJunction(curve, vectorPoints, 0.5);
 //	Ball<PointVector<3, double>> ball(Point(0,0,0), 10);
 	Z3i::Domain domain(Z3i::Point(-100,-100,-100)-Z3i::Point::diagonal(2), Z3i::Point(100, 300, 300)+Z3i::Point::diagonal(2));
 	//domain = Z3i::Domain(Z3i::Point(-20,-20,-20), Z3i::Point(20,20,60));
@@ -134,12 +135,12 @@ int main( int argc, char** argv )
 		set.insert(*it);
 	}
 	DigitalSet set2 = addNoise(set, noise);
-//	imageFromRangeAndValue(vectorPoints.begin(), vectorPoints.end(), anImage3D, 150);
+//	imageFromRangeAndValue(curve.begin(), curve.end(), anImage3D, 150);
 
 	Image3D anImage3D(domain);
 	for (auto it = domain.begin(), ite = domain.end();
 		 it != ite; ++it) {
-		if (set.find(*it) != set.end())
+		if (set2.find(*it) != set2.end())
 			anImage3D.setValue(*it, 255);
 	}
 //	anImage3D = ImageFromSet<Image3D>::create(set, 1);

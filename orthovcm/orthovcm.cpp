@@ -142,6 +142,8 @@ int main( int  argc, char**  argv )
 	Viewer3D<> viewer;
 	viewer.show();
 
+	DTL2 dt(&volume.domain(), &binarizer, &Z3i::l2Metric);
+
 
 
 
@@ -222,7 +224,6 @@ int main( int  argc, char**  argv )
 
 		vcm_r = vcm.measure( chi, it->getPoint() );
 		LinearAlgebraTool::getEigenDecomposition( vcm_r, evec, eval );
-
 	    // Display normal
 		RealVector n = evec.column( 2 );
 		n*=size;

@@ -373,7 +373,7 @@ DigitalSet addNoise(const DigitalSet& set, float noise) {
 		MetricAdjacency::writeNeighbors(inserter, *it);
 	}
     for (auto it = neighbors.begin(), itE = neighbors.end(); it != itE; ++it) {
-		if (kanungo(*it)) {
+		if (kanungo(*it) || set.find(*it) != set.end()) {
 			set2.insertNew(*it);
 		}
 	}
